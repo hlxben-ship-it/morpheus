@@ -6,7 +6,7 @@
 <title>Morpheus</title>
 <link rel="icon" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   // theme before first paint, so a light-mode reload doesn't flash dark
   try { const t = JSON.parse(localStorage.getItem('morpheus.theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
@@ -216,6 +216,70 @@
     .pill { padding: 0; width: 34px; height: 34px; justify-content: center; }
     .main { min-width: 0; overflow: hidden; }
   }
+
+  /* ---------- v0.2 look: sans body, aurora backdrop, glass surfaces ---------- */
+  :root { --glass: rgba(30, 27, 58, .62); --glow: rgba(138, 108, 216, .35); --r: 16px; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f4f2fb; --panel: #ffffff; --raised: #eeeaf9; --line: #e3def3; --text: #1b1838; --muted: #6d6890;
+      --glass: rgba(255, 255, 255, .72); --glow: rgba(108, 79, 201, .22); --shadow: 0 12px 40px rgba(40, 30, 90, .10); }
+  }
+  :root[data-theme="light"] { --bg: #f4f2fb; --panel: #ffffff; --raised: #eeeaf9; --line: #e3def3; --text: #1b1838; --muted: #6d6890;
+    --glass: rgba(255, 255, 255, .72); --glow: rgba(108, 79, 201, .22); --shadow: 0 12px 40px rgba(40, 30, 90, .10); }
+  body { font: 400 14.5px/1.55 Inter, system-ui, sans-serif; letter-spacing: 0;
+    background: radial-gradient(1200px 600px at 85% -10%, var(--glow), transparent 60%),
+                radial-gradient(900px 500px at -10% 110%, rgba(240, 138, 168, .16), transparent 60%), var(--bg); background-attachment: fixed; }
+  .acts .meta, .seed input, .range-row, .brand small, .msg.working b { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .top, .side { background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
+  .top { border-bottom-color: transparent; box-shadow: 0 1px 0 var(--line); }
+  .new { border: 0; background: linear-gradient(135deg, var(--accent), var(--pink)); color: #fff; box-shadow: 0 8px 22px var(--glow); transition: transform .15s, box-shadow .15s; }
+  .new:hover { transform: translateY(-1px); box-shadow: 0 12px 28px var(--glow); }
+  .side-label { font-weight: 600; }
+  .sess { transition: background .15s; }
+
+  .hero { padding: 7vh 0 2vh; }
+  .hero img { width: 84px; height: 84px; border-radius: 22px; }
+  .hero .greet { font: 600 24px/1.3 Inter, sans-serif; margin-top: 22px; letter-spacing: -.01em; }
+  .hero .greet span { background: linear-gradient(90deg, var(--accent), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .ideas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 22px; }
+  .idea { border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); border-radius: 999px; padding: 8px 14px; font-size: 13px;
+    transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .idea:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 20px var(--glow); }
+  .idea em { font-style: normal; color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .recent { margin-top: 34px; text-align: left; }
+  .recent .label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .recent .label button { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 12.5px; }
+  .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .strip button { aspect-ratio: 1; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: var(--raised); box-shadow: var(--shadow); transition: transform .2s; }
+  .strip button:hover { transform: translateY(-3px) scale(1.02); }
+  .strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  @media (max-width: 860px) { .strip { grid-template-columns: repeat(3, 1fr); } }
+
+  .msg { animation: rise .35s ease-out both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  @media (prefers-reduced-motion: reduce) { .msg { animation: none; } }
+  .msg.user { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--pink))); color: #fff; border-radius: 20px 20px 6px 20px; box-shadow: 0 8px 22px var(--glow); }
+  .msg.user .kind { color: rgba(255, 255, 255, .8); }
+  .out img, .out video { border-radius: var(--r); }
+  .acts button, .acts a { border-radius: 999px; padding: 5px 12px; background: var(--glass); transition: border-color .15s, background .15s; }
+  .acts button:hover, .acts a:hover { background: var(--raised); }
+  .grid { gap: 12px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .grid button { border: 0; border-radius: 14px; box-shadow: var(--shadow); transition: transform .2s; }
+  .grid button:hover { transform: translateY(-3px); }
+
+  .box { background: var(--glass); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); border-radius: 24px; transition: border-color .2s, box-shadow .2s; }
+  .box:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: var(--shadow), 0 0 0 4px var(--glow); }
+  .modes [role="tab"] { font: 600 12.5px/1.4 Inter, sans-serif; letter-spacing: 0; text-transform: none; padding: 6px 14px; transition: background .15s, color .15s; }
+  .modes [role="tab"][aria-selected="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 14px var(--glow); }
+  .input-row textarea { font-size: 15px; }
+  .send { border-radius: 14px; background: linear-gradient(135deg, var(--accent), var(--pink)); box-shadow: 0 8px 20px var(--glow); transition: transform .15s; }
+  .send:hover:not(:disabled) { transform: translateY(-1px) scale(1.04); }
+  .field > .label { font-weight: 600; letter-spacing: .08em; }
+  .msg.working { background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow);
+    background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 14%, transparent) 50%, transparent 70%);
+    background-size: 220% 100%; animation: rise .35s ease-out both, shimmer 1.8s linear infinite; }
+  @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+  @media (prefers-reduced-motion: reduce) { .msg.working { animation: none; } }
+  .live { border-radius: 14px; }
 </style>
 </head>
 <body>
@@ -499,15 +563,35 @@
     const col = $('col'), s = current();
     col.replaceChildren();
     if (!s || !s.messages.length) {
+      const hour = new Date().getHours();
+      const hi = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Hallo' : 'Guten Abend';
+      const ideas = [
+        ['chat', 'Chat', 'Ein Leuchtturm im Sturm, Ölgemälde'],
+        ['chat', 'Chat', 'Portrait einer Astronautin, Kodak Portra'],
+        ['chat', 'Chat', 'Café in Tokio bei Regen, Nacht'],
+        ['edit', 'Bearbeiten', 'Bild verändern: „make it night“'],
+        ['swap', 'EasySwap', 'Gesicht in ein Video setzen'],
+      ];
+      const recent = state.history.slice(0, 6);
       col.innerHTML = `<div class="hero"><img src="/logo.png" alt="">
-        <h1>MORPH<b>E</b>US</h1><p class="tag h">Dream · Transform · Be anyone</p>
-        <div class="starts">
-          <button type="button" class="start" data-mode="chat"><b>Chat</b><span>Beschreib auf Deutsch, was du sehen willst. Ich schreibe den Prompt und wähle Modell und Format.</span></button>
-          <button type="button" class="start" data-mode="manual"><b>Manuell</b><span>Eigener Prompt, Stil, Format, Modell und Seed.</span></button>
-          <button type="button" class="start" data-mode="edit"><b>Bearbeiten</b><span>Ein Bild verändern: „make it night“, „add a hat“.</span></button>
-          <button type="button" class="start" data-mode="swap"><b>EasySwap</b><span>Das Gesicht aus einem Foto in ein Video setzen.</span></button>
-        </div></div>`;
-      col.querySelectorAll('.start').forEach(b => b.onclick = () => { setMode(b.dataset.mode); $('input').focus(); });
+        <p class="greet">${hi} — <span>was träumen wir heute?</span></p>
+        <div class="ideas">${ideas.map((i, n) => `<button type="button" class="idea" data-n="${n}"><em>${i[1]}</em>${i[2]}</button>`).join('')}</div>
+        ${recent.length ? `<div class="recent"><div class="label">Zuletzt erstellt <button type="button" id="all-recent">Alle ansehen →</button></div><div class="strip"></div></div>` : ''}
+        </div>`;
+      col.querySelectorAll('.idea').forEach(b => b.onclick = () => {
+        const [mode, , text] = ideas[+b.dataset.n];
+        setMode(mode);
+        if (mode === 'chat') { $('input').value = text; $('input').dispatchEvent(new Event('input')); }
+        $('input').focus();
+      });
+      const strip = col.querySelector('.strip');
+      recent.forEach(h => {
+        const b = Object.assign(document.createElement('button'), { type: 'button', title: h.prompt || '' });
+        b.innerHTML = `<img src="${url(h.image)}" alt="" loading="lazy">`;
+        b.onclick = () => lightbox(h);
+        strip.append(b);
+      });
+      if (strip) $('all-recent').onclick = () => $('open-gallery').click();
       return;
     }
     s.messages.forEach(m => col.append(messageEl(m)));
@@ -1007,6 +1091,7 @@
     // ghost results come first and only while ghost mode is on; dashed frames mark them
     state.history = [...(state.ghost ? state.ghostHistory : []), ...await (await fetch('/api/history')).json()];
     if (state.view === 'gallery') renderGallery();
+    else if (!current()?.messages.length) renderThread(); // the start screen shows recent pictures
   }
   function renderGallery() {
     const col = $('col');
