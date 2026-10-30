@@ -314,6 +314,23 @@
   .out img, .out video, .live { border-radius: 0; box-shadow: 0 0 0 2px var(--line), 0 0 30px var(--glow); }
   .sess[aria-current="true"] { border-color: var(--cyan); box-shadow: inset 3px 0 var(--cyan); border-radius: 0; }
   .top { box-shadow: 0 2px 0 var(--line), 0 6px 24px rgba(177, 77, 255, .12); }
+  /* header HUD: ComfyUI state, VRAM and GPU load */
+  .hud { display: flex; align-items: center; gap: 14px; margin-right: 6px; font-family: var(--term); font-size: 16px; color: var(--muted); }
+  .hud b { font: 400 9px var(--px); letter-spacing: .08em; color: var(--muted); margin-right: 6px; }
+  .hud em { font-style: normal; color: var(--text); font-variant-numeric: tabular-nums; }
+  .hud-comfy { display: inline-flex; align-items: center; }
+  .hud-comfy i { width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--muted); }
+  .hud-comfy[data-s="idle"] i { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+  .hud-comfy[data-s="busy"] i { background: #ff2d3d; animation: live 1.6s ease-out infinite; }
+  .hud-comfy[data-s="busy"] em { color: #ff5b68; }
+  .hud-comfy[data-s="think"] i { background: var(--pink); animation: live 1.6s ease-out infinite; }
+  .hud-comfy[data-s="off"] em { color: var(--danger, #ff5b68); }
+  .hud-meter { display: inline-flex; align-items: center; }
+  .hud .bar { width: 54px; height: 8px; margin-right: 7px; border: 1px solid var(--line); padding: 1px; display: inline-block; }
+  .hud .bar i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .5s; }
+  .hud .bar i.hot { background: var(--pink); }
+  @media (max-width: 900px) { .hud .bar, .hud-meter b { display: none; } }
+  @media (max-width: 640px) { .hud-meter { display: none; } }
   /* CRT scanlines + a faint pixel grid over the backdrop, never over pictures' clicks */
   body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50; mix-blend-mode: overlay; opacity: .35;
     background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); }
@@ -440,6 +457,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <a class="brand" href="/"><img src="/logo.png" alt=""><span class="word">MORPH<b>E</b>US</span><small>v0.1</small></a>
     <div class="top-actions">
+      <div class="hud" id="hud" aria-live="off">
+        <span class="hud-comfy" id="hud-comfy" data-s="off"><i></i><b>Comfy</b> <em>…</em></span>
+        <span class="hud-meter" title="VRAM in use, all programs"><b>VRAM</b><span class="bar"><i id="hud-vram-bar"></i></span><em id="hud-vram">–</em></span>
+        <span class="hud-meter" title="GPU load, busiest engine"><b>GPU</b><span class="bar"><i id="hud-load-bar"></i></span><em id="hud-load">–</em></span>
+      </div>
       <button type="button" class="pill" id="ghost" aria-pressed="false" title="Ghost mode: nothing is saved, neither pictures nor chat">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 21V10a7 7 0 0 1 14 0v11l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2Z"/><circle cx="9.5" cy="10.5" r=".6" fill="currentColor"/><circle cx="14.5" cy="10.5" r=".6" fill="currentColor"/></svg>
         <span class="lbl">Ghost</span></button>
@@ -1494,6 +1516,31 @@
   }
 
   // ---------- Boot screen: a second of terminal, once per browser session; any key or click skips it ----------
+  // ---------- Header HUD: polls /api/status while the tab is visible ----------
+  async function hud() {
+    if (document.hidden) return;
+    let st;
+    try { st = await (await fetch('/api/status')).json(); } catch { st = { comfy: false }; }
+    const c = $('hud-comfy');
+    // rendering: ComfyUI has work; thinking: a Morpheus job before or between renders (Claude writing the prompt)
+    c.dataset.s = !st.comfy ? 'off' : st.busy ? 'busy' : st.jobs ? 'think' : 'idle';
+    c.querySelector('em').textContent = !st.comfy ? 'off' : st.busy ? (st.queue > 1 ? `rendering · ${st.queue} queued` : 'rendering')
+      : st.jobs ? 'thinking' : 'idle';
+    c.title = !st.comfy ? 'ComfyUI is not reachable on :8188' : `ComfyUI on :8188 · ${st.queue} in its queue · ${st.jobs} Morpheus jobs`;
+    const meter = (bar, label, pct, text) => {
+      $(bar).style.width = (pct ?? 0) + '%';
+      $(bar).classList.toggle('hot', pct > 85);
+      $(label).textContent = text;
+    };
+    const gb = b => (b / 2 ** 30).toFixed(1);
+    meter('hud-vram-bar', 'hud-vram', st.vram != null && st.vram_total ? Math.min(100, 100 * st.vram / st.vram_total) : null,
+      st.vram != null ? (st.vram_total ? `${gb(st.vram)}/${gb(st.vram_total)} GB` : `${gb(st.vram)} GB`) : '–');
+    meter('hud-load-bar', 'hud-load', st.load, st.load != null ? `${st.load}%` : '–');
+  }
+  hud();
+  setInterval(hud, 1500);
+  document.addEventListener('visibilitychange', hud);
+
   function boot() {
     try { if (sessionStorage.getItem('morpheus.booted')) return; sessionStorage.setItem('morpheus.booted', '1'); } catch {}
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;

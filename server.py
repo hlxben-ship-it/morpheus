@@ -6,6 +6,7 @@ morpheus.run() and morpheus.run_edit(). Starts ComfyUI on demand if it is not al
 import base64
 import json
 import mimetypes
+import os
 import shutil
 import subprocess
 import sys
@@ -324,6 +325,60 @@ def background(job: dict, handler, req: dict) -> None:
         job["state"] = "error"
 
 
+# GPU load and VRAM from the Windows performance counters, which see every process (ROCm, the desktop, games),
+# not just ComfyUI's own torch. One long-lived PowerShell samples them; spawning one per poll takes seconds.
+GPU_STATS = {"load": None, "vram": None}
+GPU_SAMPLER = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+while (Get-Process -Id SERVER_PID) {  # ends with the server, also when it is killed
+  $c = (Get-Counter '\GPU Engine(*)\Utilization Percentage', '\GPU Adapter Memory(*)\Dedicated Usage').CounterSamples
+  $eng = @{}; $vram = [double]0
+  foreach ($s in $c) {
+    if ($s.Path -match 'luid_(\w+?_\w+?)_phys_\d+_eng_(\d+)') { $eng[$Matches[1] + $Matches[2]] += $s.CookedValue }
+    elseif ($s.Path -like '*dedicated usage') { $vram = [Math]::Max($vram, $s.CookedValue) }
+  }
+  $load = ($eng.Values | Measure-Object -Maximum).Maximum
+  '{0:F0} {1:F0}' -f [Math]::Min(100, [double]$load), $vram
+  Start-Sleep -Milliseconds 600
+}
+"""
+
+
+def sample_gpu() -> None:
+    """Task Manager's view: an adapter's load is its busiest engine, summed over processes."""
+    p = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-Command", GPU_SAMPLER.replace("SERVER_PID", str(os.getpid()))],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    for line in p.stdout:
+        try:
+            load, vram = line.split()
+            GPU_STATS.update(load=int(load), vram=int(vram))
+        except ValueError:
+            pass
+
+
+VRAM_TOTAL = None  # from ComfyUI once, it doesn't change
+
+
+def status() -> dict:
+    """ComfyUI's state and the GPU's, for the header."""
+    global VRAM_TOTAL
+    comfy, queue = False, 0
+    try:
+        with urllib.request.urlopen(morpheus.SERVER + "/queue", timeout=1) as r:
+            q = json.loads(r.read())
+        comfy, queue = True, len(q.get("queue_running", [])) + len(q.get("queue_pending", []))
+        if VRAM_TOTAL is None:
+            with urllib.request.urlopen(morpheus.SERVER + "/system_stats", timeout=1) as r:
+                VRAM_TOTAL = json.loads(r.read())["devices"][0]["vram_total"]
+    except (OSError, KeyError, IndexError, ValueError):
+        pass
+    running = sum(1 for j in JOBS.values() if j.get("state") in ("running", "waiting")) + \
+        sum(1 for j in SWAPS.values() if j.get("state") in ("running", "waiting"))
+    return {"comfy": comfy, "busy": gpu.locked() or queue > 0, "queue": queue, "jobs": running,
+            "load": GPU_STATS["load"], "vram": GPU_STATS["vram"], "vram_total": VRAM_TOTAL}
+
+
 def copy_picture(source: str, dest: Path) -> None:
     """A gallery or ghost picture copied to dest, for Claude to read."""
     if source.startswith("ghost/"):
@@ -372,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]
             return self.send_json({"models": models, "edit_models": edit_models, "styles": styles, "resolutions": RESOLUTIONS})
         if route == "/api/status":
-            return self.send_json({"comfy": morpheus.comfy_up(), "busy": gpu.locked()})
+            return self.send_json(status())
         if route == "/api/history":
             return self.send_json(history())
         if route.startswith("/api/job/"):
@@ -674,4 +729,5 @@ def warm_up() -> None:
 if __name__ == "__main__":
     print(f"Morpheus is running on http://127.0.0.1:{PORT}")
     threading.Thread(target=warm_up, daemon=True).start()
+    threading.Thread(target=sample_gpu, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

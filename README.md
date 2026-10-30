@@ -15,6 +15,11 @@ the bottom. Top right: **Ghost** mode and the light/dark switch (follows the sys
 The look is 16-bit cyberpunk: Silkscreen and VT323 pixel type for the chrome, Inter for text, neon
 cyan and magenta, stepped corners, CRT scanlines (never over pictures); logo and favicon in `web/`.
 
+The header shows ComfyUI's state (idle, thinking while Claude writes the prompt, rendering with its queue,
+off), VRAM in use and GPU load. Both come from the Windows GPU performance counters, so they count every
+program, like Task Manager; a PowerShell sampler started by the server reads them each second and ends
+with it. Sessions with a job running get a red REC dot in the list.
+
 The server starts ComfyUI and renders a tiny throwaway picture at boot, so the first real prompt
 doesn't pay the model load. Every render shows its step count and a live, pixelated preview; a
 finished picture arrives with a scanline reveal. Jobs run in the background on the server, so a
