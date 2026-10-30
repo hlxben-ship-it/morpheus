@@ -121,9 +121,8 @@ Models (only these are installed):
 {models}
 The default for new pictures is z-image-turbo (about 20 s, photoreal and good at painting styles). flux2-klein-4b is
 just as fast, an alternative with a different look. noobai-xl only for anime and illustration (then write the prompt
-as comma-separated Danbooru tags, e.g. "1girl, elf, silver hair, forest, night"). qwen-image-2512 takes 2 to 4
-minutes: use it only when the picture needs lettering or the user explicitly wants the highest quality, and say that
-it takes longer.
+as comma-separated Danbooru tags, e.g. "1girl, elf, silver hair, forest, night"). For lettering (signs, titles,
+posters) also z-image-turbo: put the exact words in quotes and keep them short.
 If the user names a specific model, use exactly that one.
 
 Styles:
@@ -690,8 +689,8 @@ class Handler(BaseHTTPRequestHandler):
         if not prompt:
             raise ValueError("Please describe what should change.")
         model = req.get("model", "flux2-klein-4b-edit")
-        if model not in morpheus.EDIT_MODELS:
-            raise ValueError(f"Unknown model '{model}'.")
+        if model not in morpheus.EDIT_MODELS or not morpheus.installed(model):
+            model = "flux2-klein-4b-edit"  # e.g. Again on an edit made with a model since deleted
         ghost = bool(req.get("ghost"))
         ref = str(req.get("source", ""))
         source_ref = None

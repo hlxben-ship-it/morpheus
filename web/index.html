@@ -1685,7 +1685,7 @@
     el.innerHTML = '<pre></pre>';
     document.body.append(el);
     const lines = ['MORPHEUS BIOS v0.3', 'GPU ........ RX 7900 XT <b>20 GB</b>', 'ENGINE ..... ComfyUI <b>:8188</b>',
-      'MODELS ..... z-image · flux2 · qwen', 'DREAM ENGINE READY'];
+      'MODELS ..... z-image · flux2 · noobai', 'DREAM ENGINE READY'];
     let n = 0, done = false;
     const pre = el.querySelector('pre');
     const end = () => { if (done) return; done = true; el.classList.add('out'); setTimeout(() => el.remove(), 400); removeEventListener('keydown', end); };

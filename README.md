@@ -59,7 +59,6 @@ Edit models live in `EDIT_MODELS` in `morpheus.py`:
 | Model | Status | Time |
 |---|---|---|
 | FLUX.2 [klein] 4B | installed (same files as text-to-image), source as reference latent | ~20–30 s once loaded |
-| Qwen-Image-Edit Rapid AIO (Phr00t, NSFW v23) | one 28 GB checkpoint `checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors` (model, encoder, VAE, accelerators); 4 steps, euler_ancestral/beta | ~12 min every time: 28 GB doesn't fit the 20 GB card, so ComfyUI streams weights |
 
 The output keeps the source's aspect ratio at about 1 MP; the time is sampling, not text encoding,
 and halving the size only halves it. CLI: `morpheus.py "instruction" --edit path\to\image.png`.
@@ -103,9 +102,13 @@ prompt with the model loaded.
 | Z-Image-Turbo | **default**: photoreal, good at painting styles | 18 s / 18 s |
 | FLUX.2 [klein] 4B | alternative look, fastest warm; also the edit model | 25 s / 13 s |
 | NoobAI-XL 1.1 (SDXL) | anime / illustration, prompt as Danbooru tags; quality tags are prepended | 22 s / 14 s |
-| Qwen-Image-2512 + Lightning LoRA | best prompt adherence and lettering | 175 s / 106 s |
 
-The chat uses Z-Image unless the picture needs lettering or the user asks for top quality.
+The chat uses Z-Image, also for lettering: short texts (signs, titles, neon) come out right; long
+multi-line text sometimes repeats a word, then **Again** helps.
+
+Qwen-Image-2512 (lettering, 175 s / 106 s) and Qwen-Image-Edit Rapid AIO (~12 min per edit) were
+removed on 2026-10-30: loading Qwen-Image filled RAM plus page file (86 of 87 GB) and crashed
+ComfyUI, and the edit model streamed its 28 GB through the 20 GB card.
 
 `MODELS` in `morpheus.py` is the registry. A model is selectable once it has a workflow and all its
 files exist under `ComfyUI/models`; the others show as "Not installed" in the UI.
@@ -134,8 +137,7 @@ files exist under `ComfyUI/models`; the others show as "Not installed" in the UI
   (17.0.1, 19.x); older ones lack APIs ComfyUI imports at startup. Don't let pip upgrade it.
 - **Models as fp8.** With models at full precision, ComfyUI streams weights between RAM and VRAM and
   a picture takes minutes instead of seconds.
-- **Z-Image's text encoder runs on the GPU** (a new prompt 59 s → ~20 s). Qwen-Image keeps its
-  encoder on the CPU, next to its 19 GB model.
+- **Z-Image's text encoder runs on the GPU** (a new prompt 59 s → ~20 s).
 - **Reserve VRAM for the desktop.** Without `--reserve-vram`, a render that spills over what Windows
   and other apps hold slowed from 1.2 s to 81 s per step.
 - The first runs after a fresh install are slower while ROCm warms up its kernels.

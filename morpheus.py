@@ -96,30 +96,6 @@ def flux2_klein_workflow(prompt: str, width: int, height: int, seed: int, steps:
     }
 
 
-def qwen_image_2512_workflow(prompt: str, width: int, height: int, seed: int, steps: int) -> dict:
-    """Qwen-Image-2512 with the 4-step Lightning LoRA (cfg 1), after ComfyUI's image_qwen_Image_2512 template.
-
-    Without the LoRA the template uses 50 steps at cfg 4. The fp8 model alone is ~20 GB, so
-    ComfyUI keeps part of it in RAM; the text encoder runs on the CPU to leave the card to it.
-    """
-    return {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors", "weight_dtype": "default"}},
-        "15": {"class_type": "LoraLoaderModelOnly", "inputs": {
-            "model": ["1", 0], "lora_name": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors", "strength_model": 1.0}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "cpu"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
-        "4": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["15", 0], "shift": 3.1}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": ""}},
-        "7": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-        "8": {"class_type": "KSampler", "inputs": {
-            "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0],
-            "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
-        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "morpheus"}},
-    }
-
-
 def sdxl_workflow(ckpt: str, sampler: str, scheduler: str, cfg: float, negative: str, prefix: str = ""):
     """Build a workflow function for an SDXL checkpoint (model, text encoders and VAE in one file)."""
     def build(prompt: str, width: int, height: int, seed: int, steps: int) -> dict:
@@ -156,29 +132,6 @@ def flux2_klein_edit_workflow(prompt: str, image: str, width: int, height: int, 
     return graph
 
 
-def qwen_rapid_aio_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int) -> dict:
-    """Phr00t's Qwen-Image-Edit-Rapid-AIO (NSFW v23): Qwen-Image-Edit-2511 with accelerator LoRAs, text encoder
-    and VAE merged into one fp8 checkpoint. 4 steps, cfg 1, euler_ancestral/beta as its model card recommends.
-
-    The Qwen2.5-VL encoder sees the image as well as the instruction, so text in images and larger
-    changes work better than with FLUX.2 [klein]. At 28 GB ComfyUI keeps part of it in RAM.
-    """
-    return {
-        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "Qwen-Rapid-AIO-NSFW-v23.safetensors"}},
-        "20": {"class_type": "LoadImage", "inputs": {"image": image}},
-        "21": {"class_type": "ImageScale", "inputs": {"image": ["20", 0], "upscale_method": "lanczos",
-                                                      "width": width, "height": height, "crop": "center"}},
-        "5": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {"clip": ["1", 1], "prompt": prompt, "vae": ["1", 2], "image1": ["21", 0]}},
-        "6": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {"clip": ["1", 1], "prompt": "", "vae": ["1", 2], "image1": ["21", 0]}},
-        "7": {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["1", 2]}},
-        "8": {"class_type": "KSampler", "inputs": {
-            "model": ["1", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0],
-            "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler_ancestral", "scheduler": "beta", "denoise": 1.0}},
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["1", 2]}},
-        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "morpheus"}},
-    }
-
-
 SDXL_NEGATIVE = "lowres, blurry, out of focus, deformed, bad anatomy, bad hands, extra limbs, mutated, watermark, text, logo, signature"
 
 # A model is usable when all its files are present under ComfyUI/models. Entries without a
@@ -198,14 +151,6 @@ MODELS = {
         "files": ["diffusion_models/flux-2-klein-4b.safetensors", "text_encoders/qwen_3_4b.safetensors", "vae/flux2-vae.safetensors"],
         "steps": 4,
         "workflow": flux2_klein_workflow,
-    },
-    "qwen-image-2512": {
-        "label": "Qwen-Image-2512",
-        "note": "Best quality, lettering, Apache 2.0",
-        "files": ["diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors", "loras/Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
-                  "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
-        "steps": 4,
-        "workflow": qwen_image_2512_workflow,
     },
     "noobai-xl": {
         "label": "NoobAI-XL 1.1 (SDXL)",
@@ -229,13 +174,6 @@ EDIT_MODELS = {
         "files": MODELS["flux2-klein-4b"]["files"],
         "steps": 4,
         "workflow": flux2_klein_edit_workflow,
-    },
-    "qwen-rapid-aio": {
-        "label": "Qwen-Image-Edit Rapid AIO",
-        "note": "Best quality, lettering, bigger changes",
-        "files": ["checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors"],
-        "steps": 4,
-        "workflow": qwen_rapid_aio_workflow,
     },
 }
 
