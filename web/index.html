@@ -344,6 +344,10 @@
   .boot pre i { display: inline-block; width: .6em; background: var(--cyan); animation: blink .8s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  /* results are thumbnails: never stretched, never huge, click opens the full picture */
+  .out img, .out video { align-self: flex-start; width: auto; height: auto; max-width: min(100%, 380px); max-height: 380px; object-fit: contain; }
+  .out video { max-width: min(100%, 520px); max-height: 420px; }
+
   /* chat attachment */
   .clip { flex: none; width: 42px; height: 42px; border: 1px solid var(--line); background: transparent; color: var(--muted); display: grid; place-items: center; }
   .clip:hover { color: var(--cyan); border-color: var(--cyan); }
