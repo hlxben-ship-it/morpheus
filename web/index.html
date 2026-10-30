@@ -109,6 +109,10 @@
   .msg.bot.err > p { color: var(--danger); }
   .msg.working { color: var(--muted); }
   .msg.working b { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .live { display: block; width: min(360px, 80vw); margin-top: 10px; border-radius: 10px; box-shadow: var(--shadow);
+    filter: saturate(1.1); animation: breathe 2s ease-in-out infinite; }
+  @keyframes breathe { 50% { opacity: .82; } }
+  @media (prefers-reduced-motion: reduce) { .live { animation: none; } }
   .progress { width: min(340px, 70vw); height: 5px; margin-top: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; }
   .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--pink)); transition: width .3s; }
 
@@ -452,6 +456,12 @@
         <button type="button" class="del" aria-label="Session löschen" title="Löschen">✕</button>`;
       const open = () => { openSession(s.id); document.body.classList.remove('side-open'); };
       b.onclick = e => { if (!e.target.closest('.del')) open(); };
+      b.title = 'Doppelklick zum Umbenennen';
+      b.ondblclick = e => {
+        if (e.target.closest('.del')) return;
+        const name = prompt('Name der Session', s.title || '');
+        if (name?.trim()) { s.title = name.trim().slice(0, 60); save(); }
+      };
       b.onkeydown = e => { if (e.key === 'Enter') open(); };
       b.querySelector('.del').onclick = () => {
         if (!confirm(`Session „${s.title || 'Neue Session'}“ löschen? Die Bilder bleiben in der Galerie.`)) return;
@@ -525,16 +535,44 @@
     const card = Object.assign(document.createElement('div'), { className: 'out' + (h.ghost ? ' ghosted' : '') });
     card.innerHTML = `<img src="${url(h.image)}" alt="${esc(h.prompt)}" class="${pixel ? 'pixel' : ''}" loading="lazy">
       <div class="acts"><span class="meta">${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
-        <button type="button" data-a="edit">Bearbeiten</button><button type="button" data-a="reuse">Variante</button>
+        <button type="button" data-a="again" title="Gleiche Einstellungen, neuer Seed">Nochmal</button>
+        <button type="button" data-a="edit">Bearbeiten</button><button type="button" data-a="reuse" title="Prompt und Einstellungen in die Eingabe laden">Variante</button>
+        <button type="button" data-a="copy">Prompt kopieren</button>
         <a href="${url(pixel ? h.image : h.raw)}" target="_blank" rel="noopener">Öffnen</a></div>
       <details><summary>Prompt</summary><p>${esc(h.prompt)}</p></details>`;
     const img = card.querySelector('img');
     img.onclick = () => lightbox(h);
+    card.querySelector('[data-a="again"]').onclick = () => again(h);
+    card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.target);
     img.onerror = () => img.replaceWith(Object.assign(document.createElement('p'), { className: 'hint',
       textContent: h.ghost ? 'Geist-Bild, nicht mehr im Speicher.' : 'Das Bild ist nicht mehr vorhanden.' }));
     card.querySelector('[data-a="edit"]').onclick = () => editImage(h);
     card.querySelector('[data-a="reuse"]').onclick = () => fillForm(h);
     return card;
+  }
+
+  // One click to roll again: same prompt, model and format (or the same edit of the same source), new render seed.
+  async function again(h) {
+    const s = ensureSession();
+    try {
+      if ('source' in h) {
+        if (!h.source || h.source.includes(':')) throw new Error('Das Ausgangsbild dieser Bearbeitung ist nicht mehr da.');
+        addMessage({ role: 'user', kind: 'Nochmal', text: h.prompt, thumb: url(h.source) }, s);
+        await startJob(s, 'edit', '/api/edit', { prompt: h.prompt, model: h.model, source: h.source, ghost: state.ghost });
+      } else {
+        addMessage({ role: 'user', kind: 'Nochmal', text: h.prompt }, s);
+        await startJob(s, 'manual', '/api/generate', { prompt: h.prompt, style: h.style, model: h.model, width: h.width, height: h.height, ghost: state.ghost });
+      }
+    } catch (err) {
+      addMessage({ role: 'bot', error: true, text: err.message }, s);
+    }
+    lb.close();
+  }
+
+  async function copyPrompt(h, button) {
+    try { await navigator.clipboard.writeText(h.prompt); button.textContent = 'Kopiert ✓'; }
+    catch { button.textContent = 'Nicht möglich'; }
+    setTimeout(() => { button.textContent = 'Prompt kopieren'; }, 1500);
   }
 
   function videoCard(v) {
@@ -556,10 +594,23 @@
   function workingEl(m) {
     const el = Object.assign(document.createElement('div'), { className: 'msg bot working' });
     const entry = { el, m };
+    let frame = 0;
     entry.paint = () => {
       const s = Math.round((Date.now() - m.since) / 1000);
-      el.innerHTML = `<p>${esc(m.status || WAIT[m.kind]?.(s) || 'Läuft …')} <b>${s} s</b></p>` +
-        (m.kind === 'swap' ? `<div class="progress"><i style="width:${m.pct || 0}%"></i></div>` : '');
+      const text = m.status || (m.total ? `Schritt ${m.step} von ${m.total}` : WAIT[m.kind]?.(s)) || 'Läuft …';
+      const pct = m.kind === 'swap' ? m.pct || 0 : m.total ? 100 * m.step / m.total : null;
+      if (!el.firstChild) el.innerHTML = '<p></p><div class="progress" hidden><i></i></div><img class="live" alt="" hidden>';
+      el.querySelector('p').innerHTML = `${esc(text)} <b>${s} s</b>`;
+      el.querySelector('.progress').hidden = pct == null;
+      el.querySelector('.progress i').style.width = (pct || 0) + '%';
+      // the picture forming: ComfyUI's live preview, swapped in only when a newer frame exists
+      const live = el.querySelector('.live');
+      if (m.previews && m.previews !== frame) {
+        frame = m.previews;
+        const next = new Image();
+        next.onload = () => { live.src = next.src; live.hidden = false; };
+        next.src = `/api/job/${m.job}/preview?n=${frame}`;
+      }
     };
     entry.paint();
     live.add(entry);
@@ -581,11 +632,12 @@
         job = await r.json();
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
-        if (m.kind === 'swap') {
+        if (m.kind !== 'swap') Object.assign(m, { step: job.step, total: job.total, previews: job.previews });
+        else {
           m.status = job.state === 'waiting' ? 'Wartet, bis die Grafikkarte frei ist …' : job.total ? `Bild ${job.frame} von ${job.total}` : 'Modelle werden geladen …';
           m.pct = job.total ? 100 * job.frame / job.total : 0;
         }
-        await new Promise(res => setTimeout(res, 1000));
+        await new Promise(res => setTimeout(res, m.kind === 'swap' ? 1000 : 400));
       }
       const out = job.result;
       if (m.kind === 'chat') {
@@ -603,7 +655,7 @@
     } catch (err) {
       Object.assign(m, { error: true, text: err.message });
     }
-    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label']) delete m[k];
+    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews']) delete m[k];
     following.delete(id);
     s.updated = Date.now();
     save();
@@ -806,6 +858,36 @@
   }
   dropZone($('drop'), $('edit-file'), f => readImage(f, data => setSource({ upload: data })));
 
+  // Drop or paste anywhere: an image becomes the edit source, a video goes to EasySwap. The settings' own drop
+  // zones keep their meaning (photo vs. video) and stop the event before it gets here.
+  function takeAnywhere(file) {
+    if (!file) return false;
+    if (file.type.startsWith('image/')) {
+      readImage(file, data => setSource({ upload: data }));
+      state.optsOpen = true;
+      setMode('edit');
+      $('input').focus();
+      return true;
+    }
+    if (file.type.startsWith('video/')) {
+      takeVideo(file);
+      state.optsOpen = true;
+      setMode('swap');
+      return true;
+    }
+    return false;
+  }
+  document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if (e.target.closest?.('.drop')) return;
+    e.preventDefault();
+    takeAnywhere(e.dataTransfer.files[0]);
+  });
+  document.addEventListener('paste', e => {
+    const file = [...(e.clipboardData?.files || [])][0];
+    if (file && takeAnywhere(file)) e.preventDefault();
+  });
+
   function editImage(h) {
     setSource({ file: h.raw });
     state.optsOpen = true;
@@ -841,13 +923,14 @@
     Object.assign($('swap-photo-preview'), { src: data, hidden: false });
     $('swap-photo-empty').hidden = true;
   }));
-  dropZone($('swap-video-drop'), $('swap-video-file'), f => {
+  function takeVideo(f) {
     if (!f?.type.startsWith('video/')) return;
     if (swap.video) URL.revokeObjectURL($('swap-video-preview').src);
     swap.video = f;
     Object.assign($('swap-video-preview'), { src: URL.createObjectURL(f), hidden: false });
     $('swap-video-empty').hidden = true;
-  });
+  }
+  dropZone($('swap-video-drop'), $('swap-video-file'), takeVideo);
   [...$('swap-upscale').children].forEach((b, k) => b.onclick = () => { state.upscale = +b.dataset.v; press($('swap-upscale'), k); });
 
   // Time range: only this section gets swapped. The preview loops it, so you see exactly what will be processed.
@@ -948,11 +1031,13 @@
       <div class="acts"><span class="meta">${h.ghost ? 'Geist · ' : ''}${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
         ${pixel ? `<button type="button" data-a="raw" aria-pressed="${raw}">Roh</button>` : ''}
         ${linked ? `<a href="${url(h.source)}" target="_blank" rel="noopener">Vorher</a>` : ''}
+        <button type="button" data-a="again">Nochmal</button>
         <button type="button" data-a="reuse">Variante</button><button type="button" data-a="edit">Bearbeiten</button>
         <a href="${url(file)}" target="_blank" rel="noopener">Öffnen</a><button type="button" data-a="close" aria-label="Schließen">✕</button></div>`;
     const on = (a, f) => { const b = $('lb-inner').querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     on('raw', () => lightbox(h, !raw));
     on('reuse', () => fillForm(h));
+    on('again', () => again(h));
     on('edit', () => editImage(h));
     on('close', () => lb.close());
     if (!lb.open) lb.showModal();
