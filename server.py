@@ -484,7 +484,7 @@ class Handler(BaseHTTPRequestHandler):
         route = self.path.split("?")[0]
         if route == "/":
             return self.send_file(WEB / "index.html", WEB)
-        if route in ("/logo.png", "/favicon.png"):
+        if route in ("/logo.png", "/favicon.png", "/city.png"):
             return self.send_file(WEB / route[1:], WEB)
         if route == "/api/options":
             models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
