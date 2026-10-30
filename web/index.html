@@ -252,10 +252,10 @@
     <div class="composer">
       <form class="box" id="composer">
         <div class="modes" role="tablist" aria-label="Modus">
-          <button type="button" role="tab" data-mode="chat" aria-selected="true">Chat</button>
-          <button type="button" role="tab" data-mode="manual" aria-selected="false">Manuell</button>
-          <button type="button" role="tab" data-mode="edit" aria-selected="false">Bearbeiten</button>
-          <button type="button" role="tab" data-mode="swap" aria-selected="false">EasySwap</button>
+          <button type="button" role="tab" data-mode="chat" aria-selected="true" title="Alt+1">Chat</button>
+          <button type="button" role="tab" data-mode="manual" aria-selected="false" title="Alt+2">Manuell</button>
+          <button type="button" role="tab" data-mode="edit" aria-selected="false" title="Alt+3">Bearbeiten</button>
+          <button type="button" role="tab" data-mode="swap" aria-selected="false" title="Alt+4">EasySwap</button>
           <button type="button" class="opts-toggle" id="opts-toggle" hidden></button>
         </div>
 
@@ -716,6 +716,12 @@
     if (!swap) $('input').placeholder = PLACEHOLDER[mode];
   }
   document.querySelectorAll('.modes [role="tab"]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  // keyboard: "/" jumps to the input, Alt+1-4 picks the mode
+  document.addEventListener('keydown', e => {
+    const typing = e.target.closest?.('input, textarea, [contenteditable]');
+    if (e.key === '/' && !typing && !lb.open) { e.preventDefault(); $('input').focus(); }
+    if (e.altKey && ['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); setMode(['chat', 'manual', 'edit', 'swap'][+e.key - 1]); $('input').focus(); }
+  });
   $('opts-toggle').onclick = () => { state.optsOpen = !state.optsOpen; store.set('optsOpen', state.optsOpen); setMode(state.mode); };
 
   const grow = () => { const t = $('input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; };
