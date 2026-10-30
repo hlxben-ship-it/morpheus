@@ -240,11 +240,6 @@
   .hero img { width: 84px; height: 84px; border-radius: 22px; }
   .hero .greet { font: 600 24px/1.3 Inter, sans-serif; margin-top: 22px; letter-spacing: -.01em; }
   .hero .greet span { background: linear-gradient(90deg, var(--accent), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .ideas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 22px; }
-  .idea { border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); border-radius: 999px; padding: 8px 14px; font-size: 13px;
-    transition: border-color .15s, transform .15s, box-shadow .15s; }
-  .idea:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 20px var(--glow); }
-  .idea em { font-style: normal; color: var(--accent); font-weight: 600; margin-right: 6px; }
   .recent { margin-top: 34px; text-align: left; }
   .recent .label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
   .recent .label button { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 12.5px; }
@@ -290,12 +285,12 @@
   /* stepped 8-bit corners instead of round ones */
   .pxc { clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px),
     calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); }
-  .new, .send, .modes [role="tab"][aria-selected="true"], .idea, .acts button, .acts a, .strip button, .grid button, .msg.user, .msg.working, .chip, .ratio, .model {
+  .new, .send, .modes [role="tab"][aria-selected="true"], .acts button, .acts a, .strip button, .grid button, .msg.user, .msg.working, .chip, .ratio, .model {
     border-radius: 0; clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px),
       calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
   .box { border-radius: 0; border: 2px solid var(--line); }
   .box:focus-within { border-color: var(--cyan); box-shadow: var(--shadow), 0 0 0 1px var(--cyan), 0 0 24px color-mix(in srgb, var(--cyan) 35%, transparent); }
-  .word, .hero .greet, .side-label, .modes [role="tab"], .new, .idea em, .recent .label, .field > .label, .acts button, .acts a, .side-foot button, .send {
+  .word, .hero .greet, .side-label, .modes [role="tab"], .new, .recent .label, .field > .label, .acts button, .acts a, .side-foot button, .send {
     font-family: var(--px); letter-spacing: .04em; text-transform: none; }
   .word { font-size: 18px; letter-spacing: .12em; text-shadow: 2px 0 var(--pink), -2px 0 var(--cyan); }
   .hero .greet { font-size: 22px; line-height: 1.5; }
@@ -307,8 +302,7 @@
   .new { background: linear-gradient(90deg, var(--accent), var(--pink)); }
   .send { background: var(--pink); box-shadow: 0 0 18px color-mix(in srgb, var(--pink) 55%, transparent); }
   .modes [role="tab"][aria-selected="true"] { background: var(--cyan); color: #0a0614; box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 50%, transparent); }
-  .idea:hover, .acts button:hover, .acts a:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
-  .idea em { color: var(--pink); }
+  .acts button:hover, .acts a:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
   .msg.user { background: linear-gradient(90deg, var(--accent), var(--pink)); }
   .progress { border-radius: 0; height: 8px; background: var(--raised); }
   .progress i { background: repeating-linear-gradient(90deg, var(--cyan) 0 6px, transparent 6px 8px); }
@@ -772,7 +766,7 @@
   function lockKind() {
     const s = current(), kind = kindOf(s);
     if (kind && state.mode !== kind) setMode(kind);
-    document.querySelectorAll('.modes [role="tab"]').forEach(b => { b.hidden = !!kind; });
+    document.querySelectorAll('.modes [role="tab"]').forEach(b => { b.hidden = true; });  // the kind is picked on the start screen's cards
     $('kind-badge').hidden = !kind;
     $('kind-badge').textContent = KIND_LABEL[kind] || '';
     // a Guise is one job: once its video is there, the input gives way to "again with changes" or a new one
@@ -810,24 +804,13 @@
     if (!s || !s.messages.length) {
       const hour = new Date().getHours();
       const hi = hour < 12 ? 'Good morning' : hour < 18 ? 'Hello' : 'Good evening';
-      const ideas = [
-        ['chat', 'Chat', 'A lighthouse in a storm, oil painting'],
-        ['chat', 'Chat', 'Portrait of an astronaut, Kodak Portra'],
-        ['chat', 'Chat', 'Café in Tokyo, rain, night'],
-        ['chat', 'Chat', 'A fox in the snow, watercolour'],
-      ];
       const recent = state.history.slice(0, 6);
       col.innerHTML = `<div class="hero"><img src="/logo.png" alt="">
         <p class="greet">${hi} — <span>what are we dreaming today?</span></p>
         <div class="kinds">${Object.entries(KIND_INFO).map(([k, [name, what]]) =>
           `<button type="button" class="kind-card" data-k="${k}" aria-pressed="${state.mode === k}"><b>${name}</b><span>${what}</span></button>`).join('')}</div>
-        <div class="ideas" ${state.mode === 'chat' ? '' : 'hidden'}>${ideas.map((i, n) => `<button type="button" class="idea" data-n="${n}"><em>${i[1]}</em>${i[2]}</button>`).join('')}</div>
         ${recent.length ? `<div class="recent"><div class="label">Recently made <button type="button" id="all-recent">See all →</button></div><div class="strip"></div></div>` : ''}
         </div>`;
-      col.querySelectorAll('.idea').forEach(b => b.onclick = () => {
-        $('input').value = ideas[+b.dataset.n][2]; $('input').dispatchEvent(new Event('input'));
-        $('input').focus();
-      });
       col.querySelectorAll('.kind-card').forEach(b => b.onclick = () => {
         if (b.dataset.k !== 'chat') state.optsOpen = true;
         setMode(b.dataset.k); stashDraft(); renderThread();
