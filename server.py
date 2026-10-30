@@ -327,34 +327,91 @@ def background(job: dict, handler, req: dict) -> None:
 
 # GPU load and VRAM from the Windows performance counters, which see every process (ROCm, the desktop, games),
 # not just ComfyUI's own torch. One long-lived PowerShell samples them; spawning one per poll takes seconds.
-GPU_STATS = {"load": None, "vram": None}
+GPU_STATS = {"load": None, "vram": None, "procs": []}
 GPU_SAMPLER = r"""
 $ErrorActionPreference = 'SilentlyContinue'
 while (Get-Process -Id SERVER_PID) {  # ends with the server, also when it is killed
-  $c = (Get-Counter '\GPU Engine(*)\Utilization Percentage', '\GPU Adapter Memory(*)\Dedicated Usage').CounterSamples
-  $eng = @{}; $vram = [double]0
+  $c = (Get-Counter '\GPU Engine(*)\Utilization Percentage', '\GPU Adapter Memory(*)\Dedicated Usage',
+                    '\GPU Process Memory(*)\Dedicated Usage').CounterSamples
+  $eng = @{}; $vram = [double]0; $mem = @{}
   foreach ($s in $c) {
     if ($s.Path -match 'luid_(\w+?_\w+?)_phys_\d+_eng_(\d+)') { $eng[$Matches[1] + $Matches[2]] += $s.CookedValue }
+    elseif ($s.Path -match 'process memory\(pid_(\d+)_') { $mem[[int]$Matches[1]] += $s.CookedValue }
     elseif ($s.Path -like '*dedicated usage') { $vram = [Math]::Max($vram, $s.CookedValue) }
   }
   $load = ($eng.Values | Measure-Object -Maximum).Maximum
-  '{0:F0} {1:F0}' -f [Math]::Min(100, [double]$load), $vram
+  $top = $mem.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3 | ForEach-Object {
+    $p = Get-Process -Id $_.Key
+    $name = if ($p.Description) { $p.Description } else { $p.ProcessName }
+    if ($p.ProcessName -eq 'python' -and (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Key)").CommandLine -match 'ComfyUI.main\.py') { $name = 'ComfyUI' }
+    @{ pid = $_.Key; name = $name; exe = $p.ProcessName; bytes = [long]$_.Value } }
+  @{ load = [int][Math]::Min(100, [double]$load); vram = [long]$vram; procs = @($top) } | ConvertTo-Json -Compress -Depth 3
   Start-Sleep -Milliseconds 600
 }
 """
 
 
 def sample_gpu() -> None:
-    """Task Manager's view: an adapter's load is its busiest engine, summed over processes."""
+    """Task Manager's view: an adapter's load is its busiest engine, summed over processes; VRAM per process too."""
     p = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-Command", GPU_SAMPLER.replace("SERVER_PID", str(os.getpid()))],
-                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace",
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     for line in p.stdout:
         try:
-            load, vram = line.split()
-            GPU_STATS.update(load=int(load), vram=int(vram))
+            GPU_STATS.update(json.loads(line))
         except ValueError:
             pass
+
+
+class GpuTemp:
+    """Temperatures from AMD's driver library (ADL's PMLog, as the Adrenalin overlay reads them). Windows has no
+    counter for them. None where the library or the sensor is missing, e.g. on another vendor's card."""
+    SENSORS = {"edge": 8, "mem": 9, "hotspot": 27, "fan": 15}  # ADL_PMLOG_* indices; fan in percent
+
+    def __init__(self):
+        self.lock, self.ctx, self.adapter = threading.Lock(), None, None
+        try:
+            import ctypes as C
+            self.C, self.adl = C, C.WinDLL("atiadlxx.dll")
+            self._buffers = []
+            self._alloc = C.WINFUNCTYPE(C.c_void_p, C.c_int)(self._malloc)
+            ctx = C.c_void_p()
+            if self.adl.ADL2_Main_Control_Create(self._alloc, 1, C.byref(ctx)) != 0:
+                return
+            n = C.c_int()
+            self.adl.ADL2_Adapter_NumberOfAdapters_Get(ctx, C.byref(n))
+            for i in range(n.value):
+                active = C.c_int()
+                self.adl.ADL2_Adapter_Active_Get(ctx, i, C.byref(active))
+                if active.value:
+                    self.ctx, self.adapter = ctx, i
+                    break
+
+            class Sensor(C.Structure):
+                _fields_ = [("supported", C.c_int), ("value", C.c_int)]
+
+            class PMLog(C.Structure):
+                _fields_ = [("size", C.c_int), ("sensors", Sensor * 256)]
+            self.PMLog = PMLog
+        except (OSError, AttributeError):
+            self.ctx = None
+
+    def _malloc(self, size):
+        buf = self.C.create_string_buffer(size)
+        self._buffers.append(buf)  # ADL keeps what it allocates for the life of the context
+        return self.C.addressof(buf)
+
+    def read(self) -> dict:
+        if self.ctx is None:
+            return {}
+        with self.lock:
+            out = self.PMLog()
+            if self.adl.ADL2_New_QueryPMLogData_Get(self.ctx, self.adapter, self.C.byref(out)) != 0:
+                return {}
+        return {k: out.sensors[i].value for k, i in self.SENSORS.items() if out.sensors[i].supported}
+
+
+GPU_TEMP = GpuTemp()
 
 
 VRAM_TOTAL = None  # from ComfyUI once, it doesn't change
@@ -376,7 +433,8 @@ def status() -> dict:
     running = sum(1 for j in JOBS.values() if j.get("state") in ("running", "waiting")) + \
         sum(1 for j in SWAPS.values() if j.get("state") in ("running", "waiting"))
     return {"comfy": comfy, "busy": gpu.locked() or queue > 0, "queue": queue, "jobs": running,
-            "load": GPU_STATS["load"], "vram": GPU_STATS["vram"], "vram_total": VRAM_TOTAL}
+            "load": GPU_STATS["load"], "vram": GPU_STATS["vram"], "vram_total": VRAM_TOTAL, "procs": GPU_STATS["procs"],
+            "temp": GPU_TEMP.read()}
 
 
 def copy_picture(source: str, dest: Path) -> None:
