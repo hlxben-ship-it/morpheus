@@ -410,7 +410,7 @@
           <button type="button" role="tab" data-mode="chat" aria-selected="true" title="Alt+1">Chat</button>
           <button type="button" role="tab" data-mode="manual" aria-selected="false" title="Alt+2">Manual</button>
           <button type="button" role="tab" data-mode="edit" aria-selected="false" title="Alt+3">Edit</button>
-          <button type="button" role="tab" data-mode="swap" aria-selected="false" title="Alt+4">EasySwap</button>
+          <button type="button" role="tab" data-mode="swap" aria-selected="false" title="Alt+4">Guise</button>
           <button type="button" class="opts-toggle" id="opts-toggle" hidden></button>
         </div>
 
@@ -652,7 +652,7 @@
   $('menu').onclick = () => document.body.classList.toggle('side-open');
 
   // ---------- Thread ----------
-  const KIND = { manual: 'Manual', edit: 'Edit', swap: 'EasySwap' };
+  const KIND = { manual: 'Manual', edit: 'Edit', swap: 'Guise' };
   function renderThread() {
     if (state.view === 'gallery') return renderGallery();
     const col = $('col'), s = current();
@@ -665,7 +665,7 @@
         ['chat', 'Chat', 'Portrait of an astronaut, Kodak Portra'],
         ['chat', 'Chat', 'Café in Tokyo, rain, night'],
         ['edit', 'Edit', 'Change a picture: “make it night”'],
-        ['swap', 'EasySwap', 'Put a face into a video'],
+        ['swap', 'Guise', 'Put a face into a video'],
       ];
       const recent = state.history.slice(0, 6);
       col.innerHTML = `<div class="hero"><img src="/logo.png" alt="">
@@ -1079,7 +1079,7 @@
   }
   dropZone($('drop'), $('edit-file'), f => readImage(f, data => setSource({ upload: data })));
 
-  // Drop or paste anywhere: an image becomes the edit source, a video goes to EasySwap. The settings' own drop
+  // Drop or paste anywhere: an image becomes the edit source, a video goes to Guise. The settings' own drop
   // zones keep their meaning (photo vs. video) and stop the event before it gets here.
   // ---------- Chat attachment: one picture rides along with the next chat message ----------
   function attachChat(pic) {
@@ -1152,7 +1152,7 @@
     }
   }
 
-  // ---------- EasySwap ----------
+  // ---------- Guise ----------
   // The photo stays a data URL until sent. The video stays a File: the preview plays it straight from disk
   // (an object URL, instant at any size) and it is uploaded raw on start, never base64-encoded.
   const swap = { photo: null, video: null };
@@ -1323,7 +1323,7 @@
       ['New session', '', () => $('new-session').click()],
       ['Gallery', '', () => $('open-gallery').click()],
       ['Mode: Chat', 'Alt+1', () => setMode('chat')], ['Mode: Manual', 'Alt+2', () => setMode('manual')],
-      ['Mode: Edit', 'Alt+3', () => setMode('edit')], ['Mode: EasySwap', 'Alt+4', () => setMode('swap')],
+      ['Mode: Edit', 'Alt+3', () => setMode('edit')], ['Mode: Guise', 'Alt+4', () => setMode('swap')],
       ['Ghost mode on/off', '', () => $('ghost').click()], ['Light / dark', '', () => $('theme').click()],
     ];
     state.sessions.slice(0, 12).forEach(s => list.push([`Session: ${s.title || 'Untitled'}`, '', () => openSession(s.id)]));

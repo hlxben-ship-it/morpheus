@@ -36,7 +36,7 @@ The composer has four modes (Alt+1–4), each with its settings behind **Setting
 - **Edit** — change an existing picture by instruction ("make it night"). The source is an upload
   (drag & drop) or any result via its **Edit** button; uploads land in `output/uploads/`, and an
   edited picture links back to its source ("Before"). The next edit builds on the last result.
-- **EasySwap** — the face from a photo onto the largest face in a video section (`faceswap.py`,
+- **Guise** — the face from a photo onto the largest face in a video section (`faceswap.py`,
   `.venv-faceswap`): High (HyperSwap 256 + GPEN 512), Premium (GPEN 1024), Fast (inswapper 128);
   optional hair recolouring and Real-ESRGAN ×2/×4 upscaling (capped at 4K).
 
