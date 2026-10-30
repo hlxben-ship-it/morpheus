@@ -362,13 +362,11 @@
   .hud-tip .foot { margin-top: 8px; font-size: 14px; color: var(--muted); }
   @media (max-width: 900px) { .hud .bar, .hud-meter b { display: none; } }
   @media (max-width: 640px) { .hud-meter { display: none; } }
-  /* CRT scanlines + a faint pixel grid over the backdrop, never over pictures' clicks */
+  /* CRT scanlines over the backdrop, never over pictures' clicks */
   body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50; mix-blend-mode: overlay; opacity: .35;
     background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); }
   body { background: linear-gradient(transparent 0 0), radial-gradient(900px 500px at 85% -10%, rgba(177, 77, 255, .28), transparent 60%),
-    radial-gradient(800px 500px at -10% 110%, rgba(255, 42, 109, .18), transparent 60%),
-    linear-gradient(color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px, var(--bg); background-attachment: fixed; }
+    radial-gradient(800px 500px at -10% 110%, rgba(255, 42, 109, .18), transparent 60%), var(--bg); background-attachment: fixed; }
   .out img, .out video, .live, .strip img, .grid img { position: relative; z-index: 51; }
   /* the picture forming is upscaled as hard pixels, so the wait itself looks 16-bit */
   .live { image-rendering: pixelated; animation: none; }
@@ -407,7 +405,6 @@
   .kind-card[aria-pressed="true"] b { color: var(--cyan); }
   @media (max-width: 860px) { .kinds { grid-template-columns: 1fr; } }
   .kind-badge { font: 700 11px/1 var(--px); letter-spacing: .08em; color: var(--cyan); border: 1px solid var(--cyan); padding: 6px 10px; }
-  .kind-badge::before { content: '● '; color: var(--pink); }
   .done-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; }
   .done-bar span { flex: 1; font: 19px var(--term); color: var(--muted); }
   .done-bar span::before { content: '> '; color: var(--cyan); }
@@ -479,6 +476,26 @@
     .word b { animation: flicker 6s steps(1) infinite; }
     @keyframes flicker { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: .3; } }
   }
+
+  /* ---------- design pass: the picture leads, one job per colour, quieter chrome ---------- */
+  .col, .box { max-width: 1040px; }
+  /* the newest picture is the hero; older ones stay thumbnails */
+  .msg.latest .out img, .msg.latest .out video { max-width: min(100%, 880px); max-height: min(68vh, 880px); }
+  /* your messages: calm; the gradient is kept for the one main button */
+  .msg.user { background: var(--raised); color: var(--text); box-shadow: none; border: 1px solid var(--line); }
+  .msg.user .kind { color: var(--cyan); }
+  /* details on their own quiet line; Again and Edit as words, the rest as icons that wake on hover */
+  .out .acts .meta { flex-basis: 100%; margin: 2px 0 2px; font-size: 14px; opacity: .8; }
+  .acts button, .acts a { font: 400 17px/1 var(--term); letter-spacing: .04em; text-transform: uppercase; padding: 6px 12px; }
+  .acts .more { display: inline-flex; gap: 4px; margin-left: 4px; opacity: .35; transition: opacity .15s; }
+  .out:hover .more, .out:focus-within .more, .lb .more { opacity: 1; }
+  @media (hover: none) { .acts .more { opacity: 1; } }
+  .acts .ico { padding: 5px 7px; display: inline-grid; place-items: center; }
+  .acts .ico svg { width: 16px; height: 16px; }
+  .acts .ico.ok { color: var(--cyan); border-color: var(--cyan); }
+  /* small labels in the terminal face, where the pixel face turns to mush */
+  .hud b, .hud-tip h4, .hud-tip .models .sub, .side-label { font: 400 15px/1 var(--term); letter-spacing: .1em; }
+  .hud b { margin-right: 7px; }
 </style>
 </head>
 <body>
@@ -486,7 +503,7 @@
   <header class="top">
     <button type="button" class="icon-btn menu" id="menu" aria-label="Show sessions">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <a class="brand" href="/"><img src="/logo.png" alt=""><span class="word">MORPH<b>E</b>US</span><small>v0.1</small></a>
+    <a class="brand" href="/"><img src="/logo.png" alt=""><span class="word">MORPH<b>E</b>US</span><small>v0.2</small></a>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
         <span class="hud-comfy" id="hud-comfy" data-s="off" data-tip="comfy"><i></i><b>Comfy</b> <em>…</em></span>
@@ -735,7 +752,7 @@
       const b = Object.assign(document.createElement('div'), { className: 'sess', role: 'button', tabIndex: 0 });
       b.setAttribute('aria-current', String(s.id === state.currentId && state.view === 'thread'));
       const live = s.messages.some(m => m.job);
-      b.innerHTML = `${live ? '<i class="live" title="Running"></i>' : ''}<span><b>${esc(s.title || 'New session')}</b><small>${when(s.updated)} · ${s.messages.filter(m => m.image || m.video).length} results</small></span>
+      b.innerHTML = `${live ? '<i class="live" title="Running"></i>' : ''}<span><b>${esc(s.title || 'New session')}</b><small>${when(s.updated)} · ${plural(s.messages.filter(m => m.image || m.video).length, 'result')}</small></span>
         <button type="button" class="del" aria-label="Delete session" title="Delete">✕</button>`;
       const open = () => { openSession(s.id); document.body.classList.remove('side-open'); };
       b.onclick = e => { if (!e.target.closest('.del')) open(); };
@@ -887,7 +904,8 @@
       if (strip) $('all-recent').onclick = () => $('open-gallery').click();
       return;
     }
-    s.messages.forEach(m => col.append(messageEl(m)));
+    const latest = s.messages.findLast(m => m.image || m.video);  // shown large, the older ones as thumbnails
+    s.messages.forEach(m => col.append(messageEl(m, m === latest)));
     // the picture that just landed loads at once, so the reveal plays on the picture and not on an empty box
     col.querySelectorAll('.fresh img').forEach(i => { i.loading = 'eager'; i.addEventListener('load', scrollDown, { once: true }); });
     scrollDown();
@@ -895,7 +913,7 @@
   const scrollDown = () => { $('thread').scrollTop = $('thread').scrollHeight; };
 
   let fresh = null; // the message that just landed gets the scanline reveal, once
-  function messageEl(m) {
+  function messageEl(m, latest) {
     const el = document.createElement('div');
     if (m.role === 'user') {
       el.className = 'msg user';
@@ -903,7 +921,7 @@
       return el;
     }
     if (m.job) return workingEl(m);
-    el.className = 'msg bot' + (m.error ? ' err' : '') + (m === fresh ? ' fresh' : '');
+    el.className = 'msg bot' + (m.error ? ' err' : '') + (m === fresh ? ' fresh' : '') + (latest ? ' latest' : '');
     if (m.text) el.innerHTML = `<p>${esc(m.text)}</p>`;
     if (m.image) el.append(imageCard(m.image));
     if (m.video) el.append(videoCard(m.video));
@@ -917,14 +935,14 @@
       <div class="acts"><span class="meta">${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
         <button type="button" data-a="again" title="Same settings, new seed">Again</button>
         <button type="button" data-a="edit" title="Change this picture in a chat">Edit</button>
-        ${'source' in h ? '' : '<button type="button" data-a="reuse" title="Prompt and settings into a Manual session">Variant</button>'}
-        <button type="button" data-a="copy">Copy prompt</button>
-        <a href="${url(pixel ? h.image : h.raw)}" target="_blank" rel="noopener">Open</a></div>
+        <span class="more">${'source' in h ? '' : `<button type="button" class="ico" data-a="reuse" title="Variant: prompt and settings into a Manual session" aria-label="Variant">${ACT_ICON.variant}</button>`}
+        <button type="button" class="ico" data-a="copy" title="Copy prompt" aria-label="Copy prompt">${ACT_ICON.copy}</button>
+        <a class="ico" href="${url(pixel ? h.image : h.raw)}" target="_blank" rel="noopener" title="Open full size" aria-label="Open full size">${ACT_ICON.open}</a></span></div>
       <details><summary>Prompt</summary><p>${esc(h.prompt)}</p></details>`;
     const img = card.querySelector('img');
     img.onclick = () => lightbox(h);
     card.querySelector('[data-a="again"]').onclick = () => again(h);
-    card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.target);
+    card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.currentTarget);
     img.onerror = () => img.replaceWith(Object.assign(document.createElement('p'), { className: 'hint',
       textContent: h.ghost ? 'Ghost picture, no longer in memory.' : 'This picture no longer exists.' }));
     card.querySelector('[data-a="edit"]').onclick = () => editInChat({ source: h.image });
@@ -951,10 +969,21 @@
   }
 
   async function copyPrompt(h, button) {
-    try { await navigator.clipboard.writeText(h.prompt); button.textContent = 'Copied ✓'; }
-    catch { button.textContent = 'Not possible'; }
-    setTimeout(() => { button.textContent = 'Copy prompt'; }, 1500);
+    const icon = button.classList.contains('ico'), was = icon ? button.innerHTML : button.textContent;
+    let ok = true;
+    try { await navigator.clipboard.writeText(h.prompt); } catch { ok = false; }
+    if (icon) { button.innerHTML = ok ? ACT_ICON.check : '✕'; button.classList.toggle('ok', ok); }
+    else button.textContent = ok ? 'Copied ✓' : 'Not possible';
+    setTimeout(() => { icon ? (button.innerHTML = was, button.classList.remove('ok')) : (button.textContent = was); }, 1500);
   }
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const ACT_ICON = {
+    variant: svg('<path d="M4 6h10M4 12h7M4 18h10"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
+    copy: svg('<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>'),
+    open: svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
+    check: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
+  };
 
   function videoCard(v) {
     const card = Object.assign(document.createElement('div'), { className: 'out' + (v.ghost ? ' ghosted' : '') });
