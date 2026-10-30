@@ -40,7 +40,10 @@ comfy_lock = threading.Lock()
 
 
 def other_vram_gb() -> float:
-    """Dedicated VRAM in use by every process on the card; called while ComfyUI is down, so it is everyone else."""
+    """Dedicated VRAM in use by every process on the card; called while ComfyUI is down, so it is everyone else.
+    This overcounts (the desktop's mapped buffers count again; Local Usage is what is really resident), and that
+    is load-bearing: the large reserve keeps Z-Image's 8 GB encoder partly offloaded. Measured with Local Usage
+    the reserve was 3.3 GB instead of 10.5, ComfyUI loaded everything, the card spilled and a step took 95 s."""
     r = subprocess.run(["powershell", "-NoProfile", "-Command",
                         "((Get-Counter '\\GPU Process Memory(*)\\Dedicated Usage').CounterSamples | Measure CookedValue -Sum).Sum"],
                        capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -120,7 +123,7 @@ The default for new pictures is z-image-turbo (about 20 s, photoreal and good at
 just as fast, an alternative with a different look. noobai-xl only for anime and illustration (then write the prompt
 as comma-separated Danbooru tags, e.g. "1girl, elf, silver hair, forest, night"). qwen-image-2512 takes 2 to 4
 minutes: use it only when the picture needs lettering or the user explicitly wants the highest quality, and say that
-it takes longer. realvis-xl and chroma only when the user names them.
+it takes longer.
 If the user names a specific model, use exactly that one.
 
 Styles:
@@ -286,14 +289,16 @@ def faceswap_job(job: dict, photo: bytes, video: Path, quality: str, enhance: bo
         job["state"] = "error"
 
 
-def history(limit: int = 60) -> list[dict]:
+def history(offset: int = 0, limit: int = 60) -> tuple[list[dict], int]:
+    """One page of the gallery, newest first, and how many pictures there are in all."""
+    files = sorted(morpheus.OUTPUT.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     items = []
-    for f in sorted(morpheus.OUTPUT.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+    for f in files[offset:offset + limit]:
         try:
             items.append(json.loads(f.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError):
             continue
-    return items
+    return items, len(files)
 
 
 # Chat, generate and edit started with "background": the result waits here for the page, also across a reload.
@@ -461,9 +466,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # keep the console quiet apart from errors
         pass
 
-    def send_json(self, data, status=200):
+    def send_json(self, data, status=200, headers=None):
         body = json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -496,7 +503,9 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/status":
             return self.send_json(status())
         if route == "/api/history":
-            return self.send_json(history())
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            items, total = history(int(q.get("offset", ["0"])[0]), min(int(q.get("limit", ["60"])[0]), 500))
+            return self.send_json(items, headers={"X-Total-Count": str(total)})  # the body stays a plain list
         if route.startswith("/api/job/"):
             job_id, _, part = route.removeprefix("/api/job/").partition("/")
             job = JOBS.get(job_id)

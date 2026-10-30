@@ -137,34 +137,6 @@ def sdxl_workflow(ckpt: str, sampler: str, scheduler: str, cfg: float, negative:
     return build
 
 
-def chroma_workflow(prompt: str, width: int, height: int, seed: int, steps: int) -> dict:
-    """Chroma1-HD (FLUX-based), after ComfyUI's image_chroma_text_to_image template.
-
-    Real cfg (3.5) with a negative prompt, so it is slower than the distilled models. Shares the FLUX VAE
-    file with Z-Image; model (9 GB) and T5 encoder (5 GB) fit the card together.
-    """
-    negative = ("low quality, blurry, greyscale, unfinished sketch, lacks detail, chromatic aberration, "
-                "jpeg artifacts, deformed, bad anatomy, extra limbs, watermark, text")
-    return {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "Chroma1-HD-fp8mixed.safetensors", "weight_dtype": "default"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "t5xxl_fp8_e4m3fn_scaled.safetensors", "type": "chroma", "device": "default"}},
-        "16": {"class_type": "T5TokenizerOptions", "inputs": {"clip": ["2", 0], "min_padding": 0, "min_length": 0}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
-        "4": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 1.0}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["16", 0], "text": prompt}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["16", 0], "text": negative}},
-        "7": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-        "8": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
-        "9": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
-        "11": {"class_type": "BasicScheduler", "inputs": {"model": ["4", 0], "scheduler": "beta", "steps": steps, "denoise": 1.0}},
-        "12": {"class_type": "CFGGuider", "inputs": {"model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "cfg": 3.5}},
-        "13": {"class_type": "SamplerCustomAdvanced", "inputs": {
-            "noise": ["8", 0], "guider": ["12", 0], "sampler": ["9", 0], "sigmas": ["11", 0], "latent_image": ["7", 0]}},
-        "14": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["3", 0]}},
-        "10": {"class_type": "SaveImage", "inputs": {"images": ["14", 0], "filename_prefix": "morpheus"}},
-    }
-
-
 def flux2_klein_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int) -> dict:
     """FLUX.2 [klein] 4B as an editor, after ComfyUI's image_flux2_klein_image_edit template.
 
@@ -234,21 +206,6 @@ MODELS = {
                   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
         "steps": 4,
         "workflow": qwen_image_2512_workflow,
-    },
-    "chroma": {
-        "label": "Chroma1-HD",
-        "note": "Versatile, Apache 2.0",
-        "files": ["diffusion_models/Chroma1-HD-fp8mixed.safetensors", "text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors", "vae/ae.safetensors"],
-        "steps": 26,
-        "workflow": chroma_workflow,
-    },
-    "realvis-xl": {
-        "label": "RealVisXL V5 (SDXL)",
-        "note": "Photoreal, fast",
-        "files": ["checkpoints/RealVisXL_V5.0_fp16.safetensors"],
-        "steps": 30,
-        "workflow": sdxl_workflow("RealVisXL_V5.0_fp16.safetensors", "dpmpp_2m_sde", "karras", 5.0,
-                                  "(worst quality, low quality), " + SDXL_NEGATIVE),
     },
     "noobai-xl": {
         "label": "NoobAI-XL 1.1 (SDXL)",

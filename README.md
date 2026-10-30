@@ -103,9 +103,7 @@ prompt with the model loaded.
 | Z-Image-Turbo | **default**: photoreal, good at painting styles | 18 s / 18 s |
 | FLUX.2 [klein] 4B | alternative look, fastest warm; also the edit model | 25 s / 13 s |
 | NoobAI-XL 1.1 (SDXL) | anime / illustration, prompt as Danbooru tags; quality tags are prepended | 22 s / 14 s |
-| RealVisXL V5 (SDXL) | photorealistic people and scenes; overlaps with Z-Image | 25 s / 17 s |
 | Qwen-Image-2512 + Lightning LoRA | best prompt adherence and lettering | 175 s / 106 s |
-| Chroma1-HD | FLUX-based; real cfg, 26 steps, so slow | 104 s / 90 s |
 
 The chat uses Z-Image unless the picture needs lettering or the user asks for top quality.
 

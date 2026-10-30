@@ -477,6 +477,9 @@
     @keyframes flicker { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: .3; } }
   }
 
+  .more-btn { display: block; margin: 18px auto 6px; padding: 9px 18px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    font: 400 17px/1 var(--term); letter-spacing: .06em; text-transform: uppercase; }
+  .more-btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
   /* ---------- design pass: the picture leads, one job per colour, quieter chrome ---------- */
   .col, .box { max-width: 1040px; }
   /* the newest picture is the hero; older ones stay thumbnails */
@@ -1519,13 +1522,29 @@
   // ---------- Gallery and lightbox ----------
   async function loadHistory() {
     // ghost results come first and only while ghost mode is on; dashed frames mark them
-    state.history = [...(state.ghost ? state.ghostHistory : []), ...await (await fetch('/api/history')).json()];
+    const r = await fetch('/api/history');
+    state.saved = await r.json();
+    state.savedTotal = +r.headers.get('X-Total-Count') || state.saved.length;
+    state.history = [...(state.ghost ? state.ghostHistory : []), ...state.saved];
     if (state.view === 'gallery') renderGallery();
     else if (!current()?.messages.length) renderThread(); // the start screen shows recent pictures
   }
+  // the next 60 saved pictures, appended; the scroll position stays where it is
+  async function loadMore(button) {
+    button.disabled = true;
+    button.textContent = 'Loading …';
+    const more = await (await fetch(`/api/history?offset=${state.saved.length}`)).json();
+    state.saved.push(...more);
+    state.history.push(...more);
+    const top = $('thread').scrollTop;
+    renderGallery();
+    $('thread').scrollTop = top;
+  }
   function renderGallery() {
-    const col = $('col');
-    col.innerHTML = `<div class="gal-head"><h2 class="h">Gallery</h2><span class="hint">${state.history.length} pictures</span></div><div class="grid" id="grid"></div>`;
+    const col = $('col'), rest = (state.savedTotal || 0) - (state.saved?.length || 0);
+    col.innerHTML = `<div class="gal-head"><h2 class="h">Gallery</h2><span class="hint">${rest > 0 ? `${state.saved.length} of ${state.savedTotal}` : state.history.length} pictures</span></div><div class="grid" id="grid"></div>
+      ${rest > 0 ? `<button type="button" class="more-btn" id="gal-more">Load ${Math.min(rest, 60)} more</button>` : ''}`;
+    $('gal-more')?.addEventListener('click', e => loadMore(e.currentTarget));
     if (!state.history.length) $('grid').outerHTML = '<p class="hint">Your pictures will appear here.</p>';
     state.history.forEach(h => {
       const tile = Object.assign(document.createElement('div'), { className: 'tile' });
@@ -1538,10 +1557,10 @@
       tile.append(b, x);
       $('grid').append(tile);
     });
-    $('thread').scrollTop = 0;
   }
   $('open-gallery').onclick = () => {
     state.view = state.view === 'gallery' ? 'thread' : 'gallery';
+    $('thread').scrollTop = 0;
     $('open-gallery').setAttribute('aria-pressed', String(state.view === 'gallery'));
     document.body.classList.remove('side-open');
     renderSessions();
