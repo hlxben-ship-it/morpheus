@@ -631,6 +631,7 @@ class Handler(BaseHTTPRequestHandler):
                 if f.parent == out:  # never outside output/
                     f.unlink(missing_ok=True)
             sidecar.unlink()
+            print(f"Morpheus: deleted {sidecar.stem} ({time.strftime('%H:%M:%S')})", flush=True)
             return {"ok": True}
         raise ValueError("This picture is not in the gallery.")
 

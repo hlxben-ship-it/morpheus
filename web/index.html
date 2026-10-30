@@ -619,6 +619,7 @@
       state.sessions.unshift(s);
       state.currentId = s.id;
       store.set('current', s.id);
+      adoptDraft(s.id);
     }
     return s;
   }
@@ -694,7 +695,42 @@
 
   // ---------- Thread ----------
   const KIND = { manual: 'Manual', edit: 'Edit', swap: 'Guise' };
+  // ---------- The composer belongs to a session ----------
+  // Every session keeps its own draft: typed text and mode (saved with the sessions), and an attached picture
+  // (memory only, an upload can be megabytes). The Gallery has no composer. "new" is the not yet saved session.
+  const drafts = store.get('drafts', {});
+  const draftPics = new Map();
+  let draftKey = null;
+  const keyOf = () => state.ghost ? 'ghost' : current()?.id || 'new';
+  function stashDraft(key = draftKey) {
+    if (key === null) return;
+    const text = $('input').value;
+    if (text || state.mode !== 'chat') drafts[key] = { text, mode: state.mode }; else delete drafts[key];
+    state.chatPic ? draftPics.set(key, state.chatPic) : draftPics.delete(key);
+    if (key !== 'ghost') store.set('drafts', drafts);
+  }
+  function syncComposer() {
+    document.querySelector('.composer').hidden = state.view === 'gallery';
+    const key = keyOf();
+    if (key === draftKey) return;
+    stashDraft();
+    draftKey = key;
+    const d = drafts[key] || { text: '', mode: 'chat' };
+    $('input').value = d.text;
+    grow();
+    setMode(d.mode);
+    const pic = draftPics.get(key);
+    pic ? attachChat(pic, false) : detachChat();
+  }
+  // a fresh session takes over the composer of "new" instead of leaving a stale draft behind
+  function adoptDraft(id) {
+    if (draftKey !== 'new') return;
+    delete drafts.new; draftPics.delete('new');
+    draftKey = id;
+  }
+
   function renderThread() {
+    syncComposer();
     if (state.view === 'gallery') return renderGallery();
     const col = $('col'), s = current();
     col.replaceChildren();
@@ -963,17 +999,18 @@
       img.src = data;
     });
   }
-  document.querySelectorAll('.modes [role="tab"]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  document.querySelectorAll('.modes [role="tab"]').forEach(b => b.onclick = () => { setMode(b.dataset.mode); stashDraft(); });
   // keyboard: "/" jumps to the input, Alt+1-4 picks the mode
   document.addEventListener('keydown', e => {
     const typing = e.target.closest?.('input, textarea, [contenteditable]');
     if (e.key === '/' && !typing && !lb.open) { e.preventDefault(); $('input').focus(); }
-    if (e.altKey && ['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); setMode(['chat', 'manual', 'edit', 'swap'][+e.key - 1]); $('input').focus(); }
+    if (e.altKey && ['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); setMode(['chat', 'manual', 'edit', 'swap'][+e.key - 1]); stashDraft(); $('input').focus(); }
   });
   $('opts-toggle').onclick = () => { state.optsOpen = !state.optsOpen; store.set('optsOpen', state.optsOpen); setMode(state.mode); };
 
   const grow = () => { const t = $('input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; };
   $('input').addEventListener('input', grow);
+  $('input').addEventListener('input', () => stashDraft()); // so a reload keeps what was typed
   $('input').addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     if (state.mode === 'chat' ? !e.shiftKey : (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
@@ -1123,10 +1160,12 @@
   // Drop or paste anywhere: an image becomes the edit source, a video goes to Guise. The settings' own drop
   // zones keep their meaning (photo vs. video) and stop the event before it gets here.
   // ---------- Chat attachment: one picture rides along with the next chat message ----------
-  function attachChat(pic) {
+  // fresh = the user just attached it; a restored draft keeps its mode and doesn't take the focus
+  function attachChat(pic, fresh = true) {
     state.chatPic = pic;
     $('chat-pic').querySelector('img').src = pic.source ? url(pic.source) : pic.upload;
-    $('chat-pic').hidden = false;
+    $('chat-pic').hidden = state.mode !== 'chat';
+    if (!fresh) return;
     setMode('chat');
     $('input').focus();
   }
