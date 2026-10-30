@@ -348,6 +348,37 @@
   .out img, .out video { align-self: flex-start; width: auto; height: auto; max-width: min(100%, 380px); max-height: 380px; object-fit: contain; }
   .out video { max-width: min(100%, 520px); max-height: 420px; }
 
+  /* house-style dialog and toast */
+  dialog.ask { margin: auto; padding: 22px 22px 18px; width: min(400px, 92vw); border: 2px solid var(--cyan); background: var(--panel); color: var(--text);
+    box-shadow: 0 0 0 1px #000, 0 0 40px color-mix(in srgb, var(--cyan) 30%, transparent);
+    clip-path: polygon(0 8px, 8px 8px, 8px 0, calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px, 100% calc(100% - 8px),
+      calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px)); }
+  dialog.ask[open] { animation: pop .18s steps(4) both; }
+  @keyframes pop { from { transform: scale(.92); opacity: 0; } }
+  dialog.ask::backdrop { background: rgba(5, 3, 11, .75); backdrop-filter: blur(3px); }
+  dialog.ask.danger { border-color: var(--pink); box-shadow: 0 0 0 1px #000, 0 0 40px color-mix(in srgb, var(--pink) 35%, transparent); }
+  .ask img { display: block; width: 96px; height: 96px; object-fit: cover; margin-bottom: 14px; box-shadow: 0 0 0 2px var(--line); }
+  .ask h3 { font: 700 15px/1.4 var(--px); letter-spacing: .06em; color: var(--cyan); }
+  .ask.danger h3 { color: var(--pink); }
+  .ask h3::before { content: '> '; }
+  .ask p { margin-top: 8px; font: 19px/1.3 var(--term); color: var(--muted); }
+  .ask input { width: 100%; margin-top: 12px; border: 2px solid var(--line); background: var(--bg); padding: 8px 10px; font: 20px var(--term); outline: none; }
+  .ask input:focus { border-color: var(--cyan); }
+  .ask-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .ask-acts button { font: 700 12px/1 var(--px); letter-spacing: .06em; padding: 10px 14px; border: 1px solid var(--line); background: transparent; color: var(--text); }
+  .ask-acts button:hover, .ask-acts button:focus-visible { border-color: var(--cyan); color: var(--cyan); outline: none; }
+  .ask-acts .go { background: var(--cyan); border-color: var(--cyan); color: #0a0614; }
+  .ask.danger .ask-acts .go { background: var(--pink); border-color: var(--pink); color: #fff; }
+  .ask-acts .go:hover, .ask-acts .go:focus-visible { color: inherit; filter: brightness(1.15); box-shadow: 0 0 16px color-mix(in srgb, currentColor 40%, transparent); }
+  .ask.danger .ask-acts .go:hover, .ask.danger .ask-acts .go:focus-visible { color: #fff; }
+  .ask:not(.danger) .ask-acts .go:hover, .ask:not(.danger) .ask-acts .go:focus-visible { color: #0a0614; }
+  .toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 120; padding: 10px 16px; background: var(--panel);
+    border: 2px solid var(--cyan); color: var(--cyan); font: 19px var(--term); box-shadow: 0 0 24px color-mix(in srgb, var(--cyan) 30%, transparent);
+    animation: rise .25s steps(4) both; transition: opacity .35s; }
+  .toast::before { content: '> '; }
+  .toast.bad { border-color: var(--pink); color: var(--pink); }
+  .toast.out { opacity: 0; }
+
   /* gallery tiles: a delete cross shows on hover */
   .grid .tile { position: relative; }
   .grid .tile > button:first-child { width: 100%; }
@@ -625,14 +656,15 @@
       const open = () => { openSession(s.id); document.body.classList.remove('side-open'); };
       b.onclick = e => { if (!e.target.closest('.del')) open(); };
       b.title = 'Double-click to rename';
-      b.ondblclick = e => {
+      b.ondblclick = async e => {
         if (e.target.closest('.del')) return;
-        const name = prompt('Session name', s.title || '');
+        const name = await ask({ title: 'Rename session', ok: 'Rename', input: s.title || '' });
         if (name?.trim()) { s.title = name.trim().slice(0, 60); save(); }
       };
       b.onkeydown = e => { if (e.key === 'Enter') open(); };
-      b.querySelector('.del').onclick = () => {
-        if (!confirm(`Delete session “${s.title || 'New session'}”? The pictures stay in the gallery.`)) return;
+      b.querySelector('.del').onclick = async () => {
+        if (!await ask({ title: 'Delete session?', text: `“${s.title || 'New session'}” goes away. Its pictures stay in the gallery.`,
+          ok: 'Delete', danger: true })) return;
         state.sessions = state.sessions.filter(x => x !== s);
         if (state.currentId === s.id) { state.currentId = null; store.set('current', null); renderThread(); }
         save();
@@ -1243,14 +1275,45 @@
     }
   }
 
+  // ---------- Dialog and toast in the house style, instead of the browser's confirm / prompt / alert ----------
+  // ask() resolves true/false, or with `input` the entered text (null on cancel). Esc and the backdrop cancel.
+  const dlg = Object.assign(document.createElement('dialog'), { className: 'ask' });
+  document.body.append(dlg);
+  function ask({ title, text = '', ok = 'OK', danger = false, input = null, thumb = null }) {
+    dlg.classList.toggle('danger', danger);
+    dlg.innerHTML = `${thumb ? `<img src="${esc(thumb)}" alt="">` : ''}<h3>${esc(title)}</h3>${text ? `<p>${esc(text)}</p>` : ''}
+      ${input !== null ? `<input type="text" maxlength="60" aria-label="${esc(title)}">` : ''}
+      <div class="ask-acts"><button type="button" data-v="0">Cancel</button><button type="button" data-v="1" class="go">${esc(ok)}</button></div>`;
+    const field = dlg.querySelector('input');
+    if (field) field.value = input;
+    return new Promise(done => {
+      const finish = yes => { dlg.close(); done(input !== null ? (yes ? field.value : null) : yes); };
+      dlg.querySelectorAll('[data-v]').forEach(b => b.onclick = () => finish(b.dataset.v === '1'));
+      dlg.oncancel = e => { e.preventDefault(); finish(false); };
+      dlg.onclick = e => { if (e.target === dlg) finish(false); };
+      if (field) field.onkeydown = e => { if (e.key === 'Enter') finish(true); };
+      dlg.showModal();
+      (field || dlg.querySelector(danger ? '[data-v="0"]' : '.go')).focus(); // a destructive dialog starts on Cancel
+      field?.select();
+    });
+  }
+  function toast(text, bad = false) {
+    const t = Object.assign(document.createElement('div'), { className: 'toast' + (bad ? ' bad' : ''), textContent: text });
+    document.body.append(t);
+    setTimeout(() => t.classList.add('out'), 2600);
+    setTimeout(() => t.remove(), 3000);
+  }
+
   // Delete a picture for good: the server removes picture, raw version and sidecar from output/.
   async function deletePicture(h) {
-    if (!confirm('Delete this picture?\n\nIt is removed from disk and cannot be restored.')) return;
+    if (!await ask({ title: 'Delete picture?', text: 'It is removed from disk and cannot be restored.', ok: 'Delete', danger: true,
+      thumb: url(h.image) })) return;
     try {
       const r = await fetch('/api/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: h.image }) });
       const out = await r.json();
       if (!r.ok) throw new Error(out.error || 'Unknown error');
-    } catch (err) { return alert(`Could not delete: ${err.message}`); }
+    } catch (err) { return toast(`Could not delete: ${err.message}`, true); }
+    toast('Picture deleted');
     state.ghostHistory = state.ghostHistory.filter(x => x !== h);
     if (lb.open) lb.close();
     await loadHistory();
