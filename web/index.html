@@ -330,6 +330,7 @@
   .hud .bar i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .5s; }
   .hud .bar i.hot { background: var(--pink); }
   .hud { position: relative; }
+  .top { position: relative; z-index: 55; }  /* its tooltip floats over the thread, pictures (51) included */
   .hud [data-tip] { cursor: help; }
   .hud-temp[data-heat="warm"] em { color: #ffb84d; }
   .hud-temp[data-heat="hot"] em { color: #ff5b68; }
