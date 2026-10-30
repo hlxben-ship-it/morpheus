@@ -193,8 +193,8 @@
   .send:disabled { opacity: .5; cursor: progress; }
 
   /* Lightbox */
-  dialog.lb { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh; color: var(--text); }
-  dialog.lb::backdrop { background: rgba(8, 6, 22, .82); }
+  dialog.lb { margin: auto; border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh; color: var(--text); }
+  dialog.lb::backdrop { background: rgba(5, 3, 11, .94); backdrop-filter: blur(6px); }
   .lb-inner { display: flex; flex-direction: column; gap: 10px; align-items: center; }
   .lb-inner img { max-width: 94vw; max-height: 84vh; border-radius: 10px; box-shadow: var(--shadow); display: block; }
   .lb-inner img.pixel { image-rendering: pixelated; }
