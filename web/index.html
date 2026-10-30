@@ -783,7 +783,8 @@
     let frame = 0;
     entry.paint = () => {
       const s = Math.round((Date.now() - m.since) / 1000);
-      const text = m.status || (m.total ? `Schritt ${m.step} von ${m.total}` : WAIT[m.kind]?.(s)) || 'Läuft …';
+      const steps = m.total ? `Schritt ${m.step} von ${m.total}` : '';
+      const text = m.status || (m.round ? `${m.round}${steps ? ' · ' + steps : ''}` : steps || WAIT[m.kind]?.(s)) || 'Läuft …';
       const pct = m.kind === 'swap' ? m.pct || 0 : m.total ? 100 * m.step / m.total : null;
       if (!el.firstChild) el.innerHTML = '<p></p><div class="progress" hidden><i></i></div><img class="live" alt="" hidden>';
       el.querySelector('p').innerHTML = `${esc(text)} <b>${s} s</b>`;
@@ -818,7 +819,7 @@
         job = await r.json();
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
-        if (m.kind !== 'swap') Object.assign(m, { step: job.step, total: job.total, previews: job.previews });
+        if (m.kind !== 'swap') Object.assign(m, { step: job.step, total: job.total, previews: job.previews, round: job.status });
         else {
           m.status = job.state === 'waiting' ? 'Wartet, bis die Grafikkarte frei ist …' : job.total ? `Bild ${job.frame} von ${job.total}` : 'Modelle werden geladen …';
           m.pct = job.total ? 100 * job.frame / job.total : 0;
@@ -829,6 +830,8 @@
       if (m.kind === 'chat') {
         if (s.id !== 'ghost' && out.session) s.claude = out.session;
         if (out.image) await landed(out.image);
+        // refine rounds before the final picture: each one stays in the thread with what was off
+        (out.trail || []).forEach(t => s.messages.splice(s.messages.indexOf(m), 0, { role: 'bot', text: t.note, image: t.image }));
         Object.assign(m, { text: out.reply, image: out.image });
       } else if (m.kind === 'swap') {
         m.video = { file: job.video, ghost: job.ghost, total: job.total, missed: job.missed, seconds: job.seconds,
@@ -841,7 +844,7 @@
     } catch (err) {
       Object.assign(m, { error: true, text: err.message });
     }
-    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews']) delete m[k];
+    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews', 'round']) delete m[k];
     following.delete(id);
     fresh = m;
     setTimeout(() => { if (fresh === m) fresh = null; }, 2000); // later re-renders show it plain

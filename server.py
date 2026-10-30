@@ -128,15 +128,51 @@ Formate: {sizes}. Nimm 1024x1024, wenn nichts dagegen spricht.
 reply: ein bis zwei Sätze auf Deutsch, was du machst oder was du wissen musst. Kein Markdown."""
 
 
-def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False) -> tuple[dict, str]:
+REFINE_MAX = 5
+REFINE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["good", "retry"]},
+        "critique": {"type": "string"},
+        "prompt": {"type": "string"},
+        "model": {"type": "string"},
+        "style": {"type": "string"},
+        "width": {"type": "integer"},
+        "height": {"type": "integer"},
+    },
+    "required": ["verdict", "critique", "prompt", "model", "style", "width", "height"],
+}
+
+
+def refine_prompt() -> str:
+    return chat_system_prompt().split("Entscheide pro Nachricht:")[0] + f"""Du prüfst ein erzeugtes Bild gegen ein Zielbild.
+Vergleiche Kunststil (Linien, Shading, Pixelgröße, Farbpalette), Motiv und Details (Frisur, Haarfarbe, Kleidung,
+Accessoires, Pose, Hintergrund) und Bildaufbau.
+
+verdict "good": das Ergebnis trifft Stil und wesentliche Details. Sei ehrlich, aber nicht pedantisch.
+verdict "retry": nenne in critique, was am stärksten abweicht, und schreib einen verbesserten englischen prompt,
+der genau das korrigiert. model, style, width, height darfst du ändern, wenn es hilft (z. B. ein anderes Modell
+für den Stil, oder style "none" statt "pixel", wenn die Pixel-Nachbearbeitung den Look zerstört).
+Bei "good" wiederholst du prompt, model, style, width, height unverändert.
+
+critique: ein bis zwei Sätze auf Deutsch, kein Markdown.
+
+Modelle:
+""" + "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k)) + \
+        "\n\nStile:\n" + "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items()) + \
+        "\n\nFormate: " + ", ".join(f"{r['width']}x{r['height']}" for r in RESOLUTIONS)
+
+
+def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False,
+               system: str | None = None, schema: dict | None = None) -> tuple[dict, str]:
     """One chat turn through the Claude Code CLI; returns the structured answer and the session id.
 
     Ghost turns are not saved by the CLI and cannot be resumed; the caller passes the conversation in the message.
     """
     CHAT_DIR.mkdir(exist_ok=True)
-    cmd = [shutil.which("claude") or "claude", "-p", "--output-format", "json", "--json-schema", json.dumps(CHAT_SCHEMA),
+    cmd = [shutil.which("claude") or "claude", "-p", "--output-format", "json", "--json-schema", json.dumps(schema or CHAT_SCHEMA),
            "--tools", "Read" if see else "",  # Read only to look at an attached picture in CHAT_DIR
-           "--model", "sonnet", "--system-prompt", chat_system_prompt()]
+           "--model", "sonnet", "--system-prompt", system or chat_system_prompt()]
     if ghost:
         cmd.append("--no-session-persistence")
     elif session:
@@ -171,6 +207,12 @@ def ghost_keep(meta: dict) -> dict:
         while len(GHOST) > GHOST_MAX:
             GHOST.pop(next(iter(GHOST)))
     return {**meta, "ghost": True}
+
+
+def result_picture(meta: dict) -> Image.Image:
+    """The unprocessed picture of a result, from the ghost store or from output/."""
+    ref = meta.get("raw") or meta["image"]
+    return ghost_image(ref) if ref.startswith("ghost/") else Image.open(morpheus.OUTPUT / ref)
 
 
 def ghost_image(ref: str) -> Image.Image:
@@ -413,25 +455,64 @@ class Handler(BaseHTTPRequestHandler):
                        f"\n\n{message}")
         try:
             answer, session = ask_claude(message, req.get("session") or None, ghost, see=bool(seen))
+            result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
+            if answer["action"] == "edit" and attach:
+                # the normal edit route, so the result links back to its source like any edit
+                result["image"] = self.edit({**attach, "prompt": answer["prompt"], "ghost": ghost, "_job": req.get("_job")})
+                result["image"]["edit"] = True
+            elif answer["action"] == "generate":
+                result["image"] = self.render(answer, ghost, req)
+                if seen:
+                    # a reference picture is the target: look at each result and re-prompt until it matches
+                    result.update(self.refine(seen, answer, result["image"], ghost, req))
         finally:
             if seen:
                 seen.unlink(missing_ok=True)
-
-        result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
-        if answer["action"] == "edit" and attach:
-            # the normal edit route, so the result links back to its source like any edit
-            result["image"] = self.edit({**attach, "prompt": answer["prompt"], "ghost": ghost, "_job": req.get("_job")})
-            result["image"]["edit"] = True
-        elif answer["action"] == "generate":
-            model = answer["model"] if answer["model"] in morpheus.MODELS and morpheus.installed(answer["model"]) else "z-image-turbo"
-            style = answer["style"] if answer["style"] in morpheus.STYLES else "none"
-            size = next((r for r in RESOLUTIONS if r["width"] == answer["width"] and r["height"] == answer["height"]), RESOLUTIONS[0])
-            ensure_comfy()
-            with gpu:
-                meta = morpheus.run(answer["prompt"], style, model, size["width"], size["height"], ghost=ghost,
-                                    progress=progress_for(req))
-            result["image"] = ghost_keep(meta) if ghost else meta
         return result
+
+    def render(self, answer: dict, ghost: bool, req: dict) -> dict:
+        model = answer["model"] if answer["model"] in morpheus.MODELS and morpheus.installed(answer["model"]) else "z-image-turbo"
+        style = answer["style"] if answer["style"] in morpheus.STYLES else "none"
+        size = next((r for r in RESOLUTIONS if r["width"] == answer["width"] and r["height"] == answer["height"]), RESOLUTIONS[0])
+        ensure_comfy()
+        with gpu:
+            meta = morpheus.run(answer["prompt"], style, model, size["width"], size["height"], ghost=ghost,
+                                progress=progress_for(req))
+        return ghost_keep(meta) if ghost else meta
+
+    def refine(self, target: Path, answer: dict, first: dict, ghost: bool, req: dict) -> dict:
+        """Compare each result with the target picture and render again until Claude is happy, at most REFINE_MAX rounds.
+
+        Every round's picture stays in the trail, so the user sees how it converged. Each judgement is a fresh,
+        unsaved Claude call: it sees only target, result and prompt, not the chat it came from.
+        """
+        job = req.get("_job") or {}
+        trail, current, note = [], first, ""
+        for round_ in range(1, REFINE_MAX + 1):
+            job["status"] = f"Runde {round_} von {REFINE_MAX}: ich vergleiche das Ergebnis mit dem Ziel …"
+            shot = CHAT_DIR / f"result-{uuid.uuid4().hex[:8]}.png"
+            try:
+                result_picture(current).save(shot)
+                verdict, _ = ask_claude(
+                    f"Zielbild: {target.name}\nErgebnis: {shot.name}\nPrompt des Ergebnisses: {current['prompt']}\n"
+                    f"Modell: {current['model']}, Stil: {current.get('style', 'none')}, {current['width']}x{current['height']}\n\n"
+                    "Sieh dir beide Bilder mit dem Read-Tool an und vergleiche sie.", None, ghost=True, see=True,
+                    system=refine_prompt(), schema=REFINE_SCHEMA)
+            finally:
+                shot.unlink(missing_ok=True)
+            note = verdict["critique"]
+            if verdict["verdict"] == "good":
+                return {"trail": trail, "image": current, "reply": f"{answer['reply']}\n\nRunde {round_}: {note}"}
+            if round_ == REFINE_MAX:
+                break
+            trail.append({"image": current, "note": f"Runde {round_}: {note}"})
+            job["status"] = f"Runde {round_ + 1} von {REFINE_MAX}: {note[:140]}"
+            job.update(step=0, total=0)
+            current = self.render({**answer, **{k: verdict[k] for k in ("prompt", "model", "style", "width", "height")}},
+                                  ghost, req)
+        return {"trail": trail, "image": current,
+                "reply": f"{answer['reply']}\n\n{REFINE_MAX} Runden erreicht. Zuletzt: {note}\n"
+                         "Soll ich weiter am Prompt feilen?"}
 
     def generate(self, req):
         """The manual form: exact prompt and settings, no Claude in between."""
