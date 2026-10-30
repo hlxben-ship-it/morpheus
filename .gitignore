@@ -1,0 +1,8 @@
+# Morpheus: only the code goes in the repo. ComfyUI, models, venvs and results stay local (~120 GB).
+ComfyUI/
+models/
+output/
+.venv/
+.venv-faceswap/
+__pycache__/
+*.log
