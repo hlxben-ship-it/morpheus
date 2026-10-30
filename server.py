@@ -378,6 +378,11 @@ class Handler(BaseHTTPRequestHandler):
             # No saved session to resume, so the page sends the ghost conversation so far.
             lines = [f"{'Nutzer' if m.get('role') == 'user' else 'Du'}: {m.get('text', '')}" for m in req["context"][-20:]]
             message = "Bisheriges Gespräch:\n" + "\n".join(lines) + "\n\nNeue Nachricht:\n" + message
+        last = req.get("last")
+        if isinstance(last, dict) and last.get("prompt"):
+            # the picture the user sees last, possibly made outside the chat (Manuell, Bearbeiten, Nochmal)
+            message = (f"[Letztes Bild in dieser Session: Modell {last.get('model')}, {last.get('width')}x{last.get('height')}, "
+                       f"Prompt: {last['prompt']}]\n\n{message}")
         answer, session = ask_claude(message, req.get("session") or None, ghost)
 
         result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}

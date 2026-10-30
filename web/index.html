@@ -929,7 +929,11 @@
       // a ghost session has no stored conversation on the server, so its history goes along as context
       const context = state.ghost ? s.messages.slice(0, -1).filter(m => m.text)
         .map(m => ({ role: m.role, text: m.image ? `${m.text} (Prompt: ${m.image.prompt})` : m.text })) : undefined;
-      await startJob(s, 'chat', '/api/chat', { message: text, session: state.ghost ? null : s.claude, ghost: state.ghost, context });
+      // pictures from Manuell, Bearbeiten or Nochmal never pass the chat, so the newest one always goes along:
+      // "make it a body shot" has to know which picture "it" is
+      const pic = s.messages.slice(0, -1).reverse().find(m => m.image)?.image;
+      const last = pic && { prompt: pic.prompt, model: pic.model, width: pic.width, height: pic.height };
+      await startJob(s, 'chat', '/api/chat', { message: text, session: state.ghost ? null : s.claude, ghost: state.ghost, context, last });
     } catch (err) {
       addMessage({ role: 'bot', error: true, text: err.message }, s);
     }
