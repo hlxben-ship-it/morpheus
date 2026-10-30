@@ -6,7 +6,7 @@
 <title>Morpheus</title>
 <link rel="icon" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
 <script>
   // theme before first paint, so a light-mode reload doesn't flash dark
   try { const t = JSON.parse(localStorage.getItem('morpheus.theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
@@ -280,6 +280,53 @@
   @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
   @media (prefers-reduced-motion: reduce) { .msg.working { animation: none; } }
   .live { border-radius: 14px; }
+
+  /* ---------- v0.3: 16-bit cyberpunk. Pixel type for chrome, neon cyan/magenta, stepped corners, CRT scanlines ---------- */
+  :root { --bg: #0a0614; --panel: #120b24; --raised: #1d1238; --line: #3a2470; --text: #eae6ff; --muted: #9a8fd0;
+    --accent: #b14dff; --pink: #ff2a6d; --cyan: #2de2e6; --glass: rgba(18, 11, 36, .78); --glow: rgba(177, 77, 255, .4);
+    --px: 'Silkscreen', monospace; --term: 'VT323', monospace; }
+  :root[data-theme="light"] { --cyan: #0a8f9c; --px: 'Silkscreen', monospace; --term: 'VT323', monospace; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --cyan: #0a8f9c; } }
+  /* stepped 8-bit corners instead of round ones */
+  .pxc { clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px),
+    calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); }
+  .new, .send, .modes [role="tab"][aria-selected="true"], .idea, .acts button, .acts a, .strip button, .grid button, .msg.user, .msg.working, .chip, .ratio, .model {
+    border-radius: 0; clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px),
+      calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
+  .box { border-radius: 0; border: 2px solid var(--line); }
+  .box:focus-within { border-color: var(--cyan); box-shadow: var(--shadow), 0 0 0 1px var(--cyan), 0 0 24px color-mix(in srgb, var(--cyan) 35%, transparent); }
+  .word, .hero .greet, .side-label, .modes [role="tab"], .new, .idea em, .recent .label, .field > .label, .acts button, .acts a, .side-foot button, .send {
+    font-family: var(--px); letter-spacing: .04em; text-transform: none; }
+  .word { font-size: 18px; letter-spacing: .12em; text-shadow: 2px 0 var(--pink), -2px 0 var(--cyan); }
+  .hero .greet { font-size: 22px; line-height: 1.5; }
+  .hero .greet span { background: linear-gradient(90deg, var(--cyan), var(--accent), var(--pink)); -webkit-background-clip: text; background-clip: text; }
+  .hero > img { border-radius: 0; image-rendering: pixelated; width: 96px; height: 96px; filter: drop-shadow(0 0 18px var(--glow)); }
+  .acts .meta, .msg.working b, .brand small, .seed input, .range-row { font-family: var(--term); font-size: 15px; }
+  .msg.working b { color: var(--cyan); }
+  .msg.working p::before { content: '> '; color: var(--cyan); font-family: var(--term); }
+  .new { background: linear-gradient(90deg, var(--accent), var(--pink)); }
+  .send { background: var(--pink); box-shadow: 0 0 18px color-mix(in srgb, var(--pink) 55%, transparent); }
+  .modes [role="tab"][aria-selected="true"] { background: var(--cyan); color: #0a0614; box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 50%, transparent); }
+  .idea:hover, .acts button:hover, .acts a:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
+  .idea em { color: var(--pink); }
+  .msg.user { background: linear-gradient(90deg, var(--accent), var(--pink)); }
+  .progress { border-radius: 0; height: 8px; background: var(--raised); }
+  .progress i { background: repeating-linear-gradient(90deg, var(--cyan) 0 6px, transparent 6px 8px); }
+  .out img, .out video, .live { border-radius: 0; box-shadow: 0 0 0 2px var(--line), 0 0 30px var(--glow); }
+  .sess[aria-current="true"] { border-color: var(--cyan); box-shadow: inset 3px 0 var(--cyan); border-radius: 0; }
+  .top { box-shadow: 0 2px 0 var(--line), 0 6px 24px rgba(177, 77, 255, .12); }
+  /* CRT scanlines + a faint pixel grid over the backdrop, never over pictures' clicks */
+  body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50; mix-blend-mode: overlay; opacity: .35;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); }
+  body { background: linear-gradient(transparent 0 0), radial-gradient(900px 500px at 85% -10%, rgba(177, 77, 255, .28), transparent 60%),
+    radial-gradient(800px 500px at -10% 110%, rgba(255, 42, 109, .18), transparent 60%),
+    linear-gradient(color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px, var(--bg); background-attachment: fixed; }
+  .out img, .out video, .live, .strip img, .grid img { position: relative; z-index: 51; } /* pictures stay clean, above the scanlines */
+  @media (prefers-reduced-motion: no-preference) {
+    .word b { animation: flicker 6s steps(1) infinite; }
+    @keyframes flicker { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: .3; } }
+  }
 </style>
 </head>
 <body>
@@ -670,7 +717,9 @@
   // A running job is a bot message with its job id, saved with the session: after a reload the page finds the job
   // on the server again and keeps waiting. It shows a timer (and a bar for face swaps) until the result replaces it.
   const WAIT = {
-    chat: s => s < 12 ? 'Ich überlege …' : 'Das Bild entsteht …',
+    // no step events until the model sits in VRAM, so say what the silence is
+    chat: s => s < 12 ? 'Ich überlege …' : s < 30 ? 'Das Bild entsteht …' : s < 90 ? 'Modell wird in den Grafikspeicher geladen …'
+      : 'Großes Modell, beim ersten Bild dauert das bis zu 4 Minuten …',
     manual: () => 'Ein neues Modell oder ein neuer Prompt braucht länger …',
     edit: () => 'Das Bild wird bearbeitet …',
   };
