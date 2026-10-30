@@ -498,7 +498,7 @@
   .hud b { margin-right: 7px; }
   /* the brand sheet's city on the horizon: really faint, fading out upwards, behind everything */
   body::before { content: ''; position: fixed; inset: auto 0 0 0; height: 70vh; z-index: -1; pointer-events: none;
-    background: url(/city.jpg) center bottom / cover no-repeat; opacity: .13;
+    background: url(/city.jpg?v=2) center bottom / cover no-repeat; opacity: .13;
     -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, .6) 35%, transparent 85%); mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, .6) 35%, transparent 85%); }
   :root[data-theme="light"] body::before { opacity: .07; }
   @media (min-width: 861px) { body::before { left: 272px; } }  /* starts where the chat does, so the sun isn't behind the sidebar */
