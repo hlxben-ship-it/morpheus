@@ -400,7 +400,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
         handlers = {"/api/generate": self.generate, "/api/chat": self.chat, "/api/edit": self.edit,
-                    "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap}
+                    "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap, "/api/delete": self.delete}
         if self.path not in handlers:
             return self.send_error(404)
         try:
@@ -609,6 +609,30 @@ class Handler(BaseHTTPRequestHandler):
         with ghost_lock:
             GHOST.clear()
         return {"ok": True}
+
+    def delete(self, req):
+        """Delete one gallery picture from disk: the picture, its raw version and the sidecar. Edit sources in
+        output/uploads stay, other results may still link to them."""
+        ref = str(req.get("image", ""))
+        if ref.startswith("ghost/"):
+            with ghost_lock:
+                GHOST.pop(ref.removeprefix("ghost/"), None)
+            return {"ok": True}
+        out = morpheus.OUTPUT.resolve()
+        for sidecar in out.glob("*.json"):
+            try:
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if ref not in (meta.get("image"), meta.get("raw")):
+                continue
+            for name in {meta.get("image"), meta.get("raw")} - {None}:
+                f = (out / name).resolve()
+                if f.parent == out:  # never outside output/
+                    f.unlink(missing_ok=True)
+            sidecar.unlink()
+            return {"ok": True}
+        raise ValueError("This picture is not in the gallery.")
 
 
 def warm_up() -> None:

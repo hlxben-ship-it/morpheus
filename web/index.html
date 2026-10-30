@@ -348,6 +348,15 @@
   .out img, .out video { align-self: flex-start; width: auto; height: auto; max-width: min(100%, 380px); max-height: 380px; object-fit: contain; }
   .out video { max-width: min(100%, 520px); max-height: 420px; }
 
+  /* gallery tiles: a delete cross shows on hover */
+  .grid .tile { position: relative; }
+  .grid .tile > button:first-child { width: 100%; }
+  .grid .tile .x { position: absolute; top: 6px; right: 6px; z-index: 52; aspect-ratio: auto; width: 28px; height: 28px; border: 1px solid var(--line);
+    background: rgba(10, 6, 20, .8); color: var(--text); box-shadow: none; opacity: 0; transition: opacity .15s; clip-path: none; }
+  .grid .tile:hover .x, .grid .tile .x:focus-visible { opacity: 1; }
+  .grid .tile .x:hover { color: var(--pink); border-color: var(--pink); transform: none; }
+  .acts .danger:hover { color: var(--pink); border-color: var(--pink); }
+
   /* chat attachment */
   .clip { flex: none; width: 42px; height: 42px; border: 1px solid var(--line); background: transparent; color: var(--muted); display: grid; place-items: center; }
   .clip:hover { color: var(--cyan); border-color: var(--cyan); }
@@ -1234,6 +1243,19 @@
     }
   }
 
+  // Delete a picture for good: the server removes picture, raw version and sidecar from output/.
+  async function deletePicture(h) {
+    if (!confirm('Delete this picture?\n\nIt is removed from disk and cannot be restored.')) return;
+    try {
+      const r = await fetch('/api/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: h.image }) });
+      const out = await r.json();
+      if (!r.ok) throw new Error(out.error || 'Unknown error');
+    } catch (err) { return alert(`Could not delete: ${err.message}`); }
+    state.ghostHistory = state.ghostHistory.filter(x => x !== h);
+    if (lb.open) lb.close();
+    await loadHistory();
+  }
+
   // ---------- Gallery and lightbox ----------
   async function loadHistory() {
     // ghost results come first and only while ghost mode is on; dashed frames mark them
@@ -1246,10 +1268,15 @@
     col.innerHTML = `<div class="gal-head"><h2 class="h">Gallery</h2><span class="hint">${state.history.length} pictures</span></div><div class="grid" id="grid"></div>`;
     if (!state.history.length) $('grid').outerHTML = '<p class="hint">Your pictures will appear here.</p>';
     state.history.forEach(h => {
+      const tile = Object.assign(document.createElement('div'), { className: 'tile' });
       const b = Object.assign(document.createElement('button'), { type: 'button', title: h.prompt, className: h.ghost ? 'ghosted' : '' });
       b.innerHTML = `<img src="${url(h.image)}" alt="" loading="lazy">`;
       b.onclick = () => lightbox(h);
-      $('grid').append(b);
+      const x = Object.assign(document.createElement('button'), { type: 'button', className: 'x', title: 'Delete', textContent: '✕' });
+      x.setAttribute('aria-label', 'Delete picture');
+      x.onclick = () => deletePicture(h);
+      tile.append(b, x);
+      $('grid').append(tile);
     });
     $('thread').scrollTop = 0;
   }
@@ -1273,7 +1300,8 @@
         <button type="button" data-a="again">Again</button>
         <button type="button" data-a="reuse">Variant</button><button type="button" data-a="edit">Edit</button>
         <button type="button" data-a="chat">To chat</button>
-        <a href="${url(file)}" target="_blank" rel="noopener">Open</a><button type="button" data-a="close" aria-label="Close">✕</button></div>`;
+        <a href="${url(file)}" target="_blank" rel="noopener">Open</a><button type="button" data-a="delete" class="danger">Delete</button>
+        <button type="button" data-a="close" aria-label="Close">✕</button></div>`;
     const on = (a, f) => { const b = $('lb-inner').querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     on('raw', () => lightbox(h, !raw));
     on('reuse', () => fillForm(h));
@@ -1281,6 +1309,7 @@
     on('edit', () => editImage(h));
     on('chat', () => { lb.close(); attachChat({ source: h.image }); });
     on('close', () => lb.close());
+    on('delete', () => deletePicture(h));
     if (!lb.open) lb.showModal();
   }
   lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
