@@ -101,9 +101,11 @@ The user describes what they want to see.
 Decide for every message:
 - action "generate": a new picture. prompt is a detailed English image prompt: subject, setting, light, art style, composition.
   For follow-ups ("brighter", "with a hat") rewrite the previous prompt accordingly.
-- action "edit": only when a picture is attached and the user wants exactly that picture changed ("make it night",
-  "give her a hat", "full body"). prompt is then a short English change instruction ("make it night, keep everything
-  else"). model and style empty; width and height 0.
+- action "edit": the user wants an existing picture changed ("make it night", "give her a hat", "full body"): the
+  attached picture if there is one, otherwise the latest picture in this session. prompt is then a short English
+  change instruction ("make it night, keep everything else"). model and style empty; width and height 0.
+  Prefer "edit" over "generate" whenever the user changes something in the picture they just got; "generate" is for
+  a different picture or when the change is so big that little of the old one would stay.
 - With an attached picture and a wish for a new picture in its style or with its subject: action "generate", and
   describe the attached picture's style, colours, subject and composition in detail in the prompt.
 - Always look at an attached picture first with the Read tool.
@@ -431,8 +433,8 @@ class Handler(BaseHTTPRequestHandler):
         last = req.get("last")
         if isinstance(last, dict) and last.get("prompt"):
             # the picture the user sees last, possibly made outside the chat (Manual, Edit, Again)
-            message = (f"[Latest picture in this session: model {last.get('model')}, {last.get('width')}x{last.get('height')}, "
-                       f"Prompt: {last['prompt']}]\n\n{message}")
+            message = (f"[Latest picture in this session (action \"edit\" changes it): model {last.get('model')}, "
+                       f"{last.get('width')}x{last.get('height')}, Prompt: {last['prompt']}]\n\n{message}")
         # An attached picture: an upload (data URL) or a gallery file. Claude reads a copy in its working folder;
         # the copy goes right after the turn, so a ghost picture is never left behind.
         attach = {k: req[k] for k in ("upload", "source") if req.get(k)}
@@ -458,6 +460,8 @@ class Handler(BaseHTTPRequestHandler):
             # per turn, because a resumed conversation that began in German outweighs the system prompt
             answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost, see=bool(seen))
             result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
+            if answer["action"] == "edit" and not attach and isinstance(last, dict) and last.get("image"):
+                attach = {"source": str(last["image"])}  # no picture attached: the edit is of the latest one
             if answer["action"] == "edit" and attach:
                 # the normal edit route, so the result links back to its source like any edit
                 result["image"] = self.edit({**attach, "prompt": answer["prompt"], "ghost": ghost, "_job": req.get("_job")})

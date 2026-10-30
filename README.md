@@ -20,30 +20,28 @@ doesn't pay the model load. Every render shows its step count and a live, pixela
 finished picture arrives with a scanline reveal. Jobs run in the background on the server, so a
 reload mid-render picks the result up again.
 
-The composer has four modes (Alt+1–4), each with its settings behind **Settings**:
+A new session starts as one of three kinds (Alt+1–3 on the empty session); once the first message
+is sent the kind is fixed and shown as a badge:
 
 - **Chat** — describe the picture; Claude (Claude Code CLI, `claude -p --model sonnet`) writes the
   English prompt and picks model, style and format, then the server renders. A follow-up like
-  "now at sunrise" makes a new picture from an adjusted prompt. Each session keeps its own Claude
-  conversation, and every message carries the session's latest picture, also one made in another
-  mode. A picture can ride along with a message (paperclip, paste or drop, or **To chat** on any
-  result): Claude looks at it and either **edits** exactly that picture or **generates** a new one in
-  its style. With a reference picture, generate runs a **refine loop**: Claude compares each result
-  with the reference and re-prompts until it is happy, at most 5 rounds; every round stays in the
-  thread with its critique.
-- **Manual** — the exact prompt and settings, no Claude in between. **Variant** on a result loads
-  its prompt and settings back in.
-- **Edit** — change an existing picture by instruction ("make it night"). The source is an upload
-  (drag & drop) or any result via its **Edit** button; uploads land in `output/uploads/`, and an
-  edited picture links back to its source ("Before"). The next edit builds on the last result.
+  "make it night" **edits** the session's latest picture (FLUX.2 Klein); "now a different scene"
+  generates a new one. Each session keeps its own Claude conversation. A picture can ride along
+  (paperclip, paste or drop): Claude looks at it and either edits exactly that picture or generates
+  a new one in its style. With a reference picture, generate runs a **refine loop**: Claude compares
+  each result with the reference and re-prompts until it is happy, at most 5 rounds.
+- **Manual** — the exact prompt and settings, no Claude in between.
 - **Guise** — the face from a photo onto the largest face in a video section (`faceswap.py`,
   `.venv-faceswap`): High (HyperSwap 256 + GPEN 512), Premium (GPEN 1024), Fast (inswapper 128);
-  optional hair recolouring and Real-ESRGAN ×2/×4 upscaling (capped at 4K).
+  optional hair recolouring and Real-ESRGAN ×2/×4 upscaling (capped at 4K). A finished Guise ends
+  the session: **Run again with changes** or **New Guise**.
 
-Every result has **Again** (same settings, new seed), **Edit**, **Variant**, **To chat**, **Copy
-prompt** and **Open**. **Gallery** (bottom left) shows all saved pictures; a click opens them large,
-with the raw version for pixel styles. **Ctrl+K** opens a command palette (modes, sessions, gallery,
-ghost, theme); `/` jumps to the input.
+Crossing over is manual: **Edit** on any result continues in the current chat (or opens a new chat
+session from Manual, Guise or the Gallery); **Variant** loads a result's prompt and settings into a
+Manual session. Dropped or pasted pictures go to a chat, videos to a Guise session. Every result also
+has **Again** (same settings, new seed), **Copy prompt** and **Open**. **Gallery** (bottom left) shows
+all saved pictures; a click opens them large, with the raw version for pixel styles. **Ctrl+K** opens
+a command palette (new sessions, sessions, gallery, ghost, theme); `/` jumps to the input.
 
 Edit models live in `EDIT_MODELS` in `morpheus.py`:
 

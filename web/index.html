@@ -348,6 +348,27 @@
   .out img, .out video { align-self: flex-start; width: auto; height: auto; max-width: min(100%, 380px); max-height: 380px; object-fit: contain; }
   .out video { max-width: min(100%, 520px); max-height: 420px; }
 
+  /* kinds of session: cards on the start screen, a badge once fixed, the finish bar of a Guise */
+  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 24px; text-align: left; }
+  .kind-card { border: 2px solid var(--line); background: var(--glass); padding: 14px; display: flex; flex-direction: column; gap: 6px; color: var(--text);
+    clip-path: polygon(0 6px, 6px 6px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px),
+      calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)); transition: border-color .15s; }
+  .kind-card b { font: 700 14px/1.2 var(--px); letter-spacing: .06em; color: var(--pink); }
+  .kind-card span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .kind-card:hover { border-color: var(--accent); }
+  .kind-card[aria-pressed="true"] { border-color: var(--cyan); box-shadow: inset 0 0 24px color-mix(in srgb, var(--cyan) 14%, transparent); }
+  .kind-card[aria-pressed="true"] b { color: var(--cyan); }
+  @media (max-width: 860px) { .kinds { grid-template-columns: 1fr; } }
+  .kind-badge { font: 700 11px/1 var(--px); letter-spacing: .08em; color: var(--cyan); border: 1px solid var(--cyan); padding: 6px 10px; }
+  .kind-badge::before { content: '● '; color: var(--pink); }
+  .done-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; }
+  .done-bar span { flex: 1; font: 19px var(--term); color: var(--muted); }
+  .done-bar span::before { content: '> '; color: var(--cyan); }
+  .done-bar button { font: 700 12px/1 var(--px); letter-spacing: .06em; padding: 10px 14px; border: 1px solid var(--line); background: transparent; color: var(--text); }
+  .done-bar button:hover { border-color: var(--cyan); color: var(--cyan); }
+  .done-bar .go { background: var(--pink); border-color: var(--pink); color: #fff; }
+  .done-bar .go:hover { color: #fff; filter: brightness(1.15); }
+
   /* house-style dialog and toast */
   dialog.ask { margin: auto; padding: 22px 22px 18px; width: min(400px, 92vw); border: 2px solid var(--cyan); background: var(--panel); color: var(--text);
     box-shadow: 0 0 0 1px #000, 0 0 40px color-mix(in srgb, var(--cyan) 30%, transparent);
@@ -446,12 +467,18 @@
 
     <div class="composer">
       <form class="box" id="composer">
-        <div class="modes" role="tablist" aria-label="Mode">
+        <div class="modes" role="tablist" aria-label="Kind of session">
+          <!-- the kind is picked once, while the session is empty; afterwards only the badge shows it -->
           <button type="button" role="tab" data-mode="chat" aria-selected="true" title="Alt+1">Chat</button>
           <button type="button" role="tab" data-mode="manual" aria-selected="false" title="Alt+2">Manual</button>
-          <button type="button" role="tab" data-mode="edit" aria-selected="false" title="Alt+3">Edit</button>
-          <button type="button" role="tab" data-mode="swap" aria-selected="false" title="Alt+4">Guise</button>
+          <button type="button" role="tab" data-mode="swap" aria-selected="false" title="Alt+3">Guise</button>
+          <span class="kind-badge" id="kind-badge" hidden></span>
           <button type="button" class="opts-toggle" id="opts-toggle" hidden></button>
+        </div>
+        <div class="done-bar" id="done-bar" hidden>
+          <span>Guise finished.</span>
+          <button type="button" id="swap-rerun">Run again with changes</button>
+          <button type="button" id="swap-new" class="go">New Guise</button>
         </div>
 
         <div class="opts two" id="opts-manual" hidden>
@@ -580,7 +607,7 @@
   }
 
   const state = {
-    sessions: store.get('sessions', []), currentId: store.get('current', null), ghost: false, ghostSession: null,
+    sessions: store.get('sessions', []), currentId: store.get('current', null), ghost: false, ghostSession: null, rerun: new Set(),
     mode: store.get('mode', 'chat'), optsOpen: store.get('optsOpen', true), view: 'thread',
     style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, upscale: 1,
     history: [], ghostHistory: [], busy: false,
@@ -615,7 +642,7 @@
     if (state.ghost) return state.ghostSession;
     let s = current();
     if (!s) {
-      s = { id: uid(), title: '', created: Date.now(), updated: Date.now(), claude: null, messages: [] };
+      s = { id: uid(), title: '', created: Date.now(), updated: Date.now(), claude: null, messages: [], kind: state.mode };
       state.sessions.unshift(s);
       state.currentId = s.id;
       store.set('current', s.id);
@@ -628,6 +655,7 @@
     renderSessions();
   }
   function addMessage(m, s = ensureSession()) {
+    if (!s.messages.length && !s.kind) s.kind = state.mode;  // the first message fixes the kind
     s.messages.push(m);
     if (!s.title && m.role === 'user') s.title = (m.kind ? m.kind + ': ' : '') + (m.text || '').slice(0, 48);
     s.updated = Date.now();
@@ -712,16 +740,61 @@
   function syncComposer() {
     document.querySelector('.composer').hidden = state.view === 'gallery';
     const key = keyOf();
-    if (key === draftKey) return;
-    stashDraft();
-    draftKey = key;
-    const d = drafts[key] || { text: '', mode: 'chat' };
-    $('input').value = d.text;
-    grow();
-    setMode(d.mode);
-    const pic = draftPics.get(key);
-    pic ? attachChat(pic, false) : detachChat();
+    if (key !== draftKey) {
+      stashDraft();
+      draftKey = key;
+      const d = drafts[key] || { text: '', mode: 'chat' };
+      $('input').value = d.text;
+      grow();
+      setMode(d.mode);
+      const pic = draftPics.get(key);
+      pic ? attachChat(pic, false) : detachChat();
+    }
+    lockKind();
   }
+
+  // ---------- Kinds of session: Chat, Manual, Guise, picked once ----------
+  // While a session is empty the tabs choose its kind; with the first message it is fixed and only a badge shows
+  // it. Moving a picture to another kind is always a click of the user's (Edit, Variant), never automatic.
+  const KIND_LABEL = { chat: 'Chat', manual: 'Manual', swap: 'Guise' };
+  const KIND_INFO = {
+    chat: ['Chat', 'Describe it, then change it by talking. The agent picks model and format and edits on request.'],
+    manual: ['Manual', 'Your exact prompt, style, format, model and seed. No agent in between.'],
+    swap: ['Guise', 'A face from a photo into a video. One job, one result.'],
+  };
+  function kindOf(s) {
+    if (!s?.messages.length) return null;
+    if (s.kind) return s.kind;
+    // sessions from before kinds existed: whatever their user messages were
+    const kinds = s.messages.filter(m => m.role === 'user').map(m => m.kind);
+    return kinds.includes('Guise') ? 'swap' : kinds.includes('Manual') && !kinds.some(k => !k) ? 'manual' : 'chat';
+  }
+  function lockKind() {
+    const s = current(), kind = kindOf(s);
+    if (kind && state.mode !== kind) setMode(kind);
+    document.querySelectorAll('.modes [role="tab"]').forEach(b => { b.hidden = !!kind; });
+    $('kind-badge').hidden = !kind;
+    $('kind-badge').textContent = KIND_LABEL[kind] || '';
+    // a Guise is one job: once its video is there, the input gives way to "again with changes" or a new one
+    const done = kind === 'swap' && s.messages.some(m => m.video) && !state.rerun.has(s.id);
+    $('done-bar').hidden = !done;
+    document.querySelector('.input-row').hidden = done;
+    if (done) ['manual', 'edit', 'swap'].forEach(k => { $('opts-' + k).hidden = true; });
+    $('opts-toggle').hidden = done || state.mode === 'chat';
+  }
+  // start a new, empty session of a kind (also from a result or a drop, which is the user's own crossover)
+  function newSession(kind) {
+    $('new-session').click();
+    setMode(kind);
+    stashDraft();
+  }
+  $('swap-rerun').onclick = () => {
+    state.rerun.add(current().id);
+    state.optsOpen = true;
+    setMode('swap');
+    lockKind();
+  };
+  $('swap-new').onclick = () => { state.optsOpen = true; newSession('swap'); };
   // a fresh session takes over the composer of "new" instead of leaving a stale draft behind
   function adoptDraft(id) {
     if (draftKey !== 'new') return;
@@ -741,19 +814,23 @@
         ['chat', 'Chat', 'A lighthouse in a storm, oil painting'],
         ['chat', 'Chat', 'Portrait of an astronaut, Kodak Portra'],
         ['chat', 'Chat', 'Café in Tokyo, rain, night'],
-        ['edit', 'Edit', 'Change a picture: “make it night”'],
-        ['swap', 'Guise', 'Put a face into a video'],
+        ['chat', 'Chat', 'A fox in the snow, watercolour'],
       ];
       const recent = state.history.slice(0, 6);
       col.innerHTML = `<div class="hero"><img src="/logo.png" alt="">
         <p class="greet">${hi} — <span>what are we dreaming today?</span></p>
-        <div class="ideas">${ideas.map((i, n) => `<button type="button" class="idea" data-n="${n}"><em>${i[1]}</em>${i[2]}</button>`).join('')}</div>
+        <div class="kinds">${Object.entries(KIND_INFO).map(([k, [name, what]]) =>
+          `<button type="button" class="kind-card" data-k="${k}" aria-pressed="${state.mode === k}"><b>${name}</b><span>${what}</span></button>`).join('')}</div>
+        <div class="ideas" ${state.mode === 'chat' ? '' : 'hidden'}>${ideas.map((i, n) => `<button type="button" class="idea" data-n="${n}"><em>${i[1]}</em>${i[2]}</button>`).join('')}</div>
         ${recent.length ? `<div class="recent"><div class="label">Recently made <button type="button" id="all-recent">See all →</button></div><div class="strip"></div></div>` : ''}
         </div>`;
       col.querySelectorAll('.idea').forEach(b => b.onclick = () => {
-        const [mode, , text] = ideas[+b.dataset.n];
-        setMode(mode);
-        if (mode === 'chat') { $('input').value = text; $('input').dispatchEvent(new Event('input')); }
+        $('input').value = ideas[+b.dataset.n][2]; $('input').dispatchEvent(new Event('input'));
+        $('input').focus();
+      });
+      col.querySelectorAll('.kind-card').forEach(b => b.onclick = () => {
+        if (b.dataset.k !== 'chat') state.optsOpen = true;
+        setMode(b.dataset.k); stashDraft(); renderThread();
         $('input').focus();
       });
       const strip = col.querySelector('.strip');
@@ -795,8 +872,8 @@
     card.innerHTML = `<img src="${url(h.image)}" alt="${esc(h.prompt)}" class="${pixel ? 'pixel' : ''}" loading="lazy">
       <div class="acts"><span class="meta">${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
         <button type="button" data-a="again" title="Same settings, new seed">Again</button>
-        <button type="button" data-a="edit">Edit</button><button type="button" data-a="reuse" title="Load prompt and settings into the input">Variant</button>
-        <button type="button" data-a="chat" title="Take this picture into the chat">To chat</button>
+        <button type="button" data-a="edit" title="Change this picture in a chat">Edit</button>
+        ${'source' in h ? '' : '<button type="button" data-a="reuse" title="Prompt and settings into a Manual session">Variant</button>'}
         <button type="button" data-a="copy">Copy prompt</button>
         <a href="${url(pixel ? h.image : h.raw)}" target="_blank" rel="noopener">Open</a></div>
       <details><summary>Prompt</summary><p>${esc(h.prompt)}</p></details>`;
@@ -804,11 +881,10 @@
     img.onclick = () => lightbox(h);
     card.querySelector('[data-a="again"]').onclick = () => again(h);
     card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.target);
-    card.querySelector('[data-a="chat"]').onclick = () => attachChat({ source: h.image });
     img.onerror = () => img.replaceWith(Object.assign(document.createElement('p'), { className: 'hint',
       textContent: h.ghost ? 'Ghost picture, no longer in memory.' : 'This picture no longer exists.' }));
-    card.querySelector('[data-a="edit"]').onclick = () => editImage(h);
-    card.querySelector('[data-a="reuse"]').onclick = () => fillForm(h);
+    card.querySelector('[data-a="edit"]').onclick = () => editInChat({ source: h.image });
+    card.querySelector('[data-a="reuse"]')?.addEventListener('click', () => variant(h));
     return card;
   }
 
@@ -964,7 +1040,7 @@
 
   // ---------- Composer ----------
   const PLACEHOLDER = {
-    chat: 'Describe what you want to see … (Enter sends)',
+    chat: 'Describe a picture, or say what to change … (Enter sends)',
     manual: 'Prompt, used exactly as written, e.g. a lighthouse at night, pixel art … (Ctrl+Enter)',
     edit: 'What should change? e.g. make it night, warm light in the windows … (Ctrl+Enter)',
   };
@@ -1004,7 +1080,10 @@
   document.addEventListener('keydown', e => {
     const typing = e.target.closest?.('input, textarea, [contenteditable]');
     if (e.key === '/' && !typing && !lb.open) { e.preventDefault(); $('input').focus(); }
-    if (e.altKey && ['1', '2', '3', '4'].includes(e.key)) { e.preventDefault(); setMode(['chat', 'manual', 'edit', 'swap'][+e.key - 1]); stashDraft(); $('input').focus(); }
+    // Alt+1-3 pick the kind, only while the session is still empty
+    if (e.altKey && ['1', '2', '3'].includes(e.key) && !kindOf(current())) {
+      e.preventDefault(); setMode(['chat', 'manual', 'swap'][+e.key - 1]); stashDraft(); renderThread(); $('input').focus();
+    }
   });
   $('opts-toggle').onclick = () => { state.optsOpen = !state.optsOpen; store.set('optsOpen', state.optsOpen); setMode(state.mode); };
 
@@ -1052,7 +1131,7 @@
       // pictures from Manual, Edit or Again never pass the chat, so the newest one always goes along:
       // "make it a body shot" has to know which picture "it" is
       const prev = s.messages.slice(0, -1).reverse().find(m => m.image)?.image;
-      const last = prev && { prompt: prev.prompt, model: prev.model, width: prev.width, height: prev.height };
+      const last = prev && { image: prev.raw || prev.image, prompt: prev.prompt, model: prev.model, width: prev.width, height: prev.height };
       await startJob(s, 'chat', '/api/chat', { message: text, session: state.ghost ? null : s.claude, ghost: state.ghost, context,
         last: pic ? undefined : last, ...(pic || {}) });
     } catch (err) {
@@ -1108,25 +1187,35 @@
     }
   }
 
-  function fillForm(h) {
-    if ('source' in h) {  // an edit reopens as an edit, with its own source and instruction
-      if (h.source && !h.source.includes(':')) setSource({ file: h.source });
-      $('edit-seed').value = h.seed;
-      setMode('edit');
-    } else {
-      $('seed').value = h.seed;
-      state.style = h.style; press($('styles'), options.styles.findIndex(st => st.key === h.style));
-      const r = options.resolutions.findIndex(r => r.width === h.width && r.height === h.height);
-      if (r >= 0) { state.res = r; press($('ratios'), r); }
-      if (options.models.some(m => m.key === h.model && m.installed)) {
-        state.model = h.model;
-        document.querySelector(`input[name="model"][value="${h.model}"]`).checked = true;
-      }
-      setMode('manual');
-    }
-    $('input').value = h.prompt; grow();
+  // Variant: prompt and settings of a result into the Manual form, in this session if it is a Manual one,
+  // otherwise in a new Manual session
+  function variant(h) {
     lb.close();
+    if (state.view === 'gallery' || kindOf(current()) !== 'manual') newSession('manual');
+    $('seed').value = h.seed;
+    state.style = h.style; press($('styles'), options.styles.findIndex(st => st.key === h.style));
+    const r = options.resolutions.findIndex(r => r.width === h.width && r.height === h.height);
+    if (r >= 0) { state.res = r; press($('ratios'), r); }
+    if (options.models.some(m => m.key === h.model && m.installed)) {
+      state.model = h.model;
+      document.querySelector(`input[name="model"][value="${h.model}"]`).checked = true;
+    }
+    state.optsOpen = true;
+    setMode('manual');
+    $('input').value = h.prompt; grow();
+    stashDraft();
     $('input').focus();
+  }
+
+  // Edit: the picture goes into a chat, where the agent changes it. In a chat session that is this one;
+  // from anywhere else (Manual, Guise, the Gallery) a new chat session.
+  function editInChat(pic) {
+    lb.close();
+    const k = kindOf(current());
+    if (state.view === 'gallery' || (k && k !== 'chat')) newSession('chat');
+    else setMode('chat');
+    attachChat(pic);
+    $('input').placeholder = 'What should change? e.g. make it night … (Enter sends)';
   }
 
   // ---------- Edit ----------
@@ -1174,20 +1263,17 @@
   $('chat-attach').onclick = () => $('chat-file').click();
   $('chat-file').onchange = e => { readImage(e.target.files[0], data => attachChat({ upload: data })); e.target.value = ''; };
 
+  // A picture dropped or pasted anywhere goes into a chat (this one, or a new one); a video into a Guise.
+  // In a Guise session the settings' own drop zones take photo and video and stop the event before it gets here.
   function takeAnywhere(file) {
     if (!file) return false;
-    if (file.type.startsWith('image/') && state.mode === 'chat') {
-      readImage(file, data => attachChat({ upload: data }));
-      return true;
-    }
     if (file.type.startsWith('image/')) {
-      readImage(file, data => setSource({ upload: data }));
-      state.optsOpen = true;
-      setMode('edit');
-      $('input').focus();
+      readImage(file, data => editInChat({ upload: data }));
       return true;
     }
     if (file.type.startsWith('video/')) {
+      const s = current();
+      if (kindOf(s) !== 'swap' || $('done-bar').hidden === false) { state.optsOpen = true; newSession('swap'); }
       takeVideo(file);
       state.optsOpen = true;
       setMode('swap');
@@ -1205,14 +1291,6 @@
     const file = [...(e.clipboardData?.files || [])][0];
     if (file && takeAnywhere(file)) e.preventDefault();
   });
-
-  function editImage(h) {
-    setSource({ file: h.raw });
-    state.optsOpen = true;
-    setMode('edit');
-    lb.close();
-    $('input').focus();
-  }
 
   async function runEdit() {
     const prompt = $('input').value.trim();
@@ -1296,6 +1374,7 @@
     const hair = $('swap-hair').checked, a = +$('swap-start').value, b = +$('swap-end').value;
     const label = { fast: 'Fast', premium: 'Premium' }[quality] || 'High';
     const s = ensureSession();
+    state.rerun.delete(s.id);  // the new job ends the session again once it is done
     addMessage({ role: 'user', kind: KIND.swap, text: `${swap.video.name}, ${fmt(a)} – ${fmt(b)} · ${label}${hair ? ' + hair colour' : ''}${state.upscale > 1 ? ` · ×${state.upscale}` : ''}` }, s);
     // the upload itself can't survive a reload (the file lives in this page); from the started job on it can
     const uploading = workingEl({ kind: 'swap', since: Date.now(), status: 'Uploading video …' });
@@ -1400,16 +1479,14 @@
         ${pixel ? `<button type="button" data-a="raw" aria-pressed="${raw}">Raw</button>` : ''}
         ${linked ? `<a href="${url(h.source)}" target="_blank" rel="noopener">Before</a>` : ''}
         <button type="button" data-a="again">Again</button>
-        <button type="button" data-a="reuse">Variant</button><button type="button" data-a="edit">Edit</button>
-        <button type="button" data-a="chat">To chat</button>
+        ${'source' in h ? '' : '<button type="button" data-a="reuse">Variant</button>'}<button type="button" data-a="edit">Edit</button>
         <a href="${url(file)}" target="_blank" rel="noopener">Open</a><button type="button" data-a="delete" class="danger">Delete</button>
         <button type="button" data-a="close" aria-label="Close">✕</button></div>`;
     const on = (a, f) => { const b = $('lb-inner').querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     on('raw', () => lightbox(h, !raw));
-    on('reuse', () => fillForm(h));
+    on('reuse', () => variant(h));
     on('again', () => again(h));
-    on('edit', () => editImage(h));
-    on('chat', () => { lb.close(); attachChat({ source: h.image }); });
+    on('edit', () => editInChat({ source: h.image }));
     on('close', () => lb.close());
     on('delete', () => deletePicture(h));
     if (!lb.open) lb.showModal();
@@ -1453,8 +1530,8 @@
     const list = [
       ['New session', '', () => $('new-session').click()],
       ['Gallery', '', () => $('open-gallery').click()],
-      ['Mode: Chat', 'Alt+1', () => setMode('chat')], ['Mode: Manual', 'Alt+2', () => setMode('manual')],
-      ['Mode: Edit', 'Alt+3', () => setMode('edit')], ['Mode: Guise', 'Alt+4', () => setMode('swap')],
+      ['New chat', '', () => newSession('chat')], ['New Manual session', '', () => { state.optsOpen = true; newSession('manual'); }],
+      ['New Guise', '', () => { state.optsOpen = true; newSession('swap'); }],
       ['Ghost mode on/off', '', () => $('ghost').click()], ['Light / dark', '', () => $('theme').click()],
     ];
     state.sessions.slice(0, 12).forEach(s => list.push([`Session: ${s.title || 'Untitled'}`, '', () => openSession(s.id)]));
