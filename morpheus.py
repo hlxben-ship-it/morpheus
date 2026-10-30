@@ -10,10 +10,13 @@ image onto a real pixel grid with a limited palette (diffusion models only fake 
 The web UI (server.py) uses the same run() as the command line.
 """
 import argparse
+import asyncio
 import json
 import random
 import re
+import threading
 import time
+import uuid
 import urllib.parse
 import urllib.request
 from io import BytesIO
@@ -53,7 +56,7 @@ def zimage_workflow(prompt: str, width: int, height: int, seed: int, steps: int)
     """
     return {
         "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "fp8_e4m3fn"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "cpu"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "default"}},
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
         "4": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 3.0}},
         "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
@@ -300,12 +303,53 @@ def comfy_up() -> bool:
         return False
 
 
-def generate(graph: dict, ghost: bool = False) -> Image.Image:
+def watch(client: str, progress, ready: threading.Event, done: threading.Event) -> None:
+    """Follow one client's ComfyUI websocket: sampler steps as progress(step=, total=), and the live
+    preview frames (JPEG, sent when ComfyUI runs with --preview-method) as progress(preview=bytes)."""
+    import aiohttp  # ComfyUI's own dependency, so it is in the venv
+
+    async def run():
+        async with aiohttp.ClientSession() as http, http.ws_connect(f"{SERVER.replace('http', 'ws')}/ws?clientId={client}") as ws:
+            ready.set()
+            while not done.is_set():
+                try:
+                    msg = await ws.receive(timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = json.loads(msg.data)
+                    if data.get("type") == "progress":
+                        progress(step=data["data"]["value"], total=data["data"]["max"])
+                elif msg.type == aiohttp.WSMsgType.BINARY and msg.data[:4] == b"\x00\x00\x00\x01":
+                    progress(preview=msg.data[8:])  # event 1 = preview image, then 4 bytes format, then the image
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                    return
+    try:
+        asyncio.run(run())
+    except Exception:
+        pass  # progress is a nicety; the render itself is followed through /history
+    finally:
+        ready.set()
+
+
+def generate(graph: dict, ghost: bool = False, progress=None) -> Image.Image:
     """Run a graph and return its image. Ghost runs save to ComfyUI's temp folder instead of its output
-    folder, and the file is deleted again as soon as it is read."""
+    folder, and the file is deleted again as soon as it is read. progress, if given, gets the live steps
+    and preview frames (see watch)."""
     if ghost:
         graph = {**graph, "10": {"class_type": "PreviewImage", "inputs": {"images": graph["10"]["inputs"]["images"]}}}
-    prompt_id = call("/prompt", {"prompt": graph})["prompt_id"]
+    client, done = uuid.uuid4().hex, threading.Event()
+    if progress:
+        ready = threading.Event()
+        threading.Thread(target=watch, args=(client, progress, ready, done), daemon=True).start()
+        ready.wait(3)
+    try:
+        return wait(call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"], ghost)
+    finally:
+        done.set()
+
+
+def wait(prompt_id: str, ghost: bool) -> Image.Image:
     while True:
         hist = call(f"/history/{prompt_id}").get(prompt_id)
         if hist and hist.get("status", {}).get("completed"):
@@ -337,7 +381,7 @@ def slug(text: str) -> str:
 
 def run(prompt: str, style: str = "none", model: str = "z-image-turbo", width: int = 1024, height: int = 1024,
         seed: int | None = None, steps: int | None = None, out: Path = OUTPUT, name: str | None = None,
-        grid: int | None = None, colors: int | None = None, ghost: bool = False) -> dict:
+        grid: int | None = None, colors: int | None = None, ghost: bool = False, progress=None) -> dict:
     """Generate one image, save it (plus raw and a metadata sidecar) and return the metadata.
 
     A ghost run writes nothing: the metadata carries the images themselves under "pictures" instead.
@@ -350,7 +394,7 @@ def run(prompt: str, style: str = "none", model: str = "z-image-turbo", width: i
     name = name or f"{time.strftime('%Y%m%d-%H%M%S')}_{model}_{slug(prompt)[:30]}_{seed}"
 
     started = time.time()
-    img = generate(m["workflow"](st["prefix"] + prompt, width, height, seed, steps or m["steps"]), ghost)
+    img = generate(m["workflow"](st["prefix"] + prompt, width, height, seed, steps or m["steps"]), ghost, progress)
     final = pixelate(img, grid or st["pixel"]["grid"], colors or st["pixel"]["colors"]) if st["pixel"] else img
     meta = {"image": f"{name}.png" if st["pixel"] else f"{name}_raw.png", "raw": f"{name}_raw.png", "prompt": prompt,
             "style": style, "model": model, "width": width, "height": height, "seed": seed,
@@ -378,7 +422,7 @@ def edit_size(width: int, height: int, pixels: int = 1024 * 1024) -> tuple[int, 
 
 def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-4b-edit", seed: int | None = None,
              steps: int | None = None, out: Path = OUTPUT, name: str | None = None, ghost: bool = False,
-             source_ref: str | None = None) -> dict:
+             source_ref: str | None = None, progress=None) -> dict:
     """Edit an existing image by instruction, save the result and a metadata sidecar, return the metadata.
 
     The source is a file or, for ghost runs, an image held in memory. A ghost run writes nothing that outlives it.
@@ -398,7 +442,7 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
 
     started = time.time()
     try:
-        img = generate(m["workflow"](prompt, f"morpheus/{name}.png", width, height, seed, steps or m["steps"]), ghost)
+        img = generate(m["workflow"](prompt, f"morpheus/{name}.png", width, height, seed, steps or m["steps"]), ghost, progress)
     finally:
         if ghost:
             staged.unlink(missing_ok=True)

@@ -37,15 +37,29 @@ gpu = threading.Lock()  # ComfyUI renders one image at a time anyway; this keeps
 comfy_lock = threading.Lock()
 
 
+def other_vram_gb() -> float:
+    """Dedicated VRAM in use by every process on the card; called while ComfyUI is down, so it is everyone else."""
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "((Get-Counter '\\GPU Process Memory(*)\\Dedicated Usage').CounterSamples | Measure CookedValue -Sum).Sum"],
+                       capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        return float(r.stdout.strip().replace(",", ".")) / 1024 ** 3
+    except ValueError:
+        return 2.0
+
+
 def ensure_comfy(timeout: float = 300) -> None:
     """Start ComfyUI in the background if it is not answering, then wait until it is."""
     with comfy_lock:
         if morpheus.comfy_up():
             return
         log = open(morpheus.ROOT / "comfyui.log", "ab")
+        # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
+        # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
+        reserve = other_vram_gb() + 1.0
         subprocess.Popen(
             [sys.executable, str(morpheus.ROOT / "ComfyUI" / "main.py"), "--listen", "127.0.0.1", "--port", "8188",
-             "--disable-auto-launch"],
+             "--disable-auto-launch", "--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"],
             stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         deadline = time.time() + timeout
@@ -229,7 +243,23 @@ def history(limit: int = 60) -> list[dict]:
 JOBS: dict[str, dict] = {}
 
 
+def progress_for(req: dict):
+    """The callback a background job hands to morpheus.run: sampler steps and the newest live preview frame."""
+    job = req.get("_job")
+    if job is None:
+        return None
+
+    def update(step=None, total=None, preview=None):
+        if step is not None:
+            job["step"], job["total"] = step, total
+        if preview is not None:
+            job["_preview"] = preview
+            job["previews"] = job.get("previews", 0) + 1  # the page reloads the frame when this changes
+    return update
+
+
 def background(job: dict, handler, req: dict) -> None:
+    req["_job"] = job
     try:
         job["result"] = handler(req)
         job["state"] = "done"
@@ -281,8 +311,21 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/history":
             return self.send_json(history())
         if route.startswith("/api/job/"):
-            job = JOBS.get(route.removeprefix("/api/job/"))
-            return self.send_json(job) if job else self.send_error(404)
+            job_id, _, part = route.removeprefix("/api/job/").partition("/")
+            job = JOBS.get(job_id)
+            if not job:
+                return self.send_error(404)
+            if part == "preview":  # the live frame of the picture forming
+                data = job.get("_preview")
+                if not data:
+                    return self.send_error(404)
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return self.wfile.write(data)
+            return self.send_json({k: v for k, v in job.items() if not k.startswith("_")})
         if route.startswith("/api/faceswap/"):
             job = SWAPS.get(route.removeprefix("/api/faceswap/"))
             return self.send_json(job) if job else self.send_error(404)
@@ -342,7 +385,8 @@ class Handler(BaseHTTPRequestHandler):
             size = next((r for r in RESOLUTIONS if r["width"] == answer["width"] and r["height"] == answer["height"]), RESOLUTIONS[0])
             ensure_comfy()
             with gpu:
-                meta = morpheus.run(answer["prompt"], style, model, size["width"], size["height"], ghost=ghost)
+                meta = morpheus.run(answer["prompt"], style, model, size["width"], size["height"], ghost=ghost,
+                                    progress=progress_for(req))
             result["image"] = ghost_keep(meta) if ghost else meta
         return result
 
@@ -357,7 +401,7 @@ class Handler(BaseHTTPRequestHandler):
             meta = morpheus.run(
                 prompt, req.get("style", "none"), req.get("model", "z-image-turbo"),
                 int(req.get("width", 1024)), int(req.get("height", 1024)),
-                int(req["seed"]) if str(req.get("seed", "")).strip() else None, ghost=ghost)
+                int(req["seed"]) if str(req.get("seed", "")).strip() else None, ghost=ghost, progress=progress_for(req))
         return ghost_keep(meta) if ghost else meta
 
     def edit(self, req):
@@ -391,7 +435,7 @@ class Handler(BaseHTTPRequestHandler):
         with gpu:
             meta = morpheus.run_edit(prompt, source, model,
                                     int(req["seed"]) if str(req.get("seed", "")).strip() else None,
-                                    ghost=ghost, source_ref=source_ref)
+                                    ghost=ghost, source_ref=source_ref, progress=progress_for(req))
         return ghost_keep(meta) if ghost else meta
 
     def upload(self):
@@ -441,6 +485,19 @@ class Handler(BaseHTTPRequestHandler):
         return {"ok": True}
 
 
+def warm_up() -> None:
+    """Start ComfyUI and render one tiny throwaway image with the default model, so the first real prompt
+    doesn't pay for reading ~20 GB of weights from disk (123 s cold vs ~20 s warm)."""
+    try:
+        ensure_comfy()
+        with gpu:
+            morpheus.generate(morpheus.MODELS["z-image-turbo"]["workflow"]("warm up", 256, 256, 0, 1), ghost=True)
+        print("Morpheus: ComfyUI ist warm.")
+    except Exception as e:  # the first real render just pays the cold start then
+        print(f"Morpheus: Aufwärmen fehlgeschlagen ({e}).")
+
+
 if __name__ == "__main__":
     print(f"Morpheus läuft auf http://127.0.0.1:{PORT}")
+    threading.Thread(target=warm_up, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
