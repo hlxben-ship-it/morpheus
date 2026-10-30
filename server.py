@@ -568,7 +568,7 @@ class Handler(BaseHTTPRequestHandler):
         """Store a raw upload (the video) in chunks and hand back its id."""
         length = int(self.headers.get("Content-Length", 0))
         if not length:
-            return self.send_json({"error": "Leerer Upload."}, 400)
+            return self.send_json({"error": "Empty upload."}, 400)
         UPLOADS.mkdir(exist_ok=True)
         upload_id = f"{time.time_ns():x}"
         with open(UPLOADS / upload_id, "wb") as f:

@@ -427,7 +427,7 @@
 
         <div class="opts two" id="opts-edit" hidden>
           <div class="field">
-            <span class="label">Ausgangsbild</span>
+            <span class="label">Source picture</span>
             <label class="drop" id="drop">
               <input type="file" id="edit-file" accept="image/*" hidden>
               <img id="edit-preview" alt="" hidden>
@@ -1224,7 +1224,7 @@
     try {
       const up = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: swap.video });
       const upload = await up.json();
-      if (!up.ok) throw new Error(upload.error || 'Upload fehlgeschlagen');
+      if (!up.ok) throw new Error(upload.error || 'Upload failed');
       uploading.remove();
       await startJob(s, 'swap', '/api/faceswap', { photo: swap.photo, video_id: upload.id, enhance: $('swap-enhance').checked, hair,
         ghost: state.ghost, quality, start: a, end: b, upscale: state.upscale }, { label });
