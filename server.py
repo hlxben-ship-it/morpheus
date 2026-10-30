@@ -174,7 +174,7 @@ def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool
     """
     CHAT_DIR.mkdir(exist_ok=True)
     cmd = [shutil.which("claude") or "claude", "-p", "--output-format", "json", "--json-schema", json.dumps(schema or CHAT_SCHEMA),
-           "--tools", "Read" if see else "",  # Read only to look at an attached picture in CHAT_DIR
+           "--tools", "Read" if see else "",  # Read only to look at a picture copied into CHAT_DIR
            "--model", "sonnet", "--system-prompt", system or chat_system_prompt()]
     if ghost:
         cmd.append("--no-session-persistence")
@@ -324,6 +324,17 @@ def background(job: dict, handler, req: dict) -> None:
         job["state"] = "error"
 
 
+def copy_picture(source: str, dest: Path) -> None:
+    """A gallery or ghost picture copied to dest, for Claude to read."""
+    if source.startswith("ghost/"):
+        ghost_image(source).save(dest)
+        return
+    src = (morpheus.OUTPUT / source).resolve()
+    if morpheus.OUTPUT.resolve() not in src.parents or not src.is_file():
+        raise ValueError("The attached picture no longer exists.")
+    dest.write_bytes(src.read_bytes())
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # keep the console quiet apart from errors
         pass
@@ -444,21 +455,28 @@ class Handler(BaseHTTPRequestHandler):
             seen = CHAT_DIR / f"attached-{uuid.uuid4().hex[:8]}.png"
             if "upload" in attach:
                 seen.write_bytes(base64.b64decode(str(attach["upload"]).split(",", 1)[-1]))
-            elif attach["source"].startswith("ghost/"):
-                ghost_image(attach["source"]).save(seen)
             else:
-                src = (morpheus.OUTPUT / attach["source"]).resolve()
-                if morpheus.OUTPUT.resolve() not in src.parents or not src.is_file():
-                    raise ValueError("The attached picture no longer exists.")
-                seen.write_bytes(src.read_bytes())
+                copy_picture(attach["source"], seen)
             # spelled out here, because a resumed conversation may come from before "edit" existed and assume it can't
             message = (f"[Attached picture: {seen.name} — look at it with the Read tool. You can edit this picture "
                        f"directly: action \"edit\" changes exactly this picture and keeps the rest. Use \"edit\" when the "
                        f"user wants this picture changed; \"generate\" only for a new picture in its style or with its subject.]"
                        f"\n\n{message}")
+        # Nothing attached: Claude may still look at the latest picture, e.g. "is her eye broken?"
+        latest = None
+        if not seen and isinstance(last, dict) and last.get("image"):
+            latest = CHAT_DIR / f"latest-{uuid.uuid4().hex[:8]}.png"
+            try:
+                CHAT_DIR.mkdir(exist_ok=True)
+                copy_picture(str(last["image"]), latest)
+                message = (f"[The latest picture is {latest.name}. Look at it with the Read tool when the user asks "
+                           f"about it or a change needs you to see it; otherwise don't.]\n\n{message}")
+            except Exception:
+                latest = None  # deleted meanwhile: chat on without it
         try:
             # per turn, because a resumed conversation that began in German outweighs the system prompt
-            answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost, see=bool(seen))
+            answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost,
+                                         see=bool(seen or latest))
             result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
             if answer["action"] == "edit" and not attach and isinstance(last, dict) and last.get("image"):
                 attach = {"source": str(last["image"])}  # no picture attached: the edit is of the latest one
@@ -472,8 +490,9 @@ class Handler(BaseHTTPRequestHandler):
                     # a reference picture is the target: look at each result and re-prompt until it matches
                     result.update(self.refine(seen, answer, result["image"], ghost, req))
         finally:
-            if seen:
-                seen.unlink(missing_ok=True)
+            for f in (seen, latest):
+                if f:
+                    f.unlink(missing_ok=True)
         return result
 
     def render(self, answer: dict, ghost: bool, req: dict) -> dict:
