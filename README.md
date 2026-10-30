@@ -18,7 +18,11 @@ cyan and magenta, stepped corners, CRT scanlines (never over pictures); logo and
 The header shows ComfyUI's state (idle, thinking while Claude writes the prompt, rendering with its queue,
 off), VRAM in use and GPU load. Both come from the Windows GPU performance counters, so they count every
 program, like Task Manager; a PowerShell sampler started by the server reads them each second and ends
-with it. Hovering VRAM lists the top 3 programs on the card (ComfyUI recognised by its command line).
+with it. Hovering VRAM lists the top 3 programs on the card plus everything else, so the rows add up
+(per process it reads "Local Usage", what is resident; "Dedicated Usage" counts the desktop's mapped buffers
+again). Under ComfyUI, and when hovering its state, come its loaded models with their kind and how much of
+each sits on the card. ComfyUI has no route for that, so `comfy_ext/morpheus_status.py` adds
+`/morpheus/loaded`; the server copies it into `ComfyUI/custom_nodes` whenever it starts ComfyUI.
 The GPU temperature comes from AMD's driver library (`atiadlxx.dll`, ADL PMLog: edge, hotspot, memory, fan),
 since Windows has no counter for it; hovering shows all four, and it hides on cards without ADL. Sessions with a job running get a red REC dot in the list.
 

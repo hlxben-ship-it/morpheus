@@ -350,6 +350,15 @@
   .hud-tip .rank { color: var(--muted); }
   .hud-tip .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
   .hud-tip .num { font-variant-numeric: tabular-nums; color: var(--cyan); }
+  .hud-tip .row.rest .name, .hud-tip .row.rest .num { color: var(--muted); }
+  .hud-tip .row.rest small i { background: var(--muted); }
+  .hud-tip .models { margin: 6px 0 2px 22px; padding-left: 9px; border-left: 1px dashed var(--line); }
+  .hud-tip .models p { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; font-size: 15px; line-height: 1.25; color: var(--text); }
+  .hud-tip .models em { font-style: normal; color: var(--muted); }
+  .hud-tip .models .num { color: var(--pink); }
+  .hud-tip .models .sub { display: block; font: 400 8px var(--px); letter-spacing: .1em; color: var(--muted); margin: 2px 0 4px; }
+  .hud-tip .models .foot { display: block; margin: 0; }
+  .hud-tip { min-width: 300px; }
   .hud-tip .foot { margin-top: 8px; font-size: 14px; color: var(--muted); }
   @media (max-width: 900px) { .hud .bar, .hud-meter b { display: none; } }
   @media (max-width: 640px) { .hud-meter { display: none; } }
@@ -480,7 +489,7 @@
     <a class="brand" href="/"><img src="/logo.png" alt=""><span class="word">MORPH<b>E</b>US</span><small>v0.1</small></a>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
-        <span class="hud-comfy" id="hud-comfy" data-s="off"><i></i><b>Comfy</b> <em>…</em></span>
+        <span class="hud-comfy" id="hud-comfy" data-s="off" data-tip="comfy"><i></i><b>Comfy</b> <em>…</em></span>
         <span class="hud-meter" id="hud-vram-m" data-tip="vram"><b>VRAM</b><span class="bar"><i id="hud-vram-bar"></i></span><em id="hud-vram">–</em></span>
         <span class="hud-meter" title="GPU load, busiest engine"><b>GPU</b><span class="bar"><i id="hud-load-bar"></i></span><em id="hud-load">–</em></span>
         <span class="hud-meter hud-temp" id="hud-temp-m" data-tip="temp" hidden><b>TEMP</b><em id="hud-temp">–</em></span>
@@ -1550,7 +1559,6 @@
     c.dataset.s = !st.comfy ? 'off' : st.busy ? 'busy' : st.jobs ? 'think' : 'idle';
     c.querySelector('em').textContent = !st.comfy ? 'off' : st.busy ? (st.queue > 1 ? `rendering · ${st.queue} queued` : 'rendering')
       : st.jobs ? 'thinking' : 'idle';
-    c.title = !st.comfy ? 'ComfyUI is not reachable on :8188' : `ComfyUI on :8188 · ${st.queue} in its queue · ${st.jobs} Morpheus jobs`;
     const meter = (bar, label, pct, text) => {
       $(bar).style.width = (pct ?? 0) + '%';
       $(bar).classList.toggle('hot', pct > 85);
@@ -1575,11 +1583,20 @@
     tipFor = el;
     const tip = $('hud-tip'), st = hudState, gb = b => (b / 2 ** 30).toFixed(1) + ' GB';
     if (el.dataset.tip === 'vram') {
-      const procs = st.procs || [], top = Math.max(1, ...procs.map(p => p.bytes));
-      tip.innerHTML = `<h4>VRAM · top 3</h4>${procs.map((p, n) => `<div class="row"><span class="rank">${n + 1}</span>
-        <span class="name" title="${esc(p.exe)} · pid ${p.pid}">${esc(PROC_NAMES[p.exe] || p.name)}</span><span class="num">${gb(p.bytes)}</span>
-        <small><i style="width:${(100 * p.bytes / top).toFixed(0)}%"></i></small></div>`).join('') || '<div class="foot">No data yet.</div>'}
-        <div class="foot">${st.vram != null ? `${gb(st.vram)} of ${st.vram_total ? gb(st.vram_total) : '?'} in use` : ''} · shared buffers count per program</div>`;
+      // the top 3 plus the rest, so the rows add up to the card's total
+      const procs = (st.procs || []).slice();
+      const rest = st.vram != null ? st.vram - procs.reduce((a, p) => a + p.bytes, 0) : 0;
+      if (rest > 2 ** 26) procs.push({ name: 'Everything else', exe: '', bytes: rest, rest: true });
+      const top = Math.max(1, ...procs.map(p => p.bytes));
+      tip.innerHTML = `<h4>VRAM · top 3</h4>${procs.map((p, n) => `<div class="row${p.rest ? ' rest' : ''}"><span class="rank">${p.rest ? '+' : n + 1}</span>
+        <span class="name"${p.pid ? ` title="${esc(p.exe)} · pid ${p.pid}"` : ''}>${esc(PROC_NAMES[p.exe] || p.name)}</span><span class="num">${gb(p.bytes)}</span>
+        <small><i style="width:${(100 * p.bytes / top).toFixed(0)}%"></i></small></div>${p.name === 'ComfyUI' ? modelRows(st.models) : ''}`).join('')
+        || '<div class="foot">No data yet.</div>'}
+        <div class="foot">${st.vram != null ? `= ${gb(st.vram)} of ${st.vram_total ? gb(st.vram_total) : '?'} in use` : ''}</div>`;
+    } else if (el.dataset.tip === 'comfy') {
+      tip.innerHTML = `<h4>ComfyUI · :8188</h4>${!st.comfy ? '<div class="foot">Not reachable. It starts with the next render.</div>' : `
+        <div class="row"><span class="rank">·</span><span class="name">${st.busy ? 'Rendering' : st.jobs ? 'Thinking' : 'Idle'}</span>
+          <span class="num">${st.queue} queued</span></div>${modelRows(st.models, true)}`}`;
     } else {
       const t = st.temp || {}, row = (k, v) => v == null ? '' : `<div class="row"><span class="rank">·</span><span class="name">${k}</span><span class="num">${v}</span></div>`;
       tip.innerHTML = `<h4>GPU sensors</h4>${row('Edge', t.edge != null ? t.edge + '°C' : null)}${row('Hotspot', t.hotspot != null ? t.hotspot + '°C' : null)}
@@ -1588,6 +1605,16 @@
     tip.hidden = false;
     const hudBox = $('hud').getBoundingClientRect(), r = el.getBoundingClientRect();
     tip.style.left = Math.max(0, Math.min(r.left - hudBox.left - 20, hudBox.width - tip.offsetWidth)) + 'px';
+  }
+  // ComfyUI's models from our /morpheus/loaded route: what each is, and how much of it sits on the card
+  const MODEL_KIND = k => /Autoencod|VAE/i.test(k) ? 'VAE' : /TE|Clip|T5|Encoder/.test(k) ? 'Text encoder' : 'Diffusion';
+  function modelRows(models, heading) {
+    if (models == null) return '<div class="models"><p class="foot">Loaded models show after ComfyUI restarts.</p></div>';
+    const gb = b => (b / 2 ** 30).toFixed(1);
+    return `<div class="models">${heading ? '<p class="sub">Loaded models</p>' : ''}${models.length ? models.map(m => `<p>
+      <span class="name" title="${esc(m.kind)}">${esc(m.name.replace(/\.(safetensors|gguf|ckpt|pt)$/, ''))}</span>
+      <em>${MODEL_KIND(m.kind)}</em><span class="num">${m.loaded < m.size - 2 ** 24 ? `${gb(m.loaded)}/${gb(m.size)}` : gb(m.size)} GB</span></p>`).join('')
+      : '<p class="foot">None loaded.</p>'}</div>`;
   }
   document.querySelectorAll('.hud [data-tip]').forEach(el => {
     el.onmouseenter = () => showTip(el);

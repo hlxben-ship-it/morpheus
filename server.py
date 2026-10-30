@@ -59,6 +59,8 @@ def ensure_comfy(timeout: float = 300) -> None:
         # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
         # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
         reserve = other_vram_gb() + 1.0
+        # our route for the loaded models, refreshed every start so an update lands
+        shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
         subprocess.Popen(
             [sys.executable, str(morpheus.ROOT / "ComfyUI" / "main.py"), "--listen", "127.0.0.1", "--port", "8188",
              "--disable-auto-launch", "--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"],
@@ -332,13 +334,15 @@ GPU_SAMPLER = r"""
 $ErrorActionPreference = 'SilentlyContinue'
 while (Get-Process -Id SERVER_PID) {  # ends with the server, also when it is killed
   $c = (Get-Counter '\GPU Engine(*)\Utilization Percentage', '\GPU Adapter Memory(*)\Dedicated Usage',
-                    '\GPU Process Memory(*)\Dedicated Usage').CounterSamples
+                    '\GPU Process Memory(*)\Local Usage').CounterSamples
   $eng = @{}; $vram = [double]0; $mem = @{}
   foreach ($s in $c) {
     if ($s.Path -match 'luid_(\w+?_\w+?)_phys_\d+_eng_(\d+)') { $eng[$Matches[1] + $Matches[2]] += $s.CookedValue }
     elseif ($s.Path -match 'process memory\(pid_(\d+)_') { $mem[[int]$Matches[1]] += $s.CookedValue }
     elseif ($s.Path -like '*dedicated usage') { $vram = [Math]::Max($vram, $s.CookedValue) }
   }
+  # per process "Local Usage" is what sits in VRAM; its "Dedicated Usage" counts what the desktop maps from
+  # other programs again (dwm: 7 GB against 0.7 GB), so those never added up to the adapter's total
   $load = ($eng.Values | Measure-Object -Maximum).Maximum
   $top = $mem.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3 | ForEach-Object {
     $p = Get-Process -Id $_.Key
@@ -420,11 +424,16 @@ VRAM_TOTAL = None  # from ComfyUI once, it doesn't change
 def status() -> dict:
     """ComfyUI's state and the GPU's, for the header."""
     global VRAM_TOTAL
-    comfy, queue = False, 0
+    comfy, queue, models = False, 0, []
     try:
         with urllib.request.urlopen(morpheus.SERVER + "/queue", timeout=1) as r:
             q = json.loads(r.read())
         comfy, queue = True, len(q.get("queue_running", [])) + len(q.get("queue_pending", []))
+        try:
+            with urllib.request.urlopen(morpheus.SERVER + "/morpheus/loaded", timeout=1) as r:
+                models = json.loads(r.read())
+        except OSError:
+            models = None  # ComfyUI started before comfy_ext was there
         if VRAM_TOTAL is None:
             with urllib.request.urlopen(morpheus.SERVER + "/system_stats", timeout=1) as r:
                 VRAM_TOTAL = json.loads(r.read())["devices"][0]["vram_total"]
@@ -434,7 +443,7 @@ def status() -> dict:
         sum(1 for j in SWAPS.values() if j.get("state") in ("running", "waiting"))
     return {"comfy": comfy, "busy": gpu.locked() or queue > 0, "queue": queue, "jobs": running,
             "load": GPU_STATS["load"], "vram": GPU_STATS["vram"], "vram_total": VRAM_TOTAL, "procs": GPU_STATS["procs"],
-            "temp": GPU_TEMP.read()}
+            "temp": GPU_TEMP.read(), "models": models}
 
 
 def copy_picture(source: str, dest: Path) -> None:
