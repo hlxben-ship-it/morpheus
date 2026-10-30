@@ -186,7 +186,7 @@ class HairColor:
         hair, _ = self.parse(photo, face.kps)
         lab = cv2.cvtColor(photo, cv2.COLOR_BGR2LAB).astype(np.float32)[hair]
         if len(lab) < 300:
-            sys.exit("error: Im Foto sind keine Haare zu erkennen, die Haarfarbe lässt sich nicht übernehmen.")
+            sys.exit("error: no hair found in the photo, so the hair colour can't be taken over.")
         self.src_mean, self.src_std = lab.mean(0), lab.std(0) + 1e-3
         self.mean = self.std = self.centers = None
         self.alpha, self.n, self.blur = None, 0, 1.5  # hair alpha of the last frame (full size), frame count, edge blur
@@ -341,10 +341,10 @@ def main(photo, video, out, quality="fast", enhance=True, hair=False, start=0.0,
 
     src = cv2.imread(photo)
     if src is None:
-        sys.exit("error: Das Foto lässt sich nicht lesen.")
+        sys.exit("error: the photo can't be read.")
     faces = app.get(src)
     if not faces:
-        sys.exit("error: Im Foto wurde kein Gesicht gefunden.")
+        sys.exit("error: no face found in the photo.")
     source = max(faces, key=area)
 
     if quality in ("high", "premium"):
@@ -356,7 +356,7 @@ def main(photo, video, out, quality="fast", enhance=True, hair=False, start=0.0,
 
     cap = cv2.VideoCapture(video)
     if not cap.isOpened():
-        sys.exit("error: Das Video lässt sich nicht lesen.")
+        sys.exit("error: the video can't be read.")
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     first = min(count, int(round(start * fps)))

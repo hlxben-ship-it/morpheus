@@ -26,12 +26,12 @@ import morpheus
 PORT = 5196
 WEB = morpheus.ROOT / "web"
 RESOLUTIONS = [
-    {"label": "Quadrat", "width": 1024, "height": 1024},
-    {"label": "Quer 3:2", "width": 1216, "height": 832},
-    {"label": "Breit 16:9", "width": 1344, "height": 768},
-    {"label": "Hoch 2:3", "width": 832, "height": 1216},
-    {"label": "Hoch 9:16", "width": 768, "height": 1344},
-    {"label": "Klein", "width": 768, "height": 768},
+    {"label": "Square", "width": 1024, "height": 1024},
+    {"label": "Landscape 3:2", "width": 1216, "height": 832},
+    {"label": "Wide 16:9", "width": 1344, "height": 768},
+    {"label": "Portrait 2:3", "width": 832, "height": 1216},
+    {"label": "Tall 9:16", "width": 768, "height": 1344},
+    {"label": "Small", "width": 768, "height": 768},
 ]
 
 gpu = threading.Lock()  # ComfyUI renders one image at a time anyway; this keeps requests in order
@@ -68,7 +68,7 @@ def ensure_comfy(timeout: float = 300) -> None:
             if morpheus.comfy_up():
                 return
             time.sleep(1)
-        raise RuntimeError("ComfyUI ist nicht gestartet, siehe comfyui.log.")
+        raise RuntimeError("ComfyUI did not start, see comfyui.log.")
 
 
 # Claude runs from its own empty folder: inside C:\dev it would pick up the projects' CLAUDE.md files,
@@ -95,37 +95,38 @@ def chat_system_prompt() -> str:
     models = "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k))
     styles = "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items())
     sizes = ", ".join(f"{r['width']}x{r['height']} ({r['label']})" for r in RESOLUTIONS)
-    return f"""Du bist der Bild-Assistent in Morpheus, einer lokalen Bildgenerierung auf der Grafikkarte des Nutzers.
-Der Nutzer beschreibt auf Deutsch, was er sehen will.
+    return f"""You are the picture assistant in Morpheus, a local image generator on the user's GPU.
+The user describes what they want to see.
 
-Entscheide pro Nachricht:
-- action "generate": ein neues Bild. prompt ist ein ausführlicher englischer Bildprompt: Motiv, Umgebung, Licht, Bildstil, Bildaufbau.
-  Bei Folgewünschen ("heller", "mit Hut") schreibst du den vorigen Prompt entsprechend angepasst neu.
-- action "edit": nur wenn ein Bild angehängt ist und der Nutzer genau dieses Bild verändern will ("mach es Nacht",
-  "gib ihr einen Hut", "als Ganzkörper"). prompt ist dann eine kurze englische Änderungsanweisung ("make it night,
-  keep everything else"). model, style leer; width und height 0.
-- Mit angehängtem Bild und dem Wunsch nach einem neuen Bild in dessen Stil oder mit dessen Motiv: action "generate",
-  und du beschreibst Stil, Farben, Motiv und Bildaufbau des angehängten Bildes ausführlich im Prompt.
-- Ein angehängtes Bild siehst du dir immer zuerst mit dem Read-Tool an.
-- action "none": nur antworten oder nachfragen, kein Bild. prompt, model und style dann leer lassen.
+Decide for every message:
+- action "generate": a new picture. prompt is a detailed English image prompt: subject, setting, light, art style, composition.
+  For follow-ups ("brighter", "with a hat") rewrite the previous prompt accordingly.
+- action "edit": only when a picture is attached and the user wants exactly that picture changed ("make it night",
+  "give her a hat", "full body"). prompt is then a short English change instruction ("make it night, keep everything
+  else"). model and style empty; width and height 0.
+- With an attached picture and a wish for a new picture in its style or with its subject: action "generate", and
+  describe the attached picture's style, colours, subject and composition in detail in the prompt.
+- Always look at an attached picture first with the Read tool.
+- action "none": only answer or ask, no picture. Leave prompt, model and style empty.
 
-Modelle (nur diese sind installiert):
+Models (only these are installed):
 {models}
-Standard für neue Bilder ist z-image-turbo (rund 20 s, fotorealistisch und gut für Malstile). flux2-klein-4b ist
-gleich schnell und eine Alternative mit anderem Look. noobai-xl nur für Anime und Illustration (dann den Prompt als
-kommagetrennte Danbooru-Tags schreiben, z. B. "1girl, elf, silver hair, forest, night"). qwen-image-2512 dauert
-2 bis 4 Minuten: nimm es nur, wenn Schrift im Bild vorkommen soll oder der Nutzer ausdrücklich höchste Qualität
-will, und sag dann, dass es länger dauert. realvis-xl und chroma nur, wenn der Nutzer sie nennt.
-Wenn der Nutzer ein bestimmtes Modell nennt, nimm genau das.
+The default for new pictures is z-image-turbo (about 20 s, photoreal and good at painting styles). flux2-klein-4b is
+just as fast, an alternative with a different look. noobai-xl only for anime and illustration (then write the prompt
+as comma-separated Danbooru tags, e.g. "1girl, elf, silver hair, forest, night"). qwen-image-2512 takes 2 to 4
+minutes: use it only when the picture needs lettering or the user explicitly wants the highest quality, and say that
+it takes longer. realvis-xl and chroma only when the user names them.
+If the user names a specific model, use exactly that one.
 
-Stile:
+Styles:
 {styles}
-"pixel" und "gameboy" nur, wenn der Nutzer Retro- oder Pixel-Look will; die Pixel-Nachbearbeitung passiert danach automatisch.
-Sonst "none" und den gewünschten Stil in den Prompt schreiben.
+"pixel" and "gameboy" only when the user wants a retro or pixel look; the pixel post-processing then runs automatically.
+Otherwise "none", and put the wanted style into the prompt.
 
-Formate: {sizes}. Nimm 1024x1024, wenn nichts dagegen spricht.
+Formats: {sizes}. Use 1024x1024 unless something speaks against it.
 
-reply: ein bis zwei Sätze auf Deutsch, was du machst oder was du wissen musst. Kein Markdown."""
+reply: one or two sentences about what you are doing or what you need to know. No Markdown.
+Always reply in English, whatever language the user writes in."""
 
 
 REFINE_MAX = 5
@@ -145,22 +146,22 @@ REFINE_SCHEMA = {
 
 
 def refine_prompt() -> str:
-    return chat_system_prompt().split("Entscheide pro Nachricht:")[0] + f"""Du prüfst ein erzeugtes Bild gegen ein Zielbild.
-Vergleiche Kunststil (Linien, Shading, Pixelgröße, Farbpalette), Motiv und Details (Frisur, Haarfarbe, Kleidung,
-Accessoires, Pose, Hintergrund) und Bildaufbau.
+    return chat_system_prompt().split("Decide for every message:")[0] + f"""You check a generated picture against a target picture.
+Compare the art style (lines, shading, pixel size, palette), the subject and its details (hairstyle, hair colour,
+clothing, accessories, pose, background) and the composition.
 
-verdict "good": das Ergebnis trifft Stil und wesentliche Details. Sei ehrlich, aber nicht pedantisch.
-verdict "retry": nenne in critique, was am stärksten abweicht, und schreib einen verbesserten englischen prompt,
-der genau das korrigiert. model, style, width, height darfst du ändern, wenn es hilft (z. B. ein anderes Modell
-für den Stil, oder style "none" statt "pixel", wenn die Pixel-Nachbearbeitung den Look zerstört).
-Bei "good" wiederholst du prompt, model, style, width, height unverändert.
+verdict "good": the result hits the style and the essential details. Be honest, but not pedantic.
+verdict "retry": say in critique what is furthest off, and write an improved English prompt that corrects exactly
+that. You may change model, style, width, height if it helps (e.g. another model for the style, or style "none"
+instead of "pixel" when the pixel post-processing destroys the look).
+With "good", repeat prompt, model, style, width, height unchanged.
 
-critique: ein bis zwei Sätze auf Deutsch, kein Markdown.
+critique: one or two sentences, always in English, no Markdown.
 
-Modelle:
+Models:
 """ + "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k)) + \
-        "\n\nStile:\n" + "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items()) + \
-        "\n\nFormate: " + ", ".join(f"{r['width']}x{r['height']}" for r in RESOLUTIONS)
+        "\n\nStyles:\n" + "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items()) + \
+        "\n\nFormats: " + ", ".join(f"{r['width']}x{r['height']}" for r in RESOLUTIONS)
 
 
 def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False,
@@ -182,9 +183,9 @@ def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool
     try:
         out = json.loads(p.stdout)
     except json.JSONDecodeError:
-        raise RuntimeError(f"Claude hat nicht geantwortet: {(p.stderr or p.stdout).strip()[:300]}")
+        raise RuntimeError(f"Claude did not answer: {(p.stderr or p.stdout).strip()[:300]}")
     if out.get("is_error") or not out.get("structured_output"):
-        raise RuntimeError(f"Claude-Fehler: {str(out.get('result'))[:300]}")
+        raise RuntimeError(f"Claude error: {str(out.get('result'))[:300]}")
     return out["structured_output"], out["session_id"]
 
 
@@ -219,7 +220,7 @@ def ghost_image(ref: str) -> Image.Image:
     with ghost_lock:
         data = GHOST.get(ref.removeprefix("ghost/"))
     if data is None:
-        raise ValueError("Das Geisterbild ist nicht mehr da.")
+        raise ValueError("The ghost picture is gone.")
     return Image.open(BytesIO(data))
 
 
@@ -265,7 +266,7 @@ def faceswap_job(job: dict, photo: bytes, video: Path, quality: str, enhance: bo
             code = p.wait()
             if code != 0:
                 msg = next((l.removeprefix("error: ") for l in err.splitlines() if l.startswith("error: ")), None)
-                raise RuntimeError(msg or "Der Face Swap ist abgebrochen: " + err.strip().splitlines()[-1][:300])
+                raise RuntimeError(msg or "The face swap stopped: " + err.strip().splitlines()[-1][:300])
             if ghost:
                 with ghost_lock:
                     GHOST[name] = out.read_bytes()
@@ -421,16 +422,16 @@ class Handler(BaseHTTPRequestHandler):
     def chat(self, req):
         message = str(req.get("message", "")).strip()
         if not message:
-            raise ValueError("Bitte etwas schreiben.")
+            raise ValueError("Please write something.")
         ghost = bool(req.get("ghost"))
         if ghost and req.get("context"):
             # No saved session to resume, so the page sends the ghost conversation so far.
-            lines = [f"{'Nutzer' if m.get('role') == 'user' else 'Du'}: {m.get('text', '')}" for m in req["context"][-20:]]
-            message = "Bisheriges Gespräch:\n" + "\n".join(lines) + "\n\nNeue Nachricht:\n" + message
+            lines = [f"{'User' if m.get('role') == 'user' else 'You'}: {m.get('text', '')}" for m in req["context"][-20:]]
+            message = "Conversation so far:\n" + "\n".join(lines) + "\n\nNew message:\n" + message
         last = req.get("last")
         if isinstance(last, dict) and last.get("prompt"):
-            # the picture the user sees last, possibly made outside the chat (Manuell, Bearbeiten, Nochmal)
-            message = (f"[Letztes Bild in dieser Session: Modell {last.get('model')}, {last.get('width')}x{last.get('height')}, "
+            # the picture the user sees last, possibly made outside the chat (Manual, Edit, Again)
+            message = (f"[Latest picture in this session: model {last.get('model')}, {last.get('width')}x{last.get('height')}, "
                        f"Prompt: {last['prompt']}]\n\n{message}")
         # An attached picture: an upload (data URL) or a gallery file. Claude reads a copy in its working folder;
         # the copy goes right after the turn, so a ghost picture is never left behind.
@@ -446,15 +447,16 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 src = (morpheus.OUTPUT / attach["source"]).resolve()
                 if morpheus.OUTPUT.resolve() not in src.parents or not src.is_file():
-                    raise ValueError("Das angehängte Bild gibt es nicht mehr.")
+                    raise ValueError("The attached picture no longer exists.")
                 seen.write_bytes(src.read_bytes())
             # spelled out here, because a resumed conversation may come from before "edit" existed and assume it can't
-            message = (f"[Angehängtes Bild: {seen.name} — sieh es dir mit dem Read-Tool an. Du kannst dieses Bild direkt "
-                       f"bearbeiten: action \"edit\" verändert genau dieses Bild und lässt den Rest gleich. Nimm \"edit\", wenn der "
-                       f"Nutzer dieses Bild verändern will; \"generate\" nur für ein neues Bild in seinem Stil oder mit seinem Motiv.]"
+            message = (f"[Attached picture: {seen.name} — look at it with the Read tool. You can edit this picture "
+                       f"directly: action \"edit\" changes exactly this picture and keeps the rest. Use \"edit\" when the "
+                       f"user wants this picture changed; \"generate\" only for a new picture in its style or with its subject.]"
                        f"\n\n{message}")
         try:
-            answer, session = ask_claude(message, req.get("session") or None, ghost, see=bool(seen))
+            # per turn, because a resumed conversation that began in German outweighs the system prompt
+            answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost, see=bool(seen))
             result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
             if answer["action"] == "edit" and attach:
                 # the normal edit route, so the result links back to its source like any edit
@@ -489,36 +491,36 @@ class Handler(BaseHTTPRequestHandler):
         job = req.get("_job") or {}
         trail, current, note = [], first, ""
         for round_ in range(1, REFINE_MAX + 1):
-            job["status"] = f"Runde {round_} von {REFINE_MAX}: ich vergleiche das Ergebnis mit dem Ziel …"
+            job["status"] = f"Round {round_} of {REFINE_MAX}: comparing the result with the target …"
             shot = CHAT_DIR / f"result-{uuid.uuid4().hex[:8]}.png"
             try:
                 result_picture(current).save(shot)
                 verdict, _ = ask_claude(
-                    f"Zielbild: {target.name}\nErgebnis: {shot.name}\nPrompt des Ergebnisses: {current['prompt']}\n"
-                    f"Modell: {current['model']}, Stil: {current.get('style', 'none')}, {current['width']}x{current['height']}\n\n"
-                    "Sieh dir beide Bilder mit dem Read-Tool an und vergleiche sie.", None, ghost=True, see=True,
+                    f"Target: {target.name}\nResult: {shot.name}\nPrompt of the result: {current['prompt']}\n"
+                    f"Model: {current['model']}, style: {current.get('style', 'none')}, {current['width']}x{current['height']}\n\n"
+                    "Look at both pictures with the Read tool and compare them.", None, ghost=True, see=True,
                     system=refine_prompt(), schema=REFINE_SCHEMA)
             finally:
                 shot.unlink(missing_ok=True)
             note = verdict["critique"]
             if verdict["verdict"] == "good":
-                return {"trail": trail, "image": current, "reply": f"{answer['reply']}\n\nRunde {round_}: {note}"}
+                return {"trail": trail, "image": current, "reply": f"{answer['reply']}\n\nRound {round_}: {note}"}
             if round_ == REFINE_MAX:
                 break
-            trail.append({"image": current, "note": f"Runde {round_}: {note}"})
-            job["status"] = f"Runde {round_ + 1} von {REFINE_MAX}: {note[:140]}"
+            trail.append({"image": current, "note": f"Round {round_}: {note}"})
+            job["status"] = f"Round {round_ + 1} of {REFINE_MAX}: {note[:140]}"
             job.update(step=0, total=0)
             current = self.render({**answer, **{k: verdict[k] for k in ("prompt", "model", "style", "width", "height")}},
                                   ghost, req)
         return {"trail": trail, "image": current,
-                "reply": f"{answer['reply']}\n\n{REFINE_MAX} Runden erreicht. Zuletzt: {note}\n"
-                         "Soll ich weiter am Prompt feilen?"}
+                "reply": f"{answer['reply']}\n\nReached {REFINE_MAX} rounds. Last: {note}\n"
+                         "Shall I keep tuning the prompt?"}
 
     def generate(self, req):
         """The manual form: exact prompt and settings, no Claude in between."""
         prompt = str(req.get("prompt", "")).strip()
         if not prompt:
-            raise ValueError("Bitte einen Prompt eingeben.")
+            raise ValueError("Please enter a prompt.")
         ghost = bool(req.get("ghost"))
         ensure_comfy()
         with gpu:
@@ -532,10 +534,10 @@ class Handler(BaseHTTPRequestHandler):
         """Edit by instruction. The source is a gallery image (path under output/) or an upload as a data URL."""
         prompt = str(req.get("prompt", "")).strip()
         if not prompt:
-            raise ValueError("Bitte beschreiben, was sich ändern soll.")
+            raise ValueError("Please describe what should change.")
         model = req.get("model", "flux2-klein-4b-edit")
         if model not in morpheus.EDIT_MODELS:
-            raise ValueError(f"Unbekanntes Modell '{model}'.")
+            raise ValueError(f"Unknown model '{model}'.")
         ghost = bool(req.get("ghost"))
         ref = str(req.get("source", ""))
         source_ref = None
@@ -554,7 +556,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             source = (morpheus.OUTPUT / ref).resolve()
             if morpheus.OUTPUT.resolve() not in source.parents or not source.is_file():
-                raise ValueError("Bitte ein Ausgangsbild wählen.")
+                raise ValueError("Please pick a source picture.")
         ensure_comfy()
         with gpu:
             meta = morpheus.run_edit(prompt, source, model,
@@ -582,10 +584,10 @@ class Handler(BaseHTTPRequestHandler):
         """Start a face swap job: the photo as a data URL, the video as an id from /api/upload; the page polls
         /api/faceswap/<id>."""
         if not FACESWAP_PY.is_file():
-            raise ValueError("Face Swap ist nicht installiert (.venv-faceswap fehlt, siehe README).")
+            raise ValueError("Face swap is not installed (.venv-faceswap is missing, see README).")
         video = UPLOADS / str(req.get("video_id", "")).strip("./\\")
         if not req.get("photo") or not req.get("video_id") or not video.is_file():
-            raise ValueError("Bitte ein Foto und ein Video wählen.")
+            raise ValueError("Please pick a photo and a video.")
         photo = base64.b64decode(str(req["photo"]).split(",", 1)[-1])
         job_id = f"{time.time_ns():x}"
         quality = req.get("quality") if req.get("quality") in ("fast", "premium") else "high"
@@ -593,7 +595,7 @@ class Handler(BaseHTTPRequestHandler):
         if req.get("start") is not None and req.get("end") is not None:
             start, end = float(req["start"]), float(req["end"])
             if end - start < 0.1:
-                raise ValueError("Der gewählte Abschnitt ist zu kurz.")
+                raise ValueError("The chosen section is too short.")
             span = (max(0.0, start), end)
         upscale = req.get("upscale") if req.get("upscale") in (2, 4) else 1
         SWAPS[job_id] = job = {"state": "waiting", "frame": 0, "total": 0, "quality": quality, "hair": bool(req.get("hair")),
@@ -616,12 +618,12 @@ def warm_up() -> None:
         ensure_comfy()
         with gpu:
             morpheus.generate(morpheus.MODELS["z-image-turbo"]["workflow"]("warm up", 256, 256, 0, 1), ghost=True)
-        print("Morpheus: ComfyUI ist warm.")
+        print("Morpheus: ComfyUI is warm.")
     except Exception as e:  # the first real render just pays the cold start then
-        print(f"Morpheus: Aufwärmen fehlgeschlagen ({e}).")
+        print(f"Morpheus: warm-up failed ({e}).")
 
 
 if __name__ == "__main__":
-    print(f"Morpheus läuft auf http://127.0.0.1:{PORT}")
+    print(f"Morpheus is running on http://127.0.0.1:{PORT}")
     threading.Thread(target=warm_up, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

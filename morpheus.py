@@ -32,7 +32,7 @@ COMFY_INPUT = ROOT / "ComfyUI" / "input"
 COMFY_TEMP = ROOT / "ComfyUI" / "temp"
 
 STYLES = {
-    "none": {"label": "Kein Stil", "prefix": "", "pixel": None},
+    "none": {"label": "No style", "prefix": "", "pixel": None},
     "pixel": {
         "label": "Retro 16-bit",
         "prefix": "16-bit SNES pixel art sprite, retro video game style, clean flat colors, "
@@ -44,7 +44,7 @@ STYLES = {
         "prefix": "8-bit Game Boy pixel art, four shades of green, retro handheld game. ",
         "pixel": {"grid": 80, "colors": 4},
     },
-    "photo": {"label": "Foto", "prefix": "professional photograph, natural light, sharp focus. ", "pixel": None},
+    "photo": {"label": "Photo", "prefix": "professional photograph, natural light, sharp focus. ", "pixel": None},
 }
 
 
@@ -215,21 +215,21 @@ SDXL_NEGATIVE = "lowres, blurry, out of focus, deformed, bad anatomy, bad hands,
 MODELS = {
     "z-image-turbo": {
         "label": "Z-Image-Turbo",
-        "note": "Am schnellsten, Apache 2.0",
+        "note": "Fastest, Apache 2.0",
         "files": ["diffusion_models/z_image_turbo_bf16.safetensors", "text_encoders/qwen_3_4b.safetensors", "vae/ae.safetensors"],
         "steps": 8,
         "workflow": zimage_workflow,
     },
     "flux2-klein-4b": {
         "label": "FLUX.2 [klein] 4B",
-        "note": "Ausgewogen, Apache 2.0",
+        "note": "Balanced, Apache 2.0",
         "files": ["diffusion_models/flux-2-klein-4b.safetensors", "text_encoders/qwen_3_4b.safetensors", "vae/flux2-vae.safetensors"],
         "steps": 4,
         "workflow": flux2_klein_workflow,
     },
     "qwen-image-2512": {
         "label": "Qwen-Image-2512",
-        "note": "Beste Qualität, Text im Bild, Apache 2.0",
+        "note": "Best quality, lettering, Apache 2.0",
         "files": ["diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors", "loras/Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
                   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
         "steps": 4,
@@ -237,14 +237,14 @@ MODELS = {
     },
     "chroma": {
         "label": "Chroma1-HD",
-        "note": "Vielseitig, Apache 2.0",
+        "note": "Versatile, Apache 2.0",
         "files": ["diffusion_models/Chroma1-HD-fp8mixed.safetensors", "text_encoders/t5xxl_fp8_e4m3fn_scaled.safetensors", "vae/ae.safetensors"],
         "steps": 26,
         "workflow": chroma_workflow,
     },
     "realvis-xl": {
         "label": "RealVisXL V5 (SDXL)",
-        "note": "Fotorealistisch, schnell",
+        "note": "Photoreal, fast",
         "files": ["checkpoints/RealVisXL_V5.0_fp16.safetensors"],
         "steps": 30,
         "workflow": sdxl_workflow("RealVisXL_V5.0_fp16.safetensors", "dpmpp_2m_sde", "karras", 5.0,
@@ -252,14 +252,14 @@ MODELS = {
     },
     "noobai-xl": {
         "label": "NoobAI-XL 1.1 (SDXL)",
-        "note": "Anime und Illustration, versteht Danbooru-Tags",
+        "note": "Anime and illustration, understands Danbooru tags",
         "files": ["checkpoints/NoobAI-XL-v1.1.safetensors"],
         "steps": 28,
         "workflow": sdxl_workflow("NoobAI-XL-v1.1.safetensors", "euler_ancestral", "normal", 5.0,
                                   "worst quality, low quality, old, early, " + SDXL_NEGATIVE,
                                   prefix="masterpiece, best quality, newest, absurdres, highres, "),
     },
-    "flux2-dev": {"label": "FLUX.2 [dev]", "note": "Top-Qualität, nicht kommerziell", "files": [], "workflow": None},
+    "flux2-dev": {"label": "FLUX.2 [dev]", "note": "Top quality, non-commercial", "files": [], "workflow": None},
 }
 
 
@@ -268,14 +268,14 @@ MODELS = {
 EDIT_MODELS = {
     "flux2-klein-4b-edit": {
         "label": "FLUX.2 [klein] 4B",
-        "note": "Schnell, lässt den Rest des Bildes in Ruhe",
+        "note": "Fast, leaves the rest of the picture alone",
         "files": MODELS["flux2-klein-4b"]["files"],
         "steps": 4,
         "workflow": flux2_klein_edit_workflow,
     },
     "qwen-rapid-aio": {
         "label": "Qwen-Image-Edit Rapid AIO",
-        "note": "Beste Qualität, Text im Bild, größere Änderungen",
+        "note": "Best quality, lettering, bigger changes",
         "files": ["checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors"],
         "steps": 4,
         "workflow": qwen_rapid_aio_workflow,
@@ -387,7 +387,7 @@ def run(prompt: str, style: str = "none", model: str = "z-image-turbo", width: i
     A ghost run writes nothing: the metadata carries the images themselves under "pictures" instead.
     """
     if not installed(model):
-        raise ValueError(f"Modell '{model}' ist nicht installiert.")
+        raise ValueError(f"Model '{model}' is not installed.")
     m, st = MODELS[model], STYLES[style]
     seed = seed if seed is not None else random.randrange(2**32)
     # Model and time in the name: the same prompt and seed on another model must not overwrite an earlier image.
@@ -428,7 +428,7 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
     The source is a file or, for ghost runs, an image held in memory. A ghost run writes nothing that outlives it.
     """
     if not installed(model):
-        raise ValueError(f"Modell '{model}' ist nicht installiert.")
+        raise ValueError(f"Model '{model}' is not installed.")
     m = EDIT_MODELS[model]
     seed = seed if seed is not None else random.randrange(2**32)
     name = name or f"{time.strftime('%Y%m%d-%H%M%S')}_{model}_{slug(prompt)[:30]}_{seed}"
