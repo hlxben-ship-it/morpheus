@@ -14,6 +14,7 @@ import threading
 import time
 import traceback
 import urllib.parse
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
@@ -79,7 +80,7 @@ CHAT_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
-        "action": {"type": "string", "enum": ["generate", "none"]},
+        "action": {"type": "string", "enum": ["generate", "edit", "none"]},
         "prompt": {"type": "string"},
         "model": {"type": "string"},
         "style": {"type": "string"},
@@ -100,6 +101,12 @@ Der Nutzer beschreibt auf Deutsch, was er sehen will.
 Entscheide pro Nachricht:
 - action "generate": ein neues Bild. prompt ist ein ausführlicher englischer Bildprompt: Motiv, Umgebung, Licht, Bildstil, Bildaufbau.
   Bei Folgewünschen ("heller", "mit Hut") schreibst du den vorigen Prompt entsprechend angepasst neu.
+- action "edit": nur wenn ein Bild angehängt ist und der Nutzer genau dieses Bild verändern will ("mach es Nacht",
+  "gib ihr einen Hut", "als Ganzkörper"). prompt ist dann eine kurze englische Änderungsanweisung ("make it night,
+  keep everything else"). model, style leer; width und height 0.
+- Mit angehängtem Bild und dem Wunsch nach einem neuen Bild in dessen Stil oder mit dessen Motiv: action "generate",
+  und du beschreibst Stil, Farben, Motiv und Bildaufbau des angehängten Bildes ausführlich im Prompt.
+- Ein angehängtes Bild siehst du dir immer zuerst mit dem Read-Tool an.
 - action "none": nur antworten oder nachfragen, kein Bild. prompt, model und style dann leer lassen.
 
 Modelle (nur diese sind installiert):
@@ -121,14 +128,14 @@ Formate: {sizes}. Nimm 1024x1024, wenn nichts dagegen spricht.
 reply: ein bis zwei Sätze auf Deutsch, was du machst oder was du wissen musst. Kein Markdown."""
 
 
-def ask_claude(message: str, session: str | None, ghost: bool = False) -> tuple[dict, str]:
+def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False) -> tuple[dict, str]:
     """One chat turn through the Claude Code CLI; returns the structured answer and the session id.
 
     Ghost turns are not saved by the CLI and cannot be resumed; the caller passes the conversation in the message.
     """
     CHAT_DIR.mkdir(exist_ok=True)
     cmd = [shutil.which("claude") or "claude", "-p", "--output-format", "json", "--json-schema", json.dumps(CHAT_SCHEMA),
-           "--tools", "",
+           "--tools", "Read" if see else "",  # Read only to look at an attached picture in CHAT_DIR
            "--model", "sonnet", "--system-prompt", chat_system_prompt()]
     if ghost:
         cmd.append("--no-session-persistence")
@@ -383,10 +390,39 @@ class Handler(BaseHTTPRequestHandler):
             # the picture the user sees last, possibly made outside the chat (Manuell, Bearbeiten, Nochmal)
             message = (f"[Letztes Bild in dieser Session: Modell {last.get('model')}, {last.get('width')}x{last.get('height')}, "
                        f"Prompt: {last['prompt']}]\n\n{message}")
-        answer, session = ask_claude(message, req.get("session") or None, ghost)
+        # An attached picture: an upload (data URL) or a gallery file. Claude reads a copy in its working folder;
+        # the copy goes right after the turn, so a ghost picture is never left behind.
+        attach = {k: req[k] for k in ("upload", "source") if req.get(k)}
+        seen = None
+        if attach:
+            CHAT_DIR.mkdir(exist_ok=True)
+            seen = CHAT_DIR / f"attached-{uuid.uuid4().hex[:8]}.png"
+            if "upload" in attach:
+                seen.write_bytes(base64.b64decode(str(attach["upload"]).split(",", 1)[-1]))
+            elif attach["source"].startswith("ghost/"):
+                ghost_image(attach["source"]).save(seen)
+            else:
+                src = (morpheus.OUTPUT / attach["source"]).resolve()
+                if morpheus.OUTPUT.resolve() not in src.parents or not src.is_file():
+                    raise ValueError("Das angehängte Bild gibt es nicht mehr.")
+                seen.write_bytes(src.read_bytes())
+            # spelled out here, because a resumed conversation may come from before "edit" existed and assume it can't
+            message = (f"[Angehängtes Bild: {seen.name} — sieh es dir mit dem Read-Tool an. Du kannst dieses Bild direkt "
+                       f"bearbeiten: action \"edit\" verändert genau dieses Bild und lässt den Rest gleich. Nimm \"edit\", wenn der "
+                       f"Nutzer dieses Bild verändern will; \"generate\" nur für ein neues Bild in seinem Stil oder mit seinem Motiv.]"
+                       f"\n\n{message}")
+        try:
+            answer, session = ask_claude(message, req.get("session") or None, ghost, see=bool(seen))
+        finally:
+            if seen:
+                seen.unlink(missing_ok=True)
 
         result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
-        if answer["action"] == "generate":
+        if answer["action"] == "edit" and attach:
+            # the normal edit route, so the result links back to its source like any edit
+            result["image"] = self.edit({**attach, "prompt": answer["prompt"], "ghost": ghost, "_job": req.get("_job")})
+            result["image"]["edit"] = True
+        elif answer["action"] == "generate":
             model = answer["model"] if answer["model"] in morpheus.MODELS and morpheus.installed(answer["model"]) else "z-image-turbo"
             style = answer["style"] if answer["style"] in morpheus.STYLES else "none"
             size = next((r for r in RESOLUTIONS if r["width"] == answer["width"] and r["height"] == answer["height"]), RESOLUTIONS[0])

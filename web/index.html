@@ -344,6 +344,16 @@
   .boot pre i { display: inline-block; width: .6em; background: var(--cyan); animation: blink .8s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  /* chat attachment */
+  .clip { flex: none; width: 42px; height: 42px; border: 1px solid var(--line); background: transparent; color: var(--muted); display: grid; place-items: center; }
+  .clip:hover { color: var(--cyan); border-color: var(--cyan); }
+  .clip svg { width: 18px; height: 18px; }
+  .attached { display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; padding: 6px 8px; border: 1px dashed var(--cyan); width: fit-content;
+    font: 15px var(--term); color: var(--cyan); animation: rise .25s ease-out both; }
+  .attached img { width: 44px; height: 44px; object-fit: cover; display: block; }
+  .attached button { border: 0; background: none; color: var(--muted); padding: 2px 6px; }
+  .attached button:hover { color: var(--pink); }
+
   /* command palette (Ctrl+K) */
   dialog.cmd { border: 2px solid var(--cyan); background: var(--panel); color: var(--text); padding: 0; width: min(560px, 92vw); margin: 14vh auto 0;
     box-shadow: 0 0 40px color-mix(in srgb, var(--cyan) 30%, transparent); }
@@ -485,7 +495,11 @@
           </div>
         </div>
 
+        <div class="attached" id="chat-pic" hidden><img alt=""><span>Bild im Kontext</span><button type="button" id="chat-pic-x" aria-label="Bild entfernen">✕</button></div>
         <div class="input-row">
+          <button type="button" class="clip" id="chat-attach" aria-label="Bild anhängen" title="Bild anhängen (oder einfügen / hineinziehen)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9.2-9.2a3.7 3.7 0 015.2 5.2l-9.2 9.2a1.8 1.8 0 01-2.6-2.6l8.5-8.5"/></svg></button>
+          <input type="file" id="chat-file" accept="image/*" hidden>
           <textarea id="input" rows="1" placeholder="Beschreib, was du sehen willst …"></textarea>
           <span class="spacer" id="swap-hint" hidden>Foto und Video wählen, Abschnitt setzen, los.</span>
           <button type="submit" class="send" id="send" aria-label="Senden">
@@ -701,6 +715,7 @@
       <div class="acts"><span class="meta">${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
         <button type="button" data-a="again" title="Gleiche Einstellungen, neuer Seed">Nochmal</button>
         <button type="button" data-a="edit">Bearbeiten</button><button type="button" data-a="reuse" title="Prompt und Einstellungen in die Eingabe laden">Variante</button>
+        <button type="button" data-a="chat" title="Dieses Bild in den Chat mitnehmen">Im Chat</button>
         <button type="button" data-a="copy">Prompt kopieren</button>
         <a href="${url(pixel ? h.image : h.raw)}" target="_blank" rel="noopener">Öffnen</a></div>
       <details><summary>Prompt</summary><p>${esc(h.prompt)}</p></details>`;
@@ -708,6 +723,7 @@
     img.onclick = () => lightbox(h);
     card.querySelector('[data-a="again"]').onclick = () => again(h);
     card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.target);
+    card.querySelector('[data-a="chat"]').onclick = () => attachChat({ source: h.image });
     img.onerror = () => img.replaceWith(Object.assign(document.createElement('p'), { className: 'hint',
       textContent: h.ghost ? 'Geist-Bild, nicht mehr im Speicher.' : 'Das Bild ist nicht mehr vorhanden.' }));
     card.querySelector('[data-a="edit"]').onclick = () => editImage(h);
@@ -882,6 +898,22 @@
     $('send-label').textContent = 'Gesicht tauschen';
     $('send').setAttribute('aria-label', swap ? 'Gesicht tauschen' : 'Senden');
     if (!swap) $('input').placeholder = PLACEHOLDER[mode];
+    $('chat-attach').hidden = mode !== 'chat';
+    $('chat-pic').hidden = mode !== 'chat' || !state.chatPic;
+  }
+  // a small JPEG of an upload, so the saved session doesn't carry the full picture
+  function thumbnail(data) {
+    return new Promise(done => {
+      const img = new Image();
+      img.onload = () => {
+        const k = 160 / Math.max(img.width, img.height), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        done(c.toDataURL('image/jpeg', .8));
+      };
+      img.onerror = () => done(undefined);
+      img.src = data;
+    });
   }
   document.querySelectorAll('.modes [role="tab"]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
   // keyboard: "/" jumps to the input, Alt+1-4 picks the mode
@@ -924,16 +956,20 @@
     if (!text) return $('input').focus();
     $('input').value = ''; grow();
     const s = ensureSession();
-    addMessage({ role: 'user', text }, s);
+    const pic = state.chatPic;
+    // a gallery picture shows by its URL; an upload keeps only a small thumbnail in the saved session
+    addMessage({ role: 'user', text, thumb: pic ? (pic.source ? url(pic.source) : await thumbnail(pic.upload)) : undefined }, s);
+    detachChat();
     try {
       // a ghost session has no stored conversation on the server, so its history goes along as context
       const context = state.ghost ? s.messages.slice(0, -1).filter(m => m.text)
         .map(m => ({ role: m.role, text: m.image ? `${m.text} (Prompt: ${m.image.prompt})` : m.text })) : undefined;
       // pictures from Manuell, Bearbeiten or Nochmal never pass the chat, so the newest one always goes along:
       // "make it a body shot" has to know which picture "it" is
-      const pic = s.messages.slice(0, -1).reverse().find(m => m.image)?.image;
-      const last = pic && { prompt: pic.prompt, model: pic.model, width: pic.width, height: pic.height };
-      await startJob(s, 'chat', '/api/chat', { message: text, session: state.ghost ? null : s.claude, ghost: state.ghost, context, last });
+      const prev = s.messages.slice(0, -1).reverse().find(m => m.image)?.image;
+      const last = prev && { prompt: prev.prompt, model: prev.model, width: prev.width, height: prev.height };
+      await startJob(s, 'chat', '/api/chat', { message: text, session: state.ghost ? null : s.claude, ghost: state.ghost, context,
+        last: pic ? undefined : last, ...(pic || {}) });
     } catch (err) {
       addMessage({ role: 'bot', error: true, text: err.message }, s);
     }
@@ -1038,8 +1074,25 @@
 
   // Drop or paste anywhere: an image becomes the edit source, a video goes to EasySwap. The settings' own drop
   // zones keep their meaning (photo vs. video) and stop the event before it gets here.
+  // ---------- Chat attachment: one picture rides along with the next chat message ----------
+  function attachChat(pic) {
+    state.chatPic = pic;
+    $('chat-pic').querySelector('img').src = pic.source ? url(pic.source) : pic.upload;
+    $('chat-pic').hidden = false;
+    setMode('chat');
+    $('input').focus();
+  }
+  function detachChat() { state.chatPic = null; $('chat-pic').hidden = true; }
+  $('chat-pic-x').onclick = detachChat;
+  $('chat-attach').onclick = () => $('chat-file').click();
+  $('chat-file').onchange = e => { readImage(e.target.files[0], data => attachChat({ upload: data })); e.target.value = ''; };
+
   function takeAnywhere(file) {
     if (!file) return false;
+    if (file.type.startsWith('image/') && state.mode === 'chat') {
+      readImage(file, data => attachChat({ upload: data }));
+      return true;
+    }
     if (file.type.startsWith('image/')) {
       readImage(file, data => setSource({ upload: data }));
       state.optsOpen = true;
@@ -1212,12 +1265,14 @@
         ${linked ? `<a href="${url(h.source)}" target="_blank" rel="noopener">Vorher</a>` : ''}
         <button type="button" data-a="again">Nochmal</button>
         <button type="button" data-a="reuse">Variante</button><button type="button" data-a="edit">Bearbeiten</button>
+        <button type="button" data-a="chat">Im Chat</button>
         <a href="${url(file)}" target="_blank" rel="noopener">Öffnen</a><button type="button" data-a="close" aria-label="Schließen">✕</button></div>`;
     const on = (a, f) => { const b = $('lb-inner').querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     on('raw', () => lightbox(h, !raw));
     on('reuse', () => fillForm(h));
     on('again', () => again(h));
     on('edit', () => editImage(h));
+    on('chat', () => { lb.close(); attachChat({ source: h.image }); });
     on('close', () => lb.close());
     if (!lb.open) lb.showModal();
   }
