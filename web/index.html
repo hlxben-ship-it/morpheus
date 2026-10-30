@@ -322,7 +322,37 @@
     radial-gradient(800px 500px at -10% 110%, rgba(255, 42, 109, .18), transparent 60%),
     linear-gradient(color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px,
     linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px) 0 0 / 32px 32px, var(--bg); background-attachment: fixed; }
-  .out img, .out video, .live, .strip img, .grid img { position: relative; z-index: 51; } /* pictures stay clean, above the scanlines */
+  .out img, .out video, .live, .strip img, .grid img { position: relative; z-index: 51; }
+  /* the picture forming is upscaled as hard pixels, so the wait itself looks 16-bit */
+  .live { image-rendering: pixelated; animation: none; }
+  /* a finished picture arrives with a scanline wipe and a short chromatic flash */
+  .fresh .out img, .fresh .out video { animation: wipe .9s steps(18) both, chroma .9s ease-out .9s both; }
+  /* starts at 97 %, not 100 %: a fully clipped lazy image counts as invisible and never loads */
+  @keyframes wipe { from { clip-path: inset(0 0 97% 0); } to { clip-path: inset(0); } }
+  @keyframes chroma { 0% { filter: drop-shadow(6px 0 var(--pink)) drop-shadow(-6px 0 var(--cyan)); } 100% { filter: none; } }
+  /* tiles glitch on hover */
+  .strip button:hover img, .grid button:hover img { animation: glitch .35s steps(2) 1; }
+  @keyframes glitch { 0% { transform: translate(2px, -1px); filter: drop-shadow(-3px 0 var(--cyan)) drop-shadow(3px 0 var(--pink)); }
+    50% { transform: translate(-2px, 1px); } 100% { transform: none; filter: none; } }
+  @media (prefers-reduced-motion: reduce) { .fresh .out img, .fresh .out video, .strip button:hover img, .grid button:hover img { animation: none; } }
+
+  /* boot screen, once per browser session */
+  .boot { position: fixed; inset: 0; z-index: 100; background: #05030b; display: grid; place-items: center; cursor: pointer; transition: opacity .35s; }
+  .boot.out { opacity: 0; pointer-events: none; }
+  .boot pre { font: 22px/1.35 var(--term); color: var(--cyan); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 60%, transparent); min-width: min(560px, 90vw); }
+  .boot pre b { color: var(--pink); font-weight: 400; }
+  .boot pre i { display: inline-block; width: .6em; background: var(--cyan); animation: blink .8s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* command palette (Ctrl+K) */
+  dialog.cmd { border: 2px solid var(--cyan); background: var(--panel); color: var(--text); padding: 0; width: min(560px, 92vw); margin: 14vh auto 0;
+    box-shadow: 0 0 40px color-mix(in srgb, var(--cyan) 30%, transparent); }
+  dialog.cmd::backdrop { background: rgba(5, 3, 11, .7); backdrop-filter: blur(3px); }
+  .cmd input { width: 100%; border: 0; border-bottom: 2px solid var(--line); background: transparent; padding: 14px 16px; font: 24px var(--term); outline: none; }
+  .cmd ul { list-style: none; padding: 6px; margin: 0; max-height: 50vh; overflow-y: auto; }
+  .cmd li { padding: 9px 12px; display: flex; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .cmd li small { color: var(--muted); font-family: var(--term); font-size: 16px; }
+  .cmd li[aria-selected="true"] { background: var(--raised); box-shadow: inset 3px 0 var(--cyan); color: var(--cyan); } /* pictures stay clean, above the scanlines */
   @media (prefers-reduced-motion: no-preference) {
     .word b { animation: flicker 6s steps(1) infinite; }
     @keyframes flicker { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: .3; } }
@@ -642,10 +672,13 @@
       return;
     }
     s.messages.forEach(m => col.append(messageEl(m)));
+    // the picture that just landed loads at once, so the reveal plays on the picture and not on an empty box
+    col.querySelectorAll('.fresh img').forEach(i => { i.loading = 'eager'; i.addEventListener('load', scrollDown, { once: true }); });
     scrollDown();
   }
   const scrollDown = () => { $('thread').scrollTop = $('thread').scrollHeight; };
 
+  let fresh = null; // the message that just landed gets the scanline reveal, once
   function messageEl(m) {
     const el = document.createElement('div');
     if (m.role === 'user') {
@@ -654,7 +687,7 @@
       return el;
     }
     if (m.job) return workingEl(m);
-    el.className = 'msg bot' + (m.error ? ' err' : '');
+    el.className = 'msg bot' + (m.error ? ' err' : '') + (m === fresh ? ' fresh' : '');
     if (m.text) el.innerHTML = `<p>${esc(m.text)}</p>`;
     if (m.image) el.append(imageCard(m.image));
     if (m.video) el.append(videoCard(m.video));
@@ -790,6 +823,8 @@
     }
     for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews']) delete m[k];
     following.delete(id);
+    fresh = m;
+    setTimeout(() => { if (fresh === m) fresh = null; }, 2000); // later re-renders show it plain
     s.updated = Date.now();
     save();
     if (current() === s) renderThread();
@@ -1194,6 +1229,70 @@
     // jobs that were still running when the page was left: wait for them again
     state.sessions.forEach(s => s.messages.filter(m => m.job).forEach(m => follow(s, m)));
   }
+
+  // ---------- Boot screen: a second of terminal, once per browser session; any key or click skips it ----------
+  function boot() {
+    try { if (sessionStorage.getItem('morpheus.booted')) return; sessionStorage.setItem('morpheus.booted', '1'); } catch {}
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = Object.assign(document.createElement('div'), { className: 'boot' });
+    el.innerHTML = '<pre></pre>';
+    document.body.append(el);
+    const lines = ['MORPHEUS BIOS v0.3', 'GPU ........ RX 7900 XT <b>20 GB</b>', 'ENGINE ..... ComfyUI <b>:8188</b>',
+      'MODELS ..... z-image · flux2 · qwen', 'DREAM ENGINE READY'];
+    let n = 0, done = false;
+    const pre = el.querySelector('pre');
+    const end = () => { if (done) return; done = true; el.classList.add('out'); setTimeout(() => el.remove(), 400); removeEventListener('keydown', end); };
+    const tick = () => { if (done) return; pre.innerHTML = lines.slice(0, ++n).join('\n') + ' <i>&nbsp;</i>'; n < lines.length ? setTimeout(tick, 170) : setTimeout(end, 500); };
+    el.onclick = end;
+    addEventListener('keydown', end);
+    tick();
+  }
+
+  // ---------- Command palette: Ctrl+K, type to filter, Enter runs ----------
+  const cmd = Object.assign(document.createElement('dialog'), { className: 'cmd' });
+  cmd.innerHTML = '<input placeholder="> Befehl oder Session …" aria-label="Befehl"><ul role="listbox"></ul>';
+  document.body.append(cmd);
+  function commands() {
+    const list = [
+      ['Neue Session', '', () => $('new-session').click()],
+      ['Galerie', '', () => $('open-gallery').click()],
+      ['Modus: Chat', 'Alt+1', () => setMode('chat')], ['Modus: Manuell', 'Alt+2', () => setMode('manual')],
+      ['Modus: Bearbeiten', 'Alt+3', () => setMode('edit')], ['Modus: EasySwap', 'Alt+4', () => setMode('swap')],
+      ['Geistmodus an/aus', '', () => $('ghost').click()], ['Hell / dunkel', '', () => $('theme').click()],
+    ];
+    state.sessions.slice(0, 12).forEach(s => list.push([`Session: ${s.title || 'Ohne Titel'}`, '', () => openSession(s.id)]));
+    return list;
+  }
+  let picks = [], sel = 0;
+  function paintCmd() {
+    const q = cmd.querySelector('input').value.toLowerCase();
+    picks = commands().filter(c => c[0].toLowerCase().includes(q));
+    sel = Math.min(sel, Math.max(picks.length - 1, 0));
+    const ul = cmd.querySelector('ul');
+    ul.replaceChildren(...picks.map((c, i) => {
+      const li = Object.assign(document.createElement('li'), { role: 'option' });
+      li.setAttribute('aria-selected', i === sel);
+      li.innerHTML = `<span>${esc(c[0])}</span><small>${c[1]}</small>`;
+      li.onclick = () => runCmd(i);
+      return li;
+    }));
+  }
+  function runCmd(i) { const c = picks[i]; cmd.close(); if (c) { c[2](); $('input').focus(); } }
+  cmd.querySelector('input').oninput = () => { sel = 0; paintCmd(); };
+  cmd.querySelector('input').onkeydown = e => {
+    if (e.key === 'ArrowDown') { sel = (sel + 1) % picks.length; paintCmd(); e.preventDefault(); }
+    if (e.key === 'ArrowUp') { sel = (sel - 1 + picks.length) % picks.length; paintCmd(); e.preventDefault(); }
+    if (e.key === 'Enter') { runCmd(sel); e.preventDefault(); }
+  };
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (cmd.open) return cmd.close();
+      cmd.querySelector('input').value = ''; sel = 0; paintCmd(); cmd.showModal();
+    }
+  });
+
+  boot();
   init();
 </script>
 </body>

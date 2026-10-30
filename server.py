@@ -104,9 +104,11 @@ Entscheide pro Nachricht:
 
 Modelle (nur diese sind installiert):
 {models}
-Wähle für neue Bilder qwen-image-2512, wenn Qualität zählt oder Text im Bild vorkommt, flux2-klein-4b für schnelle Entwürfe,
-realvis-xl für fotorealistische Menschen und Szenen, noobai-xl für Anime und Illustration (dann den Prompt als
-kommagetrennte Danbooru-Tags schreiben, z. B. "1girl, elf, silver hair, forest, night"), chroma als vielseitige Alternative.
+Standard für neue Bilder ist z-image-turbo (rund 20 s, fotorealistisch und gut für Malstile). flux2-klein-4b ist
+gleich schnell und eine Alternative mit anderem Look. noobai-xl nur für Anime und Illustration (dann den Prompt als
+kommagetrennte Danbooru-Tags schreiben, z. B. "1girl, elf, silver hair, forest, night"). qwen-image-2512 dauert
+2 bis 4 Minuten: nimm es nur, wenn Schrift im Bild vorkommen soll oder der Nutzer ausdrücklich höchste Qualität
+will, und sag dann, dass es länger dauert. realvis-xl und chroma nur, wenn der Nutzer sie nennt.
 Wenn der Nutzer ein bestimmtes Modell nennt, nimm genau das.
 
 Stile:
