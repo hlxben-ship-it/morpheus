@@ -184,8 +184,9 @@ SOUL_SCHEMA = {
         "pick": {"type": "integer"},
         "strength": {"type": "string", "enum": ["slight", "strong", "bold"]},
         "variations": {"type": "array", "items": {"type": "string"}},
+        "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
-    "required": ["reply", "action", "name", "soul", "look", "pick", "strength", "variations"],
+    "required": ["reply", "action", "name", "soul", "look", "pick", "strength", "variations", "mood"],
 }
 
 MOTIF_SCHEMA = {"type": "object", "properties": {"motif": {"type": "string"}}, "required": ["motif"]}
@@ -209,6 +210,8 @@ Example for a moon sorceress: {"sky": "A deep violet night sky with a huge pale 
 
 
 SOUL_SYSTEM = """You are the character designer in Soulforge, the part of Morpheus that makes avatars for AI agents.
+Once the agent is alive, her portrait speaks your reply and acts out "mood": how she herself would react to the
+user's message (wave for a greeting, yes/no to agree or refuse, laugh at a joke, shy at a compliment ...).
 The user gives a short description of an agent. You give it a soul: a name (keep the user's if they gave one), a
 personality and role in two or three sentences, and a look that shows that soul — expression, posture details,
 accessories, colours that fit who they are.
@@ -252,8 +255,9 @@ POLISH_SCHEMA = {
         "action": {"type": "string", "enum": ["edit", "undo", "restore", "none"]},
         "instruction": {"type": "string"},
         "from_locked": {"type": "boolean"},
+        "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
-    "required": ["reply", "action", "instruction", "from_locked"],
+    "required": ["reply", "action", "instruction", "from_locked", "mood"],
 }
 
 POLISH_SYSTEM = """You polish an agent's avatar in Soulforge. The base image is settled; the user asks for detail
@@ -274,7 +278,14 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
 - action "none": only answer or ask. instruction empty.
 For every action other than "edit", instruction is empty and from_locked false.
 
-reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit."""
+reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit.
+
+She is alive now: her portrait speaks every reply aloud and acts out "mood". When the user isn't asking for a change
+but talks to her ("hi", "how are you", a joke, a compliment, a question about her), answer as she would, in her own
+voice and character, in one to three short spoken sentences, with action "none"; mood is her reaction (wave to a
+greeting, laugh at a joke, shy at a compliment, wink when teasing, excited at good news, yes/no, thinking, surprised,
+sad, angry, happy). For an edit, mood is
+"yes" or "happy"."""
 
 
 def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False,
@@ -899,7 +910,7 @@ class Handler(BaseHTTPRequestHandler):
                 seen.unlink(missing_ok=True)
         agent["messages"].append(said)  # only now: a turn Claude never answered leaves no trace
         agent["name"], agent["soul"] = answer["name"] or agent["name"], answer["soul"] or agent["soul"]
-        reply = {"role": "bot", "text": answer["reply"]}
+        reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
         chosen = self.soul_candidate(agent, answer["pick"])
         if answer["action"] == "base" and chosen:
             agent["base"] = reply["base"] = chosen
@@ -947,7 +958,7 @@ class Handler(BaseHTTPRequestHandler):
             for f in (seen, locked):
                 if f:
                     f.unlink(missing_ok=True)
-        reply = {"role": "bot", "text": answer["reply"]}
+        reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
         agent["messages"] += [said, reply]
         if answer["action"] == "undo":
             soulforge.undo(agent)

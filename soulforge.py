@@ -530,6 +530,123 @@ def smirk_lift(source: Image.Image, mouth) -> Image.Image:
     return Image.fromarray(out)
 
 
+def mouth_shapes(source: Image.Image, mouth, seam: int | None = None) -> dict:
+    """Her mouth in more shapes, drawn from her own pixels on the art's grid, like the smirk: a smile and a frown
+    (both corners lifted or dropped by one art pixel), and the mouth open one, two and three art pixels for talking
+    and laughing, the lower lip and the chin under it moved down as an oval, the gap her own darkest lip colour,
+    deepened, with a row of teeth in the widest one."""
+    import numpy as np
+    a = np.asarray(source)
+    H, W = a.shape[:2]
+    x0, y0, x1, y1 = mouth
+    mid, hw = (x0 + x1) / 2, max(BLOCK, (x1 - x0) / 2)
+    lum = a[y0:y1 + 1, x0:x1 + 1].astype(float) @ [.3, .59, .11]
+    if seam is None:  # the line between the lips: their darkest row (a grin with teeth names its own, under them)
+        seam = y0 + int(np.argmin(lum.mean(1)))
+    lip = a[y0:y1 + 1, x0:x1 + 1].reshape(-1, 3)
+    inside = (lip[np.argmin(lip.astype(float) @ [.3, .59, .11])] * .45).astype(np.uint8)
+    teeth = np.array([236, 230, 226], np.uint8)
+    shapes = {}
+    for name, lift in (("smile", 1), ("frown", -1)):
+        out = a.copy()
+        for x in range(int(x0 - BLOCK), int(x1 + BLOCK)):
+            if not 0 <= x < W:
+                continue
+            d = round(lift * min(1.0, abs(x - mid) / hw) ** 2 * BLOCK)  # the corners move, the middle stays
+            if d:
+                ys = np.arange(max(0, y0 - BLOCK), min(H, y1 + BLOCK))
+                src = np.clip(ys + d, 0, H - 1)
+                out[ys, x] = a[src, x]
+        shapes[name] = out
+    # rounded: the gap tapers toward the corners, decided per art pixel; a tongue tone along its floor once it's
+    # wide; drawn teeth only for a mouth that shows none already (a grin's teeth stay hers, the gap opens under them)
+    tongue = (np.median(lip, 0) * .62).astype(np.uint8)
+    has_teeth = ((lip.astype(float) @ [.3, .59, .11]) > 200).mean() > .04
+    for n in (1, 2, 3):
+        out = a.copy()
+        for x in range(int(x0 - BLOCK // 2), int(x1 + BLOCK // 2)):
+            if not 0 <= x < W:
+                continue
+            u = ((x // BLOCK) * BLOCK + BLOCK / 2 - mid) / hw
+            if abs(u) >= 1:
+                continue
+            drop = int(n * (1 - u * u) ** .5 + .35) * BLOCK
+            if not drop:
+                continue
+            below = np.arange(seam + 1, min(H - drop, y1 + 2 * BLOCK + 1))  # the lower lip and some chin move down
+            out[below + drop, x] = a[below, x]
+            out[seam + 1:seam + 1 + drop, x] = inside
+            if n >= 2 and drop >= 2 * BLOCK and abs(u) < .55:
+                out[seam + 1 + drop - BLOCK:seam + 1 + drop, x] = tongue
+            if n == 3 and not has_teeth and abs(u) < .7:
+                out[seam + 1:seam + 1 + BLOCK, x] = teeth
+        shapes[f"open{n}"] = out
+    return {k: Image.fromarray(v) for k, v in shapes.items()}
+
+
+# Arm poses: Klein draws her with a raised arm; only the arm's region is kept, on the art's grid. Opaque pixels
+# are her posed arm, half-transparent ones are where the posed picture shows background (where her arm hung before,
+# now empty): the page hides her there, so on a scene the backdrop shows through.
+POSES = {
+    "wave": "She raises her right hand beside her face and waves hello, palm open toward the viewer, a friendly wave.",
+    "chin": "She raises her right hand and rests her curled index finger thoughtfully against her chin, pondering.",
+    "heart": "She lays her right hand flat over her heart on her chest, a tender, touched gesture.",
+}
+POSE_TRIES = 2
+IDLE_STEPS += [f"{k} {n + 1}" for k in POSES for n in range(POSE_TRIES)]
+
+
+def pose_score(overlay: Image.Image | None, eyes) -> float:
+    """Lower is better: holes opened in the middle of her torso (where no arm hangs) mean Klein redrew her there."""
+    import numpy as np
+    if overlay is None:
+        return float("inf")
+    a = np.asarray(overlay)[..., 3]
+    ew = eyes[2] - eyes[0]
+    mid = (eyes[0] + eyes[2]) // 2
+    band = a[:, max(0, mid - int(ew * .8)):mid + int(ew * .8)]
+    return float((band == 128).sum()) / max(1, (a == 255).sum())
+
+
+def arm_pose(source: Image.Image, posed: Image.Image, plate: Image.Image, eyes, mouth) -> Image.Image | None:
+    """The posed arm as an overlay (see POSES), or None when Klein's change isn't one clear arm."""
+    import cv2
+    import numpy as np
+    W, H = source.size
+    grid = W // BLOCK
+    gh = round(grid * H / W)
+    posed = posed.resize((grid, gh), Image.Resampling.BOX).resize((W, H), Image.Resampling.NEAREST)
+    a, b = np.asarray(source).astype(int), np.asarray(posed).astype(int)
+    diff = (np.abs(a - b).sum(2) > 90).astype(np.uint8)
+    diff = cv2.morphologyEx(diff, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    diff = cv2.dilate(diff, np.ones((15, 15), np.uint8))
+    ew = eyes[2] - eyes[0]
+    face = np.zeros_like(diff)  # the face stays hers: Klein redraws its smile too
+    cv2.ellipse(face, ((eyes[0] + eyes[2]) // 2, (eyes[1] + mouth[3]) // 2),
+                (int(ew * .62), int((mouth[3] - eyes[1]) * .8 + 10)), 0, 0, 360, 1, -1)
+    face[mouth[3] + BLOCK:] = 0  # below the lips is the hand's (on the chin), not the face's
+    diff[face > 0] = 0
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(diff, connectivity=8)
+    if n < 2:
+        return None
+    k = 1 + int(np.argmax(stats[1:, 4]))
+    if not .015 < stats[k, 4] / (W * H) < .25:
+        return None
+    region = cv2.dilate((lab == k).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+    region &= face == 0
+    # the posed picture's background there, decided per art pixel against the plate and smoothed: per screen pixel
+    # Klein's slightly different backdrop came out as speckle
+    cell = lambda im: np.asarray(im.convert("RGB").resize((grid, gh), Image.Resampling.BOX)).astype(int)
+    # and changed from her: dark clothes on a dark backdrop matched the plate too, and holes opened in cloaks
+    near = ((np.abs(cell(posed) - cell(plate)).sum(2) < 75) & (np.abs(cell(posed) - cell(source)).sum(2) > 60)).astype(np.uint8) * 255
+    near = cv2.medianBlur(cv2.medianBlur(near, 3), 3)
+    empty = np.asarray(Image.fromarray(near).resize((W, H), Image.Resampling.NEAREST)) > 128
+    out = np.zeros((H, W, 4), np.uint8)
+    out[..., :3] = b
+    out[..., 3] = np.where(region, np.where(empty, 128, 255), 0)
+    return Image.fromarray(out, "RGBA")
+
+
 def blob(source: Image.Image, edited: Image.Image, window: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
     """The box of the strongest change inside window. Klein drifts everywhere (swirls, moon, outlines), but the
     feature it was asked to change is the biggest, densest change, so a heavy blur makes it the peak."""
@@ -712,7 +829,8 @@ def idle(agent: dict, progress=None, live=None) -> dict:
         out.putalpha(ImageChops.difference(source, picture).convert("L").point(lambda v: 255 if v else 0))
         return out
     pictures = {**pixel_eyes(source, overlay(eye_frame(source, shut, pair, True)), eyes),
-                "smirk": overlay(smirk_lift(source, mouth)), "blush": blush(source, eyes)}
+                "smirk": overlay(smirk_lift(source, mouth)), "blush": blush(source, eyes),
+                **{k: overlay(v) for k, v in mouth_shapes(source, mouth, (agent.get("idle") or {}).get("seam")).items()}}
     stamp = int(time.time())
     frames = {}
     for name, picture in pictures.items():
@@ -722,15 +840,15 @@ def idle(agent: dict, progress=None, live=None) -> dict:
     scene = agent.get("scene") or {}
     if not scene.get("motif"):  # the motif is about her, not this picture: it outlives a new look
         if progress:
-            progress(len(IDLE_STEPS) - 3, "her motif")
+            progress(IDLE_STEPS.index("her motif"), "her motif")
         motif(agent, live).save(folder(agent["slug"]) / f"scene_motif_{stamp}.png")
         scene["motif"] = f"soulforge/{agent['slug']}/scene_motif_{stamp}.png"
     if agent.get("world") and not scene.get("world"):  # like the motif, her world outlives a new look
         if progress:
-            progress(len(IDLE_STEPS) - 2, "her world")
+            progress(IDLE_STEPS.index("her world"), "her world")
         scene["world"] = world(agent, live)
     if progress:
-        progress(len(IDLE_STEPS) - 1, "rig")
+        progress(IDLE_STEPS.index("rig"), "rig")
     figure = rig(raw, source, eyes, mouth)
     figure.save(folder(agent["slug"]) / f"idle_rig_{stamp}.png")
     cut = source.convert("RGBA")
@@ -741,6 +859,17 @@ def idle(agent: dict, progress=None, live=None) -> dict:
     agent["scene"] = {**scene, "base": agent["base"]["file"], "cut": f"soulforge/{agent['slug']}/scene_cut_{stamp}.png"}
     best_plate(raw["plate"], vote(raw["key_figure"]).point(lambda v: 255 - v)).save(
         folder(agent["slug"]) / f"idle_plate_{stamp}.png")
+    plate = Image.open(folder(agent["slug"]) / f"idle_plate_{stamp}.png")
+    for name, instruction in POSES.items():
+        tries = []
+        for n in range(POSE_TRIES):
+            if progress:
+                progress(IDLE_STEPS.index(f"{name} {n + 1}"), f"{name} {n + 1}")
+            tries.append(arm_pose(source, klein(agent, instruction + KEEP, source, live), plate, eyes, mouth))
+        best = min(tries, key=lambda o: pose_score(o, eyes))
+        if best is not None:
+            best.save(folder(agent["slug"]) / f"idle_{name}_{stamp}.png")
+            frames[name] = f"soulforge/{agent['slug']}/idle_{name}_{stamp}.png"
     old = agent.get("idle") or {}
     for f in [*old.get("frames", {}).values(), old.get("rig"), old.get("plate")]:
         if f:  # only the idle set refers to these; the chat doesn't show them

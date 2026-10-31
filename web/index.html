@@ -365,6 +365,7 @@
   @media (max-width: 900px) { .hud .bar, .hud-meter b { display: none; } }
   @media (max-width: 640px) { .hud-meter { display: none; } }
   @media (max-width: 520px) { .brand .word, .hud-comfy b { display: none; } }  /* room for the forge switch */
+  @media (max-width: 430px) { .hud { display: none; } }  /* a phone: the header was 28px wider than the screen */
   /* CRT scanlines over the backdrop, never over pictures' clicks */
   body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50; mix-blend-mode: overlay; opacity: .35;
     background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); }
@@ -545,6 +546,11 @@
   /* integer scale: 832 art px at 416 css px is exactly 3 screen px per art pixel; at 340 the blocks alternated 2 and 3
      px wide and crawled while she breathed */
   .soul-card .portrait.alive { width: 416px; }
+  .emotes { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 8px; }
+  .emotes button { font-size: 17px; line-height: 1; padding: 5px 7px; border-radius: 8px; border: 1px solid color-mix(in srgb, currentColor 18%, transparent); background: transparent; cursor: pointer; transition: transform .12s, background .12s; }
+  .emotes button:hover { background: color-mix(in srgb, currentColor 10%, transparent); transform: translateY(-1px); }
+  .emotes button:active { transform: scale(.92); }
+  .emotes button.on { background: color-mix(in srgb, var(--accent) 30%, transparent); border-color: var(--accent); }
   .soul-card .portrait.scened { box-shadow: 0 0 34px -6px var(--scene-glow, transparent), 0 0 0 1px color-mix(in srgb, var(--scene-glow, transparent) 45%, transparent); transition: box-shadow .6s; }
   .history { margin: 4px 0 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); padding: 0 14px; }
   .history > summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 13px; }
@@ -636,6 +642,11 @@
   .soul-hero .ideas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
   .soul-hero .ideas button { border: 1px solid var(--line); background: var(--glass); border-radius: 999px; padding: 7px 14px; color: var(--text); font-size: 13px; }
   .soul-hero .ideas button:hover { border-color: var(--accent); }
+  @media (max-width: 560px) {  /* a phone: the portrait on top, her words and controls under it */
+    .soul-card { flex-direction: column; align-items: center; padding: 12px; }
+    .soul-card > div:last-child { width: 100%; min-width: 0; }
+    .scenes { flex-wrap: wrap; }
+  }
   @media (max-width: 860px) { .forge { margin-left: 6px; } .forge button { padding: 5px 8px; } .forge span { display: none; } .soul-card .portrait { width: 96px; } .soul-card .portrait.alive { width: 208px; } .cands { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>
 </head>
@@ -1964,7 +1975,38 @@
         wake.after(world);
       }
     }
-    if (alive && a.idle.rig) livePortrait(col.querySelector('.portrait.alive'), a.idle, sc);
+    if (alive && a.idle.rig) {
+      const pt = col.querySelector('.portrait.alive');
+      livePortrait(pt, a.idle, sc);
+      // the first visit in a session: she greets you with a wave
+      let met = []; try { met = JSON.parse(sessionStorage.getItem('morpheus.met') || '[]'); } catch {}
+      if (!met.includes(a.slug) && !job) {
+        try { sessionStorage.setItem('morpheus.met', JSON.stringify([...met, a.slug])); } catch {}
+        (async () => { for (let k = 0; k < 50 && !pt._soul; k++) await new Promise(r => setTimeout(r, 100)); setTimeout(() => pt.isConnected && pt._soul?.emote('wave'), 700); })();
+      }
+      if (a.idle.frames.open1) {
+        const row = Object.assign(document.createElement('div'), { className: 'emotes' });
+        row.innerHTML = Object.entries(EMOTE_ICON).map(([k, i]) => `<button type="button" data-emote="${k}" title="${k[0].toUpperCase() + k.slice(1)}">${i}</button>`).join('')
+          + `<button type="button" data-voice title="Her voice: a soft blip per syllable" aria-pressed="${voiceOn()}">${voiceOn() ? '🔊' : '🔇'}</button>`;
+        row.onclick = e => {
+          const v = e.target.closest('[data-voice]');
+          if (v) {
+            const on = !voiceOn();
+            try { localStorage.setItem('morpheus.voice', on ? '1' : '0'); } catch {}
+            v.textContent = on ? '🔊' : '🔇'; v.setAttribute('aria-pressed', on);
+            if (on) pt._soul?.say('Hello!');
+            return;
+          }
+          const k = e.target.closest('button')?.dataset.emote;
+          if (!k || !pt._soul) return;
+          const btn = e.target.closest('button');  // lit while she acts it out
+          btn.classList.add('on'); clearTimeout(btn._off);
+          if (k === 'talk') btn._off = setTimeout(() => btn.classList.remove('on'), pt._soul.say(`I'm ${a.name}. ${a.soul}`.slice(0, 220)));
+          else { pt._soul.emote(k); btn._off = setTimeout(() => btn.classList.remove('on'), EMOTES[k]?.hold || 1500); }
+        };
+        col.querySelector('.soul-card > div:last-child h2').after(row);
+      }
+    }
     else idleLoop(alive && col.querySelector('.portrait.alive'));
     const last = a.grids.length - 1;
     // an agent that's alive opens as a profile: how it was made folds away, newer polish talk stays in view
@@ -2090,7 +2132,10 @@
   let lean = 0, leanTo = 0, gust = 0, gustAt = performance.now() + 9000;
   // reduced motion: the scene and the figure hold still; blinks and expressions stay
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  addEventListener('pointermove', e => { leanTo = (e.clientX / innerWidth - .5) * 2; }, { passive: true });
+  const ptr = { x: -1e4, y: -1e4, t: 0 };
+  addEventListener('pointermove', e => { leanTo = (e.clientX / innerWidth - .5) * 2; Object.assign(ptr, { x: e.clientX, y: e.clientY, t: performance.now() }); }, { passive: true });
+  // typing to her: she listens (a tilt, a small smile) while the keys go
+  addEventListener('input', e => { if (e.target.id === 'input') document.querySelectorAll('.portrait.alive').forEach(p => p._soul?.listen()); });
   const DRIFT = { sky: [6, .05, 0], far: [16, .07, 1.3], near: [30, .09, 2.1] };
   (function drift(now) {
     requestAnimationFrame(drift);
@@ -2233,6 +2278,47 @@
   // The living portrait: the base with its expression overlays, warped every frame by the rig. Breathing lifts the
   // upper body one art pixel, hair and cloak sway with a lag toward their tips, and a pixel that the figure moves
   // off of shows the clean background plate. Every shift is a whole art pixel, so it stays crisp pixel art.
+  const MOUTHS = ['smile', 'frown', 'open1', 'open2', 'open3'], ARMS = ['wave', 'chin', 'heart'];
+  let audio = null;
+  const voiceOn = () => { try { return localStorage.getItem('morpheus.voice') === '1'; } catch { return false; } };
+  function blip(seed, big) {
+    if (!voiceOn()) return;
+    audio ||= new AudioContext();
+    const t = audio.currentTime, o = audio.createOscillator(), g = audio.createGain(), f = audio.createBiquadFilter();
+    const base = 330 + (seed % 7) * 38;  // each agent her own pitch
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(base * (big ? 1.12 : 1) * (1 + (Math.random() - .5) * .08), t);
+    f.type = 'lowpass'; f.frequency.value = 2400;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.06, t + .008); g.gain.exponentialRampToValueAtTime(.0005, t + .07);
+    o.connect(f).connect(g).connect(audio.destination);
+    o.start(t); o.stop(t + .08);
+  }
+  // emote icons over her head, as in a game: one character per art pixel (# outline, o fill, w shine)
+  const ICONS = {
+    heart: ['#ec5b9b', ['.##.##.', '#ow#oo#', '#ooooo#', '#ooooo#', '.#ooo#.', '..#o#..', '...#...']],
+    bang: ['#ffd54a', ['###', '#w#', '#o#', '#o#', '#o#', '###', '...', '###', '#o#', '###']],
+    ask: ['#f4f1ff', ['.####.', '#wooo#', '####o#', '..#oo#', '..#o#.', '..###.', '......', '..###.', '..#o#.', '..###.']],
+    vein: ['#ff4a4a', ['.##.##.', '#o#.#o#', '##...##', '.......', '##...##', '#o#.#o#', '.##.##.']],
+    drop: ['#6cc4ff', ['..#..', '.#o#.', '.#o#.', '#owo#', '#ooo#', '#ooo#', '.###.']],
+    note: ['#ffe066', ['..####', '..#oo#', '..#..#', '..#..#', '###.##', '#o#.#o', '###.##']],
+    star: ['#ffd84a', ['...#...', '..#w#..', '###o###', '#ooooo#', '.#ooo#.', '#oo#oo#', '##...##']],
+  };
+  const EMOTE_ICON = { talk: '💬', wave: '👋', happy: '😊', wink: '😉', excited: '🤩', laugh: '😂', surprised: '😮', shy: '😳', thinking: '🤔', sad: '😢', angry: '😠', yes: '👍', no: '👎' };
+  // emotions: a mouth, eyes held, a blush and a gesture of the head, all at once, for as long as the mood lasts
+  const EMOTES = {
+    happy: { mouth: 'smile', blush: .7, gesture: 'tilt', hold: 3200, icon: 'note' },
+    wave: { mouth: 'smile', arm: 'wave', gesture: 'tilt', hold: 2800 },
+    laugh: { mouth: 'open3', eyes: 'closed', blush: 1, gesture: 'laugh', hold: 2200, chuckle: true, icon: 'note' },
+    surprised: { mouth: 'open2', gesture: 'jolt', hold: 1800, icon: 'bang', brow: 1 },
+    sad: { mouth: 'frown', eyes: 'half', gesture: 'droop', hold: 3800, icon: 'drop', arm: 'heart', gloom: 1 },
+    angry: { mouth: 'frown', eyes: 'half', gesture: 'shake', hold: 2600, icon: 'vein', brow: -1 },
+    thinking: { mouth: 'smirk', eyes: 'glance', gesture: 'ponder', hold: 3400, icon: 'ask', arm: 'chin' },
+    yes: { mouth: 'smile', gesture: 'nod', hold: 1500 },
+    no: { mouth: 'frown', gesture: 'shake', hold: 1600 },
+    shy: { mouth: 'smirk', eyes: 'glance_l', blush: 1, gesture: 'duck', hold: 3000, icon: 'heart', arm: 'heart' },
+    wink: { mouth: 'smirk', eyes: 'wink', gesture: 'cock', hold: 1300, icon: 'star' },
+    excited: { mouth: 'open3', blush: .5, gesture: 'hop', hold: 2200, icon: 'star', brow: 1 },
+  };
   async function livePortrait(p, idle, cut) {
     const load = f => new Promise((ok, no) => Object.assign(new Image(), { onload() { ok(this); }, onerror: no, src: url(f) }));
     let pics;
@@ -2245,6 +2331,7 @@
     // the glance came later: sets drawn before it simply don't glance
     ov.glance = idle.frames.glance ? await load(idle.frames.glance).catch(() => null) : null;
     ov.glance_l = idle.frames.glance_l ? await load(idle.frames.glance_l).catch(() => null) : null;  // and the other way
+    for (const n of [...MOUTHS, ...ARMS]) ov[n] = idle.frames[n] ? await load(idle.frames[n]).catch(() => null) : null;
     if (!p.isConnected) return;
     const W = base.naturalWidth, H = base.naturalHeight, B = idle.block || 6, N = W * H;
     const ease = x => x * x * (3 - 2 * x);
@@ -2277,9 +2364,32 @@
         }
       }
       // a breath lifts the head into the rows above it
-      for (let x = 0; x < W; x++) for (let k = 1; k <= B && y + k < H; k++) if (fig[(y + k) * W + x]) inZone[y * W + x] = 1;
+      for (let x = 0; x < W; x++) for (let k = 1; k <= 4 * B && y + k < H; k++) if (fig[(y + k) * W + x]) inZone[y * W + x] = 1;
     }
+    const arms = {};
+    for (const name of ARMS) {
+      if (!ov[name]) continue;
+      const arm = arms[name] = { idx: [], rgb: [], on: [], thr: [], q: 0, to: 0 };
+      const a = pixels(ov[name]);
+      let top = H, bot = 0;
+      for (let i = 0; i < N; i++) if (a[i * 4 + 3] === 255) { const y = (i / W) | 0; top = Math.min(top, y); bot = Math.max(bot, y); }
+      const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+      for (let i = 0; i < N; i++) {
+        const al = a[i * 4 + 3];
+        if (al !== 255 && al !== 128) continue;
+        const y = (i / W) | 0, x = i - y * W, d = bayer[((y / B) & 3) * 4 + ((x / B) & 3)] / 16;
+        arm.idx.push(i); arm.rgb.push(0xff000000 | a[i * 4 + 2] << 16 | a[i * 4 + 1] << 8 | a[i * 4]); arm.on.push(al === 255);
+        arm.thr.push(al === 255 ? .6 * (bot - y) / Math.max(1, bot - top) + .38 * d : .15 + .5 * d);
+        for (let dy = -2 * B; dy <= 2 * B; dy += B) for (let dx = -2 * B; dx <= 2 * B; dx += B) {
+          const yy = y + dy, xx = x + dx;
+          if (yy >= 0 && yy < H && xx >= 0 && xx < W) inZone[yy * W + xx] = 1;
+        }
+      }
+      arm.top = top; arm.bot = bot;
+    }
+    const arm = arms.wave || { idx: [], on: [] };  // the waving one: its hand swings
     for (let i = 0; i < N; i++) if (inZone[i]) zone.push(i);
+    const figBase = fig.slice(), posed = new Uint8Array(N), armLit = new Float32Array(N);  // posed: an arm's pixel just now (the rim light was drawn for her old outline)
     // the motion is worked out per art pixel (a B×B block) and every screen pixel in it moves alike: moved one by
     // one, neighbours with different weights tore the blocks into slivers and combed the edges of hair and sleeves
     const BW = Math.ceil(W / B), BH = Math.ceil(H / B), NB = BW * BH;
@@ -2292,6 +2402,35 @@
     }
     for (let b = 0; b < NB; b++) { bHair[b] /= B * B; bCloak[b] /= B * B; bBreath[b] /= B * B; bRow[b] = ((b / BW) | 0) * B + B / 2; }
     const bdx = new Int16Array(NB), bdy = new Int16Array(NB);
+    const ew = idle.eyes[2] - idle.eyes[0], hx = (idle.eyes[0] + idle.eyes[2]) / 2, chin = idle.mouth[3];
+    const neck = chin + ew * .32, piv = [hx, chin + ew * .5];
+    const bHead = new Float32Array(NB), bHang = new Float32Array(NB), bX = new Float32Array(NB), bArm = new Float32Array(NB), bFace = new Float32Array(NB), bBrow = new Float32Array(NB);
+    for (let b = 0; b < NB; b++) {
+      const x = (b % BW) * B + B / 2, y = bRow[b], top = idle.eyes[1];
+      const across = 1 - Math.min(1, Math.abs(Math.abs(x - hx) - ew * .27) / (ew * .26));  // over each eye
+      const up = y < top && y > top - ew * .42 ? 1 - Math.abs(y - (top - ew * .17)) / (ew * .25) : 0;
+      bBrow[b] = Math.max(0, across) * Math.max(0, Math.min(1, up * 1.6));
+    }
+    {
+      const fy = (idle.eyes[1] + chin) / 2, rx = ew * .78, ry = (chin - idle.eyes[1]) * .9 + ew * .35;
+      for (let b = 0; b < NB; b++) {
+        const d = (((b % BW) * B + B / 2 - hx) / rx) ** 2 + ((bRow[b] - fy) / ry) ** 2;
+        bFace[b] = d < 1 ? (1 - d) ** .6 : 0;
+      }
+    }
+    for (let k = 0; k < arm.idx.length; k++) if (arm.on[k]) {
+      const i = arm.idx[k], y = (i / W) | 0;
+      bArm[blockOf[i]] = Math.max(0, Math.min(1, (arm.top + (arm.bot - arm.top) * .55 - y) / ((arm.bot - arm.top) * .55))) ** 1.4;
+    }
+    for (let b = 0; b < NB; b++) {
+      const x = (b % BW) * B + B / 2, y = bRow[b];
+      bX[b] = x;
+      // the head: above the chin across the face and the hair at its sides, fading out down the neck
+      const across = Math.abs(x - hx) < ew * 1.3 ? 1 : Math.max(0, 1 - (Math.abs(x - hx) - ew * 1.3) / (ew * .4));
+      bHead[b] = across * (y < chin ? 1 : Math.max(0, 1 - (y - chin) / (neck - chin)));
+      // the hair hanging below: it rides the head's motion, later and less toward the tips
+      bHang[b] = bHair[b] > .02 || hairW[Math.min(N - 1, (y | 0) * W + (x | 0))] > .02 ? Math.max(0, 1 - Math.max(0, y - neck) / (ew * 3.2)) : 0;
+    }
     // on a scene its light falls on her: a rim of the key light along her edges on its side (the fill on the
     // other), whole art pixels deep so it reads as painted, and her colours graded toward the scene's ambient
     const fx = p.querySelector('.front canvas');  // the light comes from where her sky puts it: a mirrored sky, a mirrored key
@@ -2324,6 +2463,30 @@
         rim[b] = w;
       }
       for (let i = 0; i < N; i++) lit[i] = rim[blockOf[i]] * look.rim;
+      // a raised arm gets its own rim: the light along its edge, tested against her posed outline
+      for (const a of Object.values(arms)) {
+        const on = new Uint8Array(N);
+        for (let i = 0; i < N; i++) on[i] = figBase[i];
+        a.idx.forEach((i, k) => { on[i] = a.on[k] ? 1 : 0; });
+        a.lit = a.idx.map((i, k) => {
+          if (!a.on[k]) return 0;
+          const y = (i / W) | 0, x = i - y * W, open = (dx, dy) => { const xx = x + dx, yy = y + dy; return xx >= 0 && xx < W && yy >= 0 && yy < H && !on[yy * W + xx]; };
+          for (let d = 1; d <= 3; d++) {
+            if (open(-d * B * look.side, 0)) return depth[d] * look.rim;
+            if (open(d * B * look.side, 0)) return -depth[d] * .7 * look.rim;
+            if (open(0, -d * B)) return depth[d] * .8 * look.rim;
+          }
+          return 0;
+        });
+      }
+    }
+    const faceRect = [Math.max(0, Math.floor((hx - ew * 1.3) / B) * B), Math.max(0, Math.floor((idle.eyes[1] - ew * .7) / B) * B),
+      Math.min(W, Math.ceil((hx + ew * 1.3) / B) * B), Math.min(H, Math.ceil((chin + 6 * B) / B) * B)];
+    for (const a of Object.values(arms)) {
+      let x0 = W, y0 = H, x1 = 0, y1 = 0;
+      for (const i of a.idx) { const y = (i / W) | 0, x = i - y * W; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1); }
+      a.box = [x0, y0, x1, y1]; a.was = 0;
+      a.blocks = [...new Set(a.idx.filter((i, k) => a.on[k]).map(i => blockOf[i]))];
     }
     const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H, className: 'live' });
     p.querySelectorAll('img').forEach(i => i.remove());
@@ -2331,7 +2494,9 @@
     const ctx = canvas.getContext('2d');
     const out = ctx.createImageData(W, H), out32 = new Uint32Array(out.data.buffer);
     const comp = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true });
-    let src32, dirty = true;
+    let src32, dirty = true, mouthNow = null, eyesNow = null, mood = {}, gaze = 0, lookSide = null, frameNo = 0, box = p.getBoundingClientRect();
+    const acts = [];  // gestures of the head: [start, kind, length]
+    const icons = [];  // emote icons showing: { k, t0, life }
     const state = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 };
     p.addEventListener('click', () => {
       const now = performance.now();
@@ -2341,11 +2506,39 @@
     function compose() {  // the base with the expression overlays that are on right now
       comp.clearRect(0, 0, W, H);
       comp.drawImage(base, 0, 0);
-      for (const n of ['blush', 'smirk', 'glance', 'glance_l', 'half', 'closed']) if (state[n] && ov[n]) { comp.globalAlpha = state[n]; comp.drawImage(ov[n], 0, 0); comp.globalAlpha = 1; }
-      src32 = new Uint32Array(comp.getImageData(0, 0, W, H).data.buffer);
-      if (cut) for (let i = 0; i < N; i++) {  // on a scene only she is drawn, lit by it
+      const draw = (n, a) => { if (a && ov[n]) { comp.globalAlpha = Math.min(1, a); comp.drawImage(ov[n], 0, 0); comp.globalAlpha = 1; } };
+      draw('blush', Math.max(state.blush, mood.blush || 0));
+      if (mouthNow && mouthNow !== 'smirk' && ov[mouthNow]) draw(mouthNow, 1); else draw('smirk', mouthNow === 'smirk' ? 1 : state.smirk);
+      for (const n of ['glance', 'glance_l']) draw(n, Math.max(state[n], eyesNow === n || (!eyesNow && lookSide === n) ? 1 : 0));
+      if (eyesNow === 'half' || eyesNow === 'closed') draw(eyesNow, 1);
+      if (eyesNow === 'wink' && ov.closed) { comp.save(); comp.beginPath(); comp.rect(hx, 0, W - hx, H); comp.clip(); draw('closed', 1); comp.restore(); }
+      draw('half', state.half); draw('closed', state.closed);
+      if (mood.gloom) {  // every other art-pixel column, from the hairline down to the eyes, deepening downward
+        const x0 = Math.round((hx - ew * .55) / B) * B, x1 = hx + ew * .55, y0 = idle.eyes[1] - ew * .3, y1 = idle.eyes[1] + ew * .14;
+        for (let x = x0; x < x1; x += 2 * B) for (let y = Math.round(y0 / B) * B; y < y1; y += B) {
+          comp.globalAlpha = .2 + .55 * (y - y0) / (y1 - y0);
+          comp.fillStyle = '#28306a'; comp.fillRect(x, y, B, B);
+        }
+        comp.globalAlpha = 1;
+      }
+      // only what can change is read back and relit: the face, and an arm while it moves; the rest stays as the
+      // first full pass left it. Reading and lighting the whole picture on every mouth shape cost frames in speech
+      let rx0 = 0, ry0 = 0, rx1 = W, ry1 = H;
+      if (src32) {
+        [rx0, ry0, rx1, ry1] = faceRect;
+        for (const a of Object.values(arms)) if (a.q || a.was) { rx0 = Math.min(rx0, a.box[0]); ry0 = Math.min(ry0, a.box[1]); rx1 = Math.max(rx1, a.box[2]); ry1 = Math.max(ry1, a.box[3]); }
+        const part = new Uint32Array(comp.getImageData(rx0, ry0, rx1 - rx0, ry1 - ry0).data.buffer), w = rx1 - rx0;
+        for (let y = ry0; y < ry1; y++) src32.set(part.subarray((y - ry0) * w, (y - ry0 + 1) * w), y * W + rx0);
+      } else src32 = new Uint32Array(comp.getImageData(0, 0, W, H).data.buffer);
+      for (const a of Object.values(arms)) a.was = a.q;
+      for (const a of Object.values(arms)) for (let k = 0; k < a.idx.length; k++) if (a.thr[k] >= a.q) { fig[a.idx[k]] = figBase[a.idx[k]]; posed[a.idx[k]] = 0; }
+      for (const a of Object.values(arms)) if (a.q) for (let k = 0; k < a.idx.length; k++) {  // the posed arm over her
+        const i = a.idx[k];
+        if (a.thr[k] < a.q) { fig[i] = a.on[k] ? 1 : 0; posed[i] = 1; armLit[i] = a.lit?.[k] || 0; if (a.on[k] || !cut) src32[i] = a.rgb[k]; }
+      }
+      if (cut) for (let y = ry0; y < ry1; y++) for (let i = y * W + rx0, e = y * W + rx1; i < e; i++) {  // on a scene only she is drawn, lit by it
         if (!fig[i]) { src32[i] = 0; continue; }
-        const s = lit[i];
+        const s = posed[i] ? armLit[i] : lit[i];
         if (!s && !look.amb[3]) continue;
         const v = src32[i], t = look.amb[3];
         let r = v & 255, g = v >> 8 & 255, bl = v >> 16 & 255;
@@ -2357,7 +2550,97 @@
     }
     // smirk and blush fade (seconds for a full fade); the blink cuts, as a real one does
     const target = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 }, fade = { blush: 1.6, smirk: .45 };
-    const set = (n, v) => { target[n] = v; if (!fade[n]) { state[n] = v; dirty = true; } };
+    const set = (n, v) => {
+      if (n === 'mouth') { if (mouthNow !== v) { mouthNow = v; dirty = true; } return; }
+      if (n === 'eyes') { if (eyesNow !== v) { eyesNow = v; dirty = true; } return; }
+      if (n === 'gesture') {
+        const now = performance.now();
+        acts.push([now, v, GEST[v]?.len || 1, ['tilt', 'cock', 'droop'].includes(v) && Math.random() < .5 ? -1 : 1]);  // a tilt goes either way
+        if (['shake', 'tilt', 'ponder', 'duck'].includes(v) && eyesNow !== 'closed' && Math.random() < .7)  // never on a surprise: eyes go wide, not shut
+         
+          [[0, 'half', 1], [45, 'half', 0], [45, 'closed', 1], [130, 'closed', 0], [130, 'half', 1], [190, 'half', 0]].forEach(([d, k, x]) => timeline.push([now + d, k, x]));
+        return;
+      }
+      if (n === 'mood') { mood = v; browTo = v.brow || 0; dirty = true; return; }
+      if (n === 'arm') { for (const [k, a] of Object.entries(arms)) a.to = k === v ? 1 : 0; return; }
+      target[n] = v; if (!fade[n]) { state[n] = v; dirty = true; }
+    };
+    // the gestures, as the head's offset (art pixels) and roll (radians) over their time u in 0..1
+    const bump = u => Math.sin(Math.PI * Math.min(1, Math.max(0, u)));
+    const hold = (u, a = .18) => ease(Math.min(1, u / a, (1 - u) / a));
+    const GEST = {
+      nod: { len: 1.0, f: u => ({ y: 1.3 * Math.max(0, Math.sin(u * Math.PI * 4)) * (1 - u * .5), r: 0 }) },
+      shake: { len: 1.3, f: u => ({ x: .7 * Math.sin(u * Math.PI * 6) * (1 - u) ** 1.2, yaw: 1.6 * Math.sin(u * Math.PI * 6) * (1 - u) ** 1.2, r: .015 * Math.sin(u * Math.PI * 6 + .5) * (1 - u) }) },
+      tilt: { len: 3.0, f: u => ({ r: .055 * hold(u), y: .3 * hold(u) }) },
+      ponder: { len: 3.4, f: u => ({ r: -.06 * hold(u, .25), y: -.4 * hold(u, .25), x: .3 * hold(u, .25), yaw: .8 * hold(u, .25) }) },
+      laugh: { len: 2.0, f: u => ({ y: -1.1 * Math.abs(Math.sin(u * Math.PI * 7)) * (1 - u) ** .7, r: .03 * bump(u) }) },
+      jolt: { len: 1.6, f: u => ({ y: u < .12 ? -2 * ease(u / .12) : -2 * (1 - ease((u - .12) / .88)) ** 2, r: 0 }) },
+      droop: { len: 3.8, f: u => ({ y: 1.1 * hold(u, .3), r: .04 * hold(u, .3) }) },
+      duck: { len: 3.0, f: u => ({ y: .9 * hold(u), r: -.05 * hold(u), x: -.2 * hold(u), yaw: -.8 * hold(u) }) },
+      beat: { len: .35, f: u => ({ y: .6 * bump(u), r: 0 }) },  // a word stressed in speech
+      hop: { len: 1.4, f: u => ({ y: -1.4 * Math.abs(Math.sin(u * Math.PI * 3)) * (1 - u * .4), r: .02 * Math.sin(u * Math.PI * 3) }) },  // excited little hops
+      cock: { len: .9, f: u => ({ r: .045 * bump(u), y: 0 }) },  // a question
+    };
+    // the hair on the head's spring: it chases the head, overshoots, swings back
+    const lag = { x: 0, y: 0, r: 0 }, vel = { x: 0, y: 0, r: 0 };
+    function emote(name) {
+      const e = EMOTES[name];
+      if (!e) return;
+      const now = performance.now();
+      for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'eyes', 'mood'].includes(timeline[k][1])) timeline.splice(k, 1);
+      if (e.arm && arms[e.arm]) timeline.push([now, 'arm', e.arm], [now + e.hold - 300, 'arm', 0]);
+      timeline.push([now, 'mouth', e.mouth || null], [now, 'eyes', e.eyes || null], [now, 'mood', { blush: e.blush || 0, gloom: e.gloom || 0, brow: e.brow || 0 }],
+        [now + e.hold, 'mouth', null], [now + e.hold, 'eyes', null], [now + e.hold + 400, 'mood', {}]);
+      if (e.chuckle) for (let k = 1; k < 9; k++) timeline.push([now + k * 230, 'mouth', k % 2 ? 'open2' : 'open3']);
+      if (e.gesture) timeline.push([now, 'gesture', e.gesture]);
+      if (e.icon && ICONS[e.icon]) { icons.length = 0; icons.push({ k: e.icon, t0: now + 120, life: Math.min(2600, e.hold) }); }
+      if (e.eyes || e.brow > 0) nextBlink = Math.max(nextBlink, now + e.hold * (e.eyes === 'closed' || e.brow > 0 ? 1 : .4));  // wide eyes hold open
+      nextGlance = Math.max(nextGlance, now + e.hold + 4000);
+    }
+    // speech: the mouth opens on the vowels, half on the consonants, shuts between the words and rests at the
+    // stops; a stressed word nods, a question cocks the head
+    // speech, as game dialogue animates it: one open mouth per syllable (a vowel group), held a beat, a half-shut
+    // mouth between, shut between the words, rests at the stops; a cheerful mood rests on a smile. Per letter it
+    // flapped at fifteen a second, which read as jitter. A stressed word nods, a question cocks the head
+    function say(text, after) {
+      const now = performance.now();
+      for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth') timeline.splice(k, 1);
+      const rest = ['happy', 'laugh', 'wave', 'yes', 'shy'].includes(after) && ov.smile ? 'smile' : null;
+      if (breathPhase > .45) breathPhase = 0;  // a breath in before the first word
+      let t = now + 120, n = 0;
+      for (const tok of String(text).slice(0, 360).match(/[\p{L}']+|[.!?]+|[,;:]|\s+/gu) || []) {
+        if (/^\p{L}/u.test(tok)) {
+          const syl = Math.max(1, (tok.toLowerCase().match(/[aeiouyäöü]+/g) || []).length);
+          const stress = tok.length > 6 || /^[A-ZÄÖÜ]/.test(tok);
+          for (let k = 0; k < syl; k++) {
+            const big = stress && k === 0 ? 'open3' : Math.random() < .55 ? 'open2' : 'open1';
+            timeline.push([t, 'mouth', big], [t, 'blip', big === 'open3']); t += 105 + Math.random() * 35;
+            if (k < syl - 1) { timeline.push([t, 'mouth', 'open1']); t += 55; }
+          }
+          timeline.push([t, 'mouth', rest]); t += 70;
+          if (stress && ++n % 3 === 0) timeline.push([t - 200, 'gesture', 'beat']);
+        } else if (/[,;:]/.test(tok)) t += 200;
+        else if (/[.!?]/.test(tok)) {
+          if (tok.includes('?')) timeline.push([t, 'gesture', 'cock']);
+          if (tok.includes('!')) timeline.push([t - 150, 'gesture', 'beat']);
+          t += 360;
+        }
+      }
+      timeline.push([t, 'mouth', null]);
+      if (after) timeline.push([t + 150, 'emote', after]);
+      speakTill = t;
+      return t - now;
+    }
+    // listening: one attentive tilt and a small smile per burst of typing, the smile kept while the keys go
+    let listenTill = 0, speakTill = 0, brow = 0, browTo = 0;
+    const voiceSeed = [...(idle.base || '')].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7);
+    function listen() {
+      const now = performance.now();
+      if (now > listenTill + 1500 && !acts.length) timeline.push([now, 'gesture', 'tilt']);
+      if (!mouthNow || mouthNow === 'smile') { set('mouth', 'smile'); for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth' && timeline[k][2] === null && timeline[k].listen) timeline.splice(k, 1); const e = [now + 2200, 'mouth', null]; e.listen = 1; timeline.push(e); }
+      listenTill = now;
+    }
+    p._soul = { emote, say, listen };
     // sparkles: plus-shaped stars glowing up and fading in the background around her
     const sparks = Array.from({ length: 6 }, () => ({}));
     function place(s, fresh) {
@@ -2373,7 +2656,7 @@
     const rand = (a, b) => a + Math.random() * (b - a);
     const t0 = performance.now();
     let nextBlink = t0 + rand(1500, 3500), nextSmirk = t0 + rand(12000, 20000), nextBlush = t0 + rand(20000, 30000),
-      nextGlance = t0 + rand(6000, 10000);
+      nextGlance = t0 + rand(6000, 10000), nextMoment = t0 + rand(14000, 24000);
     const timeline = [];  // [when, overlay, value]
     let last = 0;
     // a breath: in quickly, out slower, a short rest; its own clock drifts a little so it never feels metronomic
@@ -2400,13 +2683,27 @@
         nextGlance = now + hold + rand(15000, 30000);
         nextBlink = Math.max(nextBlink, now + hold + 1500);
       }
+      if (now > nextMoment && !acts.length && !mouthNow) {
+        const r = Math.random();
+        if (r < .4) timeline.push([now, 'mouth', 'smile'], [now, 'gesture', 'tilt'], [now + 2600, 'mouth', null]);
+        else if (r < .7) timeline.push([now, 'mouth', 'smile'], [now, 'gesture', 'beat'], [now + 520, 'gesture', 'beat'], [now + 1040, 'gesture', 'beat'], [now + 1900, 'mouth', null]);  // a little hum along to something
+        else timeline.push([now, 'gesture', 'ponder']);
+        nextMoment = now + rand(22000, 45000);
+      }
       if (now > nextSmirk) { const hold = rand(2500, 4000); timeline.push([now, 'smirk', 1], [now + hold, 'smirk', 0]); nextSmirk = now + hold + rand(25000, 45000); }
       if (now > nextBlush) { const hold = rand(3000, 5000); timeline.push([now, 'blush', 1], [now + hold, 'blush', 0]); nextBlush = now + hold + rand(35000, 60000); }
-      for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][0] <= now) { set(timeline[k][1], timeline[k][2]); timeline.splice(k, 1); }
+      for (let k = 0; k < timeline.length; k++) if (timeline[k][0] <= now) {
+        const [, n, v] = timeline.splice(k--, 1)[0];
+        if (n === 'emote') emote(v); else if (n === 'blip') blip(voiceSeed, v); else set(n, v);
+      }
       const t = now / 1000, dt = last ? Math.min(.1, t - last) : 0; last = t;
       for (const n in fade) if (state[n] !== target[n]) {
         const d = dt / fade[n];
         state[n] = target[n] > state[n] ? Math.min(target[n], state[n] + d) : Math.max(target[n], state[n] - d);
+        dirty = true;
+      }
+      for (const a of Object.values(arms)) if (a.q !== a.to) {  // an arm rises in about a quarter second, lowers a little slower
+        a.q = a.to > a.q ? Math.min(1, a.q + dt / .26) : Math.max(0, a.q - dt / .34);
         dirty = true;
       }
       if (dirty) {  // the fade's curve, not its linear clock
@@ -2432,10 +2729,50 @@
       }
       // the head rides on the shoulders a beat behind them, as a real one does: risen together it read as one block
       const breathLate = breathCurve((breathPhase + .94) % 1);
+      // the head's pose: a slow drift of its own (a living head is never still) plus the gestures playing
+      const pose = calm ? { x: 0, y: 0, r: 0 } : { x: 2.2 * Math.sin(t * .31) + 1.3 * Math.sin(t * .73 + 2), y: 0, r: .012 * Math.sin(t * .23 + 1) + .008 * Math.sin(t * .57) };
+      // the pointer near her and moving: her eyes go to it and her head turns a little after them
+      if (!calm && now - ptr.t < 2500 && now > speakTill) {  // speaking, she looks at you, not at the pointer
+        if (!(frameNo++ % 12)) box = p.getBoundingClientRect();
+        const rel = (ptr.x - box.left - box.width / 2) / box.width, up = (ptr.y - box.top) / box.height;
+        const near = Math.abs(rel) < 1.6 && up > -.3 && up < 1.3;
+        gaze += ((near ? Math.max(-1, Math.min(1, rel * 1.4)) : 0) - gaze) * Math.min(1, dt * 3);
+      } else gaze += (0 - gaze) * Math.min(1, dt * 1.5);
+      const side = gaze > .45 ? 'glance' : gaze < -.45 ? 'glance_l' : null;
+      if (side !== lookSide) { lookSide = side; dirty = true; }
+      pose.x += gaze * B * .3; pose.yaw = gaze * B * .7; pose.r += gaze * .012;
+      if (now < speakTill && !calm) {  // a speaker's head is never still: it bobs a little with the words and sways
+        const k = Math.min(1, (speakTill - now) / 400, (now - speakTill + 99999) / 400);
+        pose.y += k * B * .35 * Math.abs(Math.sin(t * 5.3)); pose.r += k * .014 * Math.sin(t * 1.7); pose.yaw += k * B * .4 * Math.sin(t * 1.1);
+      }
+      let lift = 0;
+      for (let k = acts.length - 1; k >= 0; k--) {
+        const u = (now - acts[k][0]) / 1000 / acts[k][2];
+        if (u >= 1) { acts.splice(k, 1); continue; }
+        const g = GEST[acts[k][1]].f(Math.max(0, u)), m = acts[k][3] || 1;
+        pose.x += (g.x || 0) * B * m; pose.y += (g.y || 0) * B; pose.r += (g.r || 0) * m; pose.yaw += (g.yaw || 0) * B * m; lift += (g.y || 0) * B;
+      }
+      for (const k of ['x', 'y', 'r']) {  // underdamped: a quick head leaves the hair swinging
+        vel[k] += ((pose[k] - lag[k]) * 70 - vel[k] * 6.5) * dt;
+        lag[k] += vel[k] * dt;
+      }
       for (let b = 0; b < NB; b++) {
         const y = bRow[b], late = ease(Math.min(1, Math.max(0, (idle.chest - y) / (idle.chest - idle.mouth[3]))));
-        bdy[b] = -Math.round((breath + (breathLate - breath) * late) * bBreath[b] * 3);
-        bdx[b] = Math.round(bHair[b] * hairRow[y] + bCloak[b] * cloakRow[y]);
+        const h = bHead[b], hang = bHang[b] * (1 - h);
+        const ox = bX[b] - piv[0], oy = y - piv[1];
+        // a turn about the neck: the point moves by the roll times its arm, plus the head's shift
+        const hdx = pose.x - oy * pose.r, hdy = pose.y + ox * pose.r;
+        const ldx = lag.x - oy * lag.r, ldy = lag.y + ox * lag.r;
+        const tip = h * bHair[b] * .45;  // strands on the head trail it too, at most an art pixel (more doubled the outline)
+        bdy[b] = -Math.round((breath + (breathLate - breath) * late) * bBreath[b] * 3) + Math.round(h * hdy + hang * ldy + tip * Math.max(-B, Math.min(B, ldy - hdy)) + (1 - h) * bBreath[b] * lift * .4);
+        bdx[b] = Math.round(bHair[b] * hairRow[y] + bCloak[b] * cloakRow[y] + h * hdx + hang * ldx + tip * Math.max(-B, Math.min(B, ldx - hdx)) + bFace[b] * pose.yaw
+          + (arm.q === 1 && bArm[b] ? bArm[b] * B * 1.3 * Math.sin(t * 8.5) : 0));
+      }
+      brow += (browTo - brow) * Math.min(1, dt * 14);  // brows jump fast and settle
+      if (Math.abs(brow) > .02) for (let b = 0; b < NB; b++) if (bBrow[b]) bdy[b] -= Math.round(bBrow[b] * brow * B);
+      for (const a of Object.values(arms)) if (a.q > 0 && a.q < 1) {
+        const off = Math.round((1 - ease(a.q)) * 3 * B);
+        for (const b of a.blocks) bdy[b] += off;
       }
       for (let k = 0; k < zone.length; k++) {
         const i = zone[k], y = (i / W) | 0, x = i - y * W, b = blockOf[i];
@@ -2459,6 +2796,23 @@
         ctx.fillRect(sp.x - B, sp.y, B, B); ctx.fillRect(sp.x + B, sp.y, B, B); ctx.fillRect(sp.x, sp.y - B, B, B); ctx.fillRect(sp.x, sp.y + B, B, B);
       }
       ctx.globalAlpha = 1;
+      for (let k = icons.length - 1; k >= 0; k--) {
+        const ic = icons[k], age = (now - ic.t0) / 1000;
+        if (age > ic.life / 1000) { icons.splice(k, 1); continue; }
+        if (age < 0) continue;
+        const [col, rows] = ICONS[ic.k];
+        const pop = age < .28 ? Math.sin(age / .28 * Math.PI) : 0;  // it hops up as it appears, then bobs
+        const C = 2 * B;  // an icon pixel is two art pixels: at one it read as a speck
+        const x0 = Math.min(W - C * rows[0].length - B, Math.round((hx + ew * .85 + pose.x) / B) * B);
+        const y0 = Math.max(5 * B, Math.round((idle.eyes[1] - ew * 1.35 + pose.y - pop * B * 2 + Math.sin(age * 5) * B * .5) / B) * B);
+        ctx.globalAlpha = Math.min(1, age / .08, (ic.life / 1000 - age) / .3);
+        rows.forEach((row, ry) => [...row].forEach((c, rx) => {
+          if (c === '.') return;
+          ctx.fillStyle = c === '#' ? '#1a1020' : c === 'w' ? '#ffffff' : col;
+          ctx.fillRect(x0 + rx * C, y0 + ry * C, C, C);
+        }));
+        ctx.globalAlpha = 1;
+      }
     }
     requestAnimationFrame(frame);
   }
@@ -2540,6 +2894,29 @@
     });
   }
 
+  // her portrait speaks a reply: the mood leads when it's a gesture (a wave, a nod), else it follows the words
+  async function speak(m) {
+    let pt;
+    for (let k = 0; k < 40 && !(pt = document.querySelector('.portrait.alive'))?._soul; k++) await new Promise(r => setTimeout(r, 100));
+    if (!pt?._soul) return;
+    const bubble = [...document.querySelectorAll('.msg.bot p')].at(-1);
+    const typeOut = d => {  // the words appear as she speaks them
+      if (!bubble || bubble.textContent !== m.text) return;
+      const t0 = performance.now();
+      bubble.style.minHeight = bubble.offsetHeight + 'px';
+      const step = now => {
+        const k = Math.min(1, (now - t0) / d);
+        bubble.textContent = m.text.slice(0, Math.ceil(m.text.length * k));
+        if (k < 1 && bubble.isConnected) requestAnimationFrame(step); else { bubble.textContent = m.text; bubble.style.minHeight = ''; }
+      };
+      requestAnimationFrame(step);
+    };
+    if (['wave', 'yes', 'no', 'surprised', 'excited'].includes(m.mood)) {  // a reaction leads; a wink or a laugh lands after the words
+      if (bubble) bubble.textContent = '';
+      pt._soul.emote(m.mood);
+      setTimeout(() => { if (bubble) bubble.textContent = m.text; typeOut(pt._soul.say(m.text, 'happy')); }, 900);
+    } else typeOut(pt._soul.say(m.text, m.mood));
+  }
   async function soulSend(extra = {}) {
     const text = $('input').value.trim();
     if (!text) return $('input').focus();
@@ -2577,10 +2954,14 @@
           soul.job = null; store.set('soul.job', null);
           if (j.state === 'error') toast(j.error || 'Soulforge failed.', true);
           await loadAgents();
+          const said = soul.agents.find(x => x.slug === soul.current)?.messages.at(-1);
+          if (j.state !== 'error' && said?.role === 'bot' && said.mood) speak(said);
           break;
         }
         const el = $('soul-working');
         if (state.forge === 'soul') el ? paintWorking(el, soul.job) : renderSoul();
+        const pt = document.querySelector('.portrait.alive');
+        if (pt?._soul && soul.job.agent === soul.current && /Thinking/.test(j.status || '') && (Date.now() - (pt._thought || 0)) > 3800) { pt._thought = Date.now(); pt._soul.emote('thinking'); }
         await new Promise(r => setTimeout(r, 1000));
       }
     } finally { soulFollowing = false; }
