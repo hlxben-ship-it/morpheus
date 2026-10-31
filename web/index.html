@@ -660,8 +660,8 @@
     background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 2px, transparent 2px 4px); }
   .dlg-name { font: 400 17px/1 var(--px); letter-spacing: .06em; padding: 9px 16px 8px; text-shadow: 2px 2px 0 #0b0820; }
   .dlg-name small { font: 400 15px/1 var(--term); letter-spacing: .04em; color: color-mix(in srgb, var(--host-frame) 55%, #fff); margin-left: 8px; }
-  .dlg-box { align-self: stretch; display: flex; gap: 16px; align-items: flex-start; padding: 14px 18px 18px 14px; cursor: default; }
-  .dlg-face { flex: none; width: 148px; aspect-ratio: 1; position: relative; overflow: hidden; border-radius: 4px;
+  .dlg-box { align-self: stretch; display: flex; gap: 16px; align-items: flex-start; padding: 12px 18px 16px 12px; cursor: default; }
+  .dlg-face { flex: none; width: 128px; aspect-ratio: 1; position: relative; overflow: hidden; border-radius: 4px;
     background: #0b0820; box-shadow: 0 0 0 2px rgba(233, 228, 255, .5), 0 0 0 4px #0b0820; }
   .dlg-face > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
   .dlg-face .portrait { position: absolute; aspect-ratio: var(--ar); }
@@ -687,11 +687,12 @@
   .dlg-say:empty { display: none; }
   .dlg-say:not(:empty) + .dlg-wait { display: block; margin-top: 10px; font-size: 18px; color: color-mix(in srgb, var(--host-frame) 45%, #cfc8f0); }
   .msg.dlg.working { background: none; border: 0; padding: 0; box-shadow: none; clip-path: none; animation: rise .35s ease-out both; }
-  /* the name tab sits on the box's edge; the speaking box stays in view over the picture, as a game's dialogue
-     sits over the scene, and slides back to its place under it once the picture's end scrolls up */
+  /* the name tab sits on the box's edge. The picture above her box is sized so both fit the screen: a box pinned
+     over the picture lost to the pictures' z-index and hid her name and face */
   .dlg-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
   .dlg-wrap .dlg-name { margin: 0 0 -3px 14px; z-index: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-  .msg.dlg.speaking .dlg-wrap { position: sticky; bottom: 10px; z-index: 5; }
+  .msg.dlg.latest .out img, .msg.dlg.latest .out video, .msg.dlg.working img.live {
+    max-height: max(220px, calc(100vh - 540px)); width: auto; max-width: 100%; object-fit: contain; }
   /* a new line opens like a game window: the box unfolds from its middle in a few hard steps, the tab drops in */
   .msg.dlg.speaking.typing .dlg-box, .msg.dlg.speaking.working .dlg-box { animation: dlg-open .22s steps(4, end) both; }
   .msg.dlg.speaking.typing .dlg-name, .msg.dlg.speaking.working .dlg-name { animation: dlg-tab .3s steps(3, end) both; }
@@ -1143,6 +1144,8 @@
     hostAfterRender();
     // the picture that just landed loads at once, so the reveal plays on the picture and not on an empty box
     col.querySelectorAll('.fresh img').forEach(i => { i.loading = 'eager'; i.addEventListener('load', scrollDown, { once: true }); });
+    // her box sits under the newest picture: once it has its height, she is in view
+    if (host) col.querySelectorAll('.latest .out img').forEach(i => i.complete || i.addEventListener('load', scrollDown, { once: true }));
     scrollDown();
   }
   const scrollDown = () => { $('thread').scrollTop = $('thread').scrollHeight; };
@@ -1267,7 +1270,7 @@
       if (m.previews && m.previews !== frame) {
         frame = m.previews;
         const next = new Image();
-        next.onload = () => { live.src = next.src; live.hidden = false; };
+        next.onload = () => { const first = live.hidden; live.src = next.src; live.hidden = false; if (first && host) scrollDown(); };
         next.src = `/api/job/${m.job}/preview?n=${frame}`;
       }
     };
