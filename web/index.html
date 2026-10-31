@@ -689,6 +689,7 @@
   .msg.dlg.working { background: none; border: 0; padding: 0; box-shadow: none; clip-path: none; animation: rise .35s ease-out both; }
   /* the name tab sits on the box's edge. The picture above her box is sized so both fit the screen: a box pinned
      over the picture lost to the pictures' z-index and hid her name and face */
+  .msg.bot > .dlg-wrap ~ .out, .msg.bot > .dlg-wrap ~ img.live, .msg.bot > .dlg-choices ~ .out { margin-top: 14px; }
   .dlg-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
   .dlg-wrap .dlg-name { margin: 0 0 -3px 14px; z-index: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .msg.dlg.latest .out img, .msg.dlg.latest .out video, .msg.dlg.working img.live {
@@ -699,11 +700,14 @@
   @keyframes dlg-open { from { transform: scaleY(.08); filter: brightness(1.8); } }
   @keyframes dlg-tab { from { transform: translateY(10px); opacity: 0; } }
   /* older lines: a compact log, small face, no name tab, so the thread stays readable */
-  .msg.dlg.past .dlg-name { display: none; }
-  .msg.dlg.past .dlg-box { padding: 8px 12px 8px 8px; gap: 12px; align-items: center; background: linear-gradient(180deg, rgba(48, 40, 128, .7), rgba(20, 15, 64, .78));
+  /* every line is this compact box, the live one too: no big talking head, the picture is the star */
+  .msg.dlg .dlg-name { display: none; }
+  .msg.dlg .dlg-box { padding: 8px 12px 8px 8px; gap: 12px; align-items: center; background: linear-gradient(180deg, rgba(48, 40, 128, .7), rgba(20, 15, 64, .78));
     border-width: 2px; box-shadow: 0 0 0 1px #0b0820, inset 0 0 0 1px color-mix(in srgb, var(--host-frame) 45%, transparent); }
-  .msg.dlg.past .dlg-face { width: 52px; }
-  .msg.dlg.past .dlg-text { font-size: 20px; min-height: 0; color: #dcd6f6; }
+  .msg.dlg .dlg-face { width: 52px; }
+  .msg.dlg .dlg-text { font-size: 20px; min-height: 0; }
+  .msg.dlg.past .dlg-text { color: #dcd6f6; }
+  .msg.dlg .dlg-next { display: none; }
   /* the empty thread: she greets */
   .hero .msg.dlg { width: min(640px, 100%); margin: 6px auto 4px; text-align: left; animation: none; }
   .hero.hosted > img, .hero.hosted .greet { display: none; }
@@ -975,6 +979,8 @@
   }
   function addMessage(m, s = ensureSession()) {
     if (!s.messages.length && !s.kind) s.kind = state.mode;  // the first message fixes the kind
+    // her greeting stays on top of the thread as history once you answer it
+    if (host && greeting && !s.messages.length && m.role === 'user') { s.messages.push({ role: 'bot', text: greeting.text, mood: greeting.mood }); greeting = null; }
     s.messages.push(m);
     if (!s.title && m.role === 'user') s.title = (m.kind ? m.kind + ': ' : '') + (m.text || '').slice(0, 48);
     s.updated = Date.now();
@@ -1164,7 +1170,10 @@
     }
     const latest = s.messages.findLast(m => m.image || m.video);  // shown large, the older ones as thumbnails
     // the host speaks in the newest box with words (or the one she is working in); older boxes are a compact log
-    speaker = host ? s.messages.findLast(m => m.role === 'bot' && (m.text || m.job)) : null;
+    // once the user has spoken, her last box is history at once; she speaks again in the box for the new turn
+    const last = s.messages.at(-1);
+    speaker = host && last?.role === 'bot' && (last.text || last.job) ? last : null;
+    if (host && !speaker) { skipTyping?.(); hostFace?._soul?.hush?.(); }  // she stops mid-line: it's your turn
     s.messages.forEach(m => col.append(messageEl(m, m === latest)));
     hostAfterRender();
     // the picture that just landed loads at once, so the reveal plays on the picture and not on an empty box
@@ -1186,9 +1195,9 @@
     if (m.job) return workingEl(m);
     el.className = 'msg bot' + (m.error ? ' err' : '') + (m === fresh ? ' fresh' : '') + (latest ? ' latest' : '');
     if (m.text && !host) el.innerHTML = `<p>${esc(m.text)}</p>`;
+    if (m.text && host) dialogue(el, m, m === speaker);  // she speaks first, the picture follows under her words
     if (m.image) el.append(imageCard(m.image));
     if (m.video) el.append(videoCard(m.video));
-    if (m.text && host) dialogue(el, m, m === speaker);
     return el;
   }
 
@@ -1278,7 +1287,7 @@
       const pct = m.kind === 'swap' ? m.pct || 0 : m.total ? 100 * m.step / m.total : null;
       if (!el.firstChild) {
         el.innerHTML = '<p></p><div class="progress" hidden><i></i></div><img class="live" alt="" hidden>';
-        if (host) dialogue(el, m, m === speaker);
+        if (host) { dialogue(el, m, m === speaker); el.append(el.querySelector('img.live')); }  // the preview grows under her box
       }
       if (host) {  // her words as soon as she has them; under them what's happening, the dots say she's at it
         const p = el.querySelector('p');
@@ -3022,6 +3031,7 @@
     if (!pt._started) { pt._started = true; livePortrait(pt, host.live, false); }
     for (let k = 0; k < 50 && !pt._soul; k++) await new Promise(r => setTimeout(r, 100));
     if (!pt._soul || !speaker) return;
+    scrollDown();  // her box got its full height only now: keep it in view, not cut off by the input
     pt._soul.think(!!speaker.job);
     if (speaker === fresh && !spoken.has(speaker) && speaker.text) hostSpeak(speaker);
   }
