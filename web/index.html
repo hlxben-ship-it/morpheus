@@ -2038,6 +2038,11 @@
             back.onclick = () => { $('input').value = 'Back to the locked-in image'; soulSend({ restore: true }); };
             el.append(' ', back);
           }
+          // the animation is drawn from this picture; same label logic as the button under the portrait
+          const wake = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in',
+            textContent: a.idle ? 'Wake up the new look' : `Bring ${a.name} to life` });
+          wake.onclick = () => { $('input').value = `Bring ${a.name} to life`; soulSend({ idle: true }); };
+          el.append(' ', wake);
         }
       }
       // the open question after a pick: one click locks it in, a chat message fine-tunes it instead

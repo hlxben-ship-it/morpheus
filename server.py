@@ -267,7 +267,7 @@ POLISH_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
-        "action": {"type": "string", "enum": ["edit", "undo", "restore", "none"]},
+        "action": {"type": "string", "enum": ["edit", "undo", "restore", "wake", "none"]},
         "instruction": {"type": "string"},
         "from_locked": {"type": "boolean"},
         "redo": {"type": "boolean"},
@@ -311,6 +311,8 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
 - action "undo": the user wants the newest edit taken back.
 - action "restore": the user wants to go back to the locked-in image, dropping all edits ("back to the baseline",
   "start over from the original").
+- action "wake": the user wants her brought to life (animated) with the current picture ("bring her to life",
+  "wake her up", "animate her", "send it to the wake-up"). The newest picture is used as it is.
 - action "none": only answer or ask. instruction empty.
 For every action other than "edit", instruction is empty, from_locked and redo false, focus "whole".
 
@@ -1005,6 +1007,8 @@ class Handler(BaseHTTPRequestHandler):
             for f in (seen, locked):
                 if f:
                     f.unlink(missing_ok=True)
+        if answer["action"] == "wake":
+            return self.soul_idle(agent, said, job)
         reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
         agent["messages"] += [said, reply]
         if answer["action"] == "undo" or (answer["action"] == "edit" and answer.get("redo") and not answer["from_locked"]):

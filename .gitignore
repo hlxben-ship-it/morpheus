@@ -6,3 +6,7 @@ output/
 .venv-faceswap/
 __pycache__/
 *.log
+# E2E run data and stray Soulforge candidates stay local
+tools/e2e_runs.jsonl
+tools/e2e_seen/
+/soulforge/
