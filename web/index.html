@@ -692,7 +692,7 @@
   .dlg-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
   .dlg-wrap .dlg-name { margin: 0 0 -3px 14px; z-index: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .msg.dlg.latest .out img, .msg.dlg.latest .out video, .msg.dlg.working img.live {
-    max-height: max(220px, calc(100vh - 540px)); width: auto; max-width: 100%; object-fit: contain; }
+    max-height: max(220px, calc(100vh - 600px)); width: auto; max-width: 100%; object-fit: contain; }
   /* a new line opens like a game window: the box unfolds from its middle in a few hard steps, the tab drops in */
   .msg.dlg.speaking.typing .dlg-box, .msg.dlg.speaking.working .dlg-box { animation: dlg-open .22s steps(4, end) both; }
   .msg.dlg.speaking.typing .dlg-name, .msg.dlg.speaking.working .dlg-name { animation: dlg-tab .3s steps(3, end) both; }
@@ -708,6 +708,31 @@
   .hero .msg.dlg { width: min(640px, 100%); margin: 6px auto 4px; text-align: left; animation: none; }
   .hero.hosted > img, .hero.hosted .greet { display: none; }
   @media (max-width: 640px) { .dlg-face { width: 84px; } .dlg-text { font-size: 21px; min-height: 0; } .dlg-box { gap: 12px; padding: 10px 12px 16px 10px; } }
+
+  /* choices under her box, as a game's answer menu: a cursor jumps to the one under the pointer */
+  .dlg-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0 14px; }
+  .msg.dlg:not(.done) .dlg-choices { visibility: hidden; }
+  .msg.dlg.done .dlg-choices button { animation: choice-in .3s steps(3, end) both; }
+  .msg.dlg.done .dlg-choices button:nth-child(2) { animation-delay: .08s; } .msg.dlg.done .dlg-choices button:nth-child(3) { animation-delay: .16s; }
+  @keyframes choice-in { from { opacity: 0; transform: translateY(6px); } }
+  .dlg-choices button { position: relative; font: 400 20px/1 var(--term); color: #f4f1ff; padding: 8px 14px 8px 26px; cursor: pointer;
+    background: linear-gradient(180deg, rgba(64, 52, 168, .85), rgba(26, 20, 82, .9)); border: 2px solid #e9e4ff; border-radius: 6px;
+    box-shadow: 0 0 0 2px #0b0820, inset 0 0 0 1px color-mix(in srgb, var(--host-frame) 60%, transparent); text-shadow: 2px 2px 0 #0b0820; }
+  .dlg-choices button::before { content: ''; position: absolute; left: 10px; top: 50%; width: 7px; height: 10px; margin-top: -5px;
+    background: #f4f1ff; clip-path: polygon(0 0, 100% 50%, 0 100%); opacity: 0; }
+  .dlg-choices button:hover, .dlg-choices button:focus-visible { outline: none; background: linear-gradient(180deg, rgba(110, 86, 220, .95), rgba(48, 34, 130, .95));
+    box-shadow: 0 0 0 2px #0b0820, 0 0 18px -4px var(--host-frame); }
+  .dlg-choices button:hover::before, .dlg-choices button:focus-visible::before { opacity: 1; animation: cursor .5s steps(2, jump-none) infinite alternate; }
+  @keyframes cursor { to { translate: 3px 0; } }
+  /* the picture's progress inside her box: a pixel bar of whole blocks */
+  .dlg-bar { display: flex; gap: 3px; margin-top: 8px; }
+  .dlg-bar i { width: 12px; height: 8px; background: rgba(233, 228, 255, .16); box-shadow: 1px 1px 0 #0b0820; }
+  .dlg-bar i.on { background: color-mix(in srgb, var(--host-frame) 55%, #fff); }
+  /* her voice: a small speaker in the name tab */
+  .dlg-sound { margin-left: 10px; background: none; border: 0; padding: 0 2px; color: #f4f1ff; opacity: .55; cursor: pointer; font: 400 15px/1 var(--term); vertical-align: 1px; }
+  .dlg-sound:hover { opacity: 1; }
+  .dlg-sound[aria-pressed="true"] { opacity: 1; color: color-mix(in srgb, var(--host-frame) 50%, #fff); }
+  .msg.dlg.past .dlg-choices { display: none; }
 </style>
 </head>
 <body>
@@ -1127,7 +1152,7 @@
       });
       if (strip) $('all-recent').onclick = () => $('open-gallery').click();
       if (host) {
-        greeting ||= { role: 'bot', text: greet(hi), mood: 'wave' };
+        greeting ||= { role: 'bot', text: greet(hi), mood: 'wave', choices: STARTERS.sort(() => Math.random() - .5).slice(0, 3) };
         speaker = greeting;
         const el = Object.assign(document.createElement('div'), { className: 'msg bot' });
         dialogue(el, greeting, true);
@@ -1262,6 +1287,10 @@
         const line = hostLine(m, s);
         if (el.dataset.line !== line) { el.dataset.line = line; p.querySelector('.dlg-wait > span').textContent = line; }
         p.querySelector('.dlg-wait b').textContent = `${s} s`;
+        const pct = m.kind === 'swap' ? m.pct : m.total ? 100 * m.step / m.total : null;
+        let bar = p.querySelector('.dlg-bar');
+        if (pct != null && !bar) { bar = Object.assign(document.createElement('span'), { className: 'dlg-bar' }); bar.innerHTML = '<i></i>'.repeat(16); p.append(bar); }
+        if (bar) bar.querySelectorAll('i').forEach((i, k) => i.classList.toggle('on', k < Math.round(16 * (pct || 0) / 100)));
       } else el.querySelector('p').innerHTML = `${esc(text)} <b>${s} s</b>`;
       el.querySelector('.progress').hidden = pct == null;
       el.querySelector('.progress i').style.width = (pct || 0) + '%';
@@ -1308,7 +1337,8 @@
         if (out.image) await landed(out.image);
         // refine rounds before the final picture: each one stays in the thread with what was off
         (out.trail || []).forEach(t => s.messages.splice(s.messages.indexOf(m), 0, { role: 'bot', text: t.note, image: t.image }));
-        Object.assign(m, { text: out.reply, image: out.image, mood: out.mood });
+        Object.assign(m, { text: out.reply, image: out.image, mood: out.mood, choices: out.choices });
+        if (out.image && spoken.has(m)) setTimeout(() => hostFace?._soul?.emote(Math.random() < .5 ? 'excited' : 'happy'), 500);  // it's here!
       } else if (m.kind === 'swap') {
         m.video = { file: job.video, ghost: job.ghost, total: job.total, missed: job.missed, seconds: job.seconds,
           label: `Face Swap ${m.label}${job.hair ? ' + hair colour' : ''}${job.upscale > 1 ? ` · ×${job.upscale}` : ''}` };
@@ -2744,7 +2774,13 @@
         icons.length = 0;
       }
     }
-    p._soul = { emote, say, listen, think };
+    function hush() {
+      const now = performance.now();
+      for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'blip', 'gesture'].includes(timeline[k][1])) timeline.splice(k, 1);
+      set('mouth', null);
+      speakTill = now;
+    }
+    p._soul = { emote, say, listen, think, hush };
     // sparkles: plus-shaped stars glowing up and fading in the background around her
     const sparks = Array.from({ length: 6 }, () => ({}));
     function place(s, fresh) {
@@ -2955,6 +2991,13 @@
     el.classList.toggle('done', live && !m.job && !(m === fresh && !spoken.has(m)));
     const name = Object.assign(document.createElement('span'), { className: 'dlg-name' });
     name.innerHTML = `${esc(host.name)}${host.title ? `<small>${esc(host.title)}</small>` : ''}`;
+    if (live) {
+      const snd = Object.assign(document.createElement('button'), { type: 'button', className: 'dlg-sound', textContent: voiceOn() ? '♪ on' : '♪ off',
+        title: 'Her voice: a soft blip per syllable' });
+      snd.setAttribute('aria-pressed', String(voiceOn()));
+      snd.onclick = () => { try { localStorage.setItem('morpheus.voice', voiceOn() ? '0' : '1'); } catch {} snd.textContent = voiceOn() ? '♪ on' : '♪ off'; snd.setAttribute('aria-pressed', String(voiceOn())); };
+      name.append(snd);
+    }
     const box = Object.assign(document.createElement('div'), { className: 'dlg-box' });
     const slot = Object.assign(document.createElement('div'), { className: 'dlg-face' });
     if (live) slot.append(face()); else slot.innerHTML = `<img src="${host.root}${host.art.bust.file}" alt="">`;
@@ -2962,6 +3005,15 @@
     const wrap = Object.assign(document.createElement('div'), { className: 'dlg-wrap' });
     wrap.append(name, box);
     el.append(wrap);
+    if (live && !m.job && m.choices?.length) {
+      const menu = Object.assign(document.createElement('div'), { className: 'dlg-choices', role: 'group', ariaLabel: 'Suggestions' });
+      m.choices.forEach(c => {
+        const b = Object.assign(document.createElement('button'), { type: 'button', textContent: c, title: `Press ${menu.children.length + 1}` });
+        b.onclick = () => { if (state.busy) return; setMode('chat'); $('input').value = c; submit(); };
+        menu.append(b);
+      });
+      el.append(menu);
+    }
   }
   // after each render: start her face once, think while she works, speak a reply that just landed
   async function hostAfterRender() {
@@ -2983,7 +3035,14 @@
     p.textContent = '';
     el.classList.add('typing'); el.classList.remove('done');
     let stop = false;
-    const finish = () => { stop = true; p.textContent = text; el.classList.remove('typing'); if (!m.job) el.classList.add('done'); };
+    const finish = () => {
+      if (stop) return;
+      stop = true; skipTyping = null;
+      p.textContent = text; el.classList.remove('typing'); if (!m.job) el.classList.add('done');
+      if (performance.now() < spokeAt + 60000) soul.hush?.();  // skipped: she stops talking too
+    };
+    const spokeAt = performance.now();
+    skipTyping = finish;
     el.querySelector('.dlg-box').addEventListener('click', finish, { once: true });
     const go = () => {
       if (stop) return;
@@ -2992,12 +3051,21 @@
         if (stop || !p.isConnected) return;
         const k = Math.min(1, (now - t0) / d);
         p.textContent = text.slice(0, Math.ceil(text.length * k));
-        if (k < 1) requestAnimationFrame(step); else finish();
+        if (k < 1) requestAnimationFrame(step); else { stop = true; skipTyping = null; p.textContent = text; el.classList.remove('typing'); if (!m.job) el.classList.add('done'); }
       };
       requestAnimationFrame(step);
     };
     if (lead) { soul.emote(mood); setTimeout(go, 750); } else go();
   }
+  let skipTyping = null;
+  addEventListener('keydown', e => {
+    if (skipTyping && (e.key === 'Escape' || (e.target.id === 'input' && e.key.length === 1))) skipTyping();
+    // 1-3 pick her choices, as in a game menu, while the input is empty
+    if (/^[1-3]$/.test(e.key) && !e.altKey && !e.ctrlKey && !e.metaKey && !$('input').value && state.forge !== 'soul') {
+      const b = document.querySelectorAll('.msg.dlg.speaking.done .dlg-choices button')[+e.key - 1];
+      if (b) { e.preventDefault(); b.click(); }
+    }
+  });
   // what she says while she works, by what's happening: her words, not a log line
   const HOST_WAIT = {
     chat: (s, m) => m.previews || m.step ? 'I can see it forming in the mist'
@@ -3008,7 +3076,7 @@
     swap: () => 'Sewing the new face in, frame by frame',
   };
   function hostLine(m, s) {
-    const steps = m.total ? ` · step ${m.step} of ${m.total}` : '';
+    const steps = '';  // the bar shows the steps
     if (m.round) return m.round + steps;  // a refine round says what was off, in her words already
     return (HOST_WAIT[m.kind]?.(s, m) || 'One moment') + steps;
   }
@@ -3018,6 +3086,8 @@
     h => `${h}! The moon is up and the canvas is empty. What shall we dream?`,
   ];
   const greet = hi => GREETINGS[Math.random() * GREETINGS.length | 0](hi);
+  const STARTERS = ['A fox in a snowy forest, watercolour', 'A neon samurai cat, pixel art', 'A cosy cabin by a lake at dawn',
+    'A dragon made of clouds', 'A rainy Tokyo café at night', 'Surprise me with a dream'];
   addEventListener('input', e => { if (e.target.id === 'input' && hostFace?.isConnected) hostFace._soul?.listen(); });
   // nine slots; a slot fills as its candidate lands, a click picks it through the chat
   function candGrid(cands, live, a) {

@@ -98,8 +98,9 @@ CHAT_SCHEMA = {
         "width": {"type": "integer"},
         "height": {"type": "integer"},
         "mood": {"type": "string", "enum": agents.MOODS},
+        "choices": {"type": "array", "items": {"type": "string"}, "maxItems": 3},
     },
-    "required": ["reply", "action", "prompt", "model", "style", "width", "height", "mood"],
+    "required": ["reply", "action", "prompt", "model", "style", "width", "height", "mood", "choices"],
 }
 
 
@@ -160,6 +161,10 @@ Otherwise "none", and put the wanted style into the prompt.
 Formats: {sizes}. Use 1024x1024 unless something speaks against it.
 
 reply: one or two sentences about what you are doing or what you need to know. No Markdown.
+
+choices: two or three next steps the user might want, written as the user would say them, each at most six
+words, concrete for this picture: "Make it night", "Add a black cat", "Try it as pixel art", "Closer on her face".
+When you ask a question, the choices are its likely answers. Never "Again" (there is a button for that).
 Always reply in English, whatever language the user writes in."""
 
 
@@ -805,7 +810,8 @@ class Handler(BaseHTTPRequestHandler):
             answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost,
                                          see=bool(seen or latest), system=host_system_prompt())
             result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"],
-                      "mood": answer.get("mood") or "happy", "image": None}
+                      "mood": answer.get("mood") or "happy", "choices": [c.strip() for c in answer.get("choices") or [] if c.strip()][:3],
+                      "image": None}
             if req.get("_job") is not None:  # her words go out at once; the picture follows
                 req["_job"]["say"] = {"text": answer["reply"], "mood": result["mood"]}
             if answer["action"] == "edit" and not attach and isinstance(last, dict) and last.get("image"):
