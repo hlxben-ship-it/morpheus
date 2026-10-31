@@ -132,7 +132,36 @@ def flux2_klein_edit_workflow(prompt: str, image: str, width: int, height: int, 
     return graph
 
 
-SDXL_NEGATIVE = "lowres, blurry, out of focus, deformed, bad anatomy, bad hands, extra limbs, mutated, watermark, text, logo, signature"
+def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int) -> dict:
+    """Qwen-Image-Edit-2511 (20B, Q4 GGUF) with the 4-step Lightning LoRA, after ComfyUI's image_qwen_image_edit_2511
+    template. Its Qwen2.5-VL encoder reads the picture along with the instruction, which keeps who she is through
+    an outfit change better than Klein, at the cost of loading 22 GB in turns.
+    """
+    return {
+        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_K_M.gguf"}},
+        "15": {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["1", 0], "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", "strength_model": 1.0}},
+        "16": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["15", 0], "shift": 3.1}},
+        "17": {"class_type": "CFGNorm", "inputs": {"model": ["16", 0], "strength": 1.0}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
+        "20": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "21": {"class_type": "ImageScale", "inputs": {"image": ["20", 0], "upscale_method": "lanczos",
+                                                      "width": width, "height": height, "crop": "center"}},
+        "5": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {"clip": ["2", 0], "prompt": prompt, "vae": ["3", 0], "image1": ["21", 0]}},
+        "6": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {"clip": ["2", 0], "prompt": "", "vae": ["3", 0], "image1": ["21", 0]}},
+        "25": {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {"conditioning": ["5", 0], "reference_latents_method": "index_timestep_zero"}},
+        "26": {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {"conditioning": ["6", 0], "reference_latents_method": "index_timestep_zero"}},
+        "22": {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["3", 0]}},
+        "8": {"class_type": "KSampler", "inputs": {
+            "model": ["17", 0], "positive": ["25", 0], "negative": ["26", 0], "latent_image": ["22", 0],
+            "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "morpheus"}},
+    }
+
+
+SDXL_NEGATIVE ="lowres, blurry, out of focus, deformed, bad anatomy, bad hands, extra limbs, mutated, watermark, text, logo, signature"
 
 # A model is usable when all its files are present under ComfyUI/models. Entries without a
 # workflow are listed so the UI can show what could be added, but cannot be selected yet.
@@ -174,6 +203,15 @@ EDIT_MODELS = {
         "files": MODELS["flux2-klein-4b"]["files"],
         "steps": 4,
         "workflow": flux2_klein_edit_workflow,
+    },
+    "qwen-image-edit-2511": {
+        "label": "Qwen-Image-Edit 2511",
+        "note": "Best at outfit and detail changes, keeps the person and style; slower",
+        "files": ["unet/qwen-image-edit-2511-Q4_K_M.gguf", "loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+                  "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
+        "steps": 4,
+        "pixel_art": True,  # keeps a pixel-art source's grid and flat colours on its own (Soulforge skips its restyle)
+        "workflow": qwen_edit_workflow,
     },
 }
 

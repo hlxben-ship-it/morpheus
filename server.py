@@ -63,7 +63,9 @@ def ensure_comfy(timeout: float = 300) -> None:
         log = open(morpheus.ROOT / "comfyui.log", "ab")
         # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
         # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
-        reserve = other_vram_gb() + 1.0
+        # The overcount swings with what the desktop maps (11.9 to 14.9 GB on one afternoon). At 11.9 every model ran
+        # well (SDXL 13 s, Qwen-Edit 85 s); at 14.6 SDXL itself was offloaded (20 s); at 5 Qwen spilled (135 s a step)
+        reserve = min(other_vram_gb() + 1.0, 12.0)
         # our route for the loaded models, refreshed every start so an update lands
         shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
         subprocess.Popen(
@@ -219,13 +221,26 @@ accessories, colours that fit who they are.
 The art style is fixed and added automatically: pixel art, a waist-up portrait facing the viewer. Never put style,
 framing, quality or background tags into look.
 look: 12 to 25 comma-separated Danbooru tags for appearance only, in this order: 1girl or 1boy (for a man add
-"male focus, masculine, adult male"), age and build, skin, hair colour and style, eye colour, face details,
+"male focus, masculine, adult male"), age and build (always "adult woman" or "adult man"; "mature female" or
+"mature male" only for a middle-aged or older agent, never on top of "adult woman" for a young one; never "young", "teen", "petite" or "small": the art model draws those as children; every
+agent is a grown-up), skin, hair colour and style, eye colour, face details,
 outfit with colours, accessories, expression. Concrete colours, no vague words. Never "coral" for a colour (it draws
 coral reefs): say "salmon pink" or "orange".
+Never anything that carries writing (name tag, badge, sign, book cover, screen, logo, lettering): the art model
+scribbles fake letters on it. Never props held up or worn in front of the head or face (big plants, masks over the
+face, large hats that hide the hair, raised weapons): she must be fully readable. Hands stay at her sides.
+The portrait is small, so it must read at a glance: give a dark outfit at least one light or bright colour area
+(a light shirt, bright trim, a coloured scarf) and keep the face lively, with a natural skin tone and clear eyes;
+"dark circles", grey or deathly pale skin and red eyes read as a ghost unless the user asks for that.
+Show her role through what she wears, since her hands stay empty: a quill behind the ear, a gear brooch, a tool
+belt, potion vials at the belt, a coffee-bean pin, a key on a chain, a pattern on the clothes. Hats sit pushed back
+or small, so the brim never shades her eyes.
 
 Each turn picks one action:
-- "grid": 9 brand-new candidates of look, from scratch. On the first message always "grid". Later only when the user
-  wants to start over or none of the candidates is close.
+- "grid": 9 brand-new candidates, from scratch. On the first message always "grid". Later only when the user
+  wants to start over or none of the candidates is close. variations: 3 complete looks, three clearly different
+  takes on the same agent (the user's wishes in all three): other outfit cut and colours, other hairstyle, other
+  accessories, so the grid offers a real choice. Each is drawn three times. look is the first of them.
 - "refine": the user chose a candidate or wants one changed ("number 5", "the one with the scar", "like 4 but with a
   red coat", "keep the face, darker hair"). The chosen one goes into the middle of the next grid, with 8 variations
   of it around. pick is its number 1-9 in the latest grid, or 0 for the one already in the middle.
@@ -239,7 +254,7 @@ Each turn picks one action:
 - "base": the user is happy and takes a candidate as the agent's base image ("take it", "that's her", "use 7").
   pick is its number, 0 for the one in the middle.
 - "none": only answer or ask. Repeat name, soul and look unchanged; pick 0, strength "slight", variations [].
-For "grid" and "base" variations is [].
+For "base" variations is [].
 After "refine", ask in reply whether they want to lock one in or keep fine-tuning, and that they can say what to
 keep or change.
 Keep the agent's name and soul from the [Agent: …] line unless the user asks to change them.
@@ -255,28 +270,49 @@ POLISH_SCHEMA = {
         "action": {"type": "string", "enum": ["edit", "undo", "restore", "none"]},
         "instruction": {"type": "string"},
         "from_locked": {"type": "boolean"},
+        "redo": {"type": "boolean"},
+        "focus": {"type": "string", "enum": ["whole", "head", "neck"]},
         "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
-    "required": ["reply", "action", "instruction", "from_locked", "mood"],
+    "required": ["reply", "action", "instruction", "from_locked", "redo", "focus", "mood"],
 }
 
 POLISH_SYSTEM = """You polish an agent's avatar in Soulforge. The base image is settled; the user asks for detail
-changes ("fix the cloak", "lower neckline", "add a scar over the left eye"). An image edit model (FLUX.2 Klein)
-carries them out from one instruction; only the area that changes is kept, the rest stays as it is.
+changes ("fix the cloak", "a red coat instead", "add a scar over the left eye"). An image edit model carries each one
+out from your instruction; only the area that changes is kept and redrawn in the pixel-art style, the rest stays.
 
-Look at the base image with the Read tool (and the locked-in image when it is given), then:
-- action "edit": instruction is one precise English edit instruction for the edit model. Change exactly what the
-  user asked for and nothing else: never add things they didn't ask for (no hood when they said "fix the cloak"),
-  never restyle hair, face or colours they didn't mention. Name the exact part and how it should look afterwards
-  (shape, colour, position), and end with "Keep everything else exactly the same, same pixel art style."
-  When unsure what they mean, ask with "none" instead of guessing.
+Look at the base image with the Read tool (and the locked-in image when it is given) before you answer, then:
+- action "edit": instruction is one precise English edit instruction for the edit model.
+  - Change exactly what the user asked for and nothing else: never add things they didn't ask for (no hood when they
+    said "fix the cloak"), never restyle hair, face or colours they didn't mention.
+  - Start with the verb and the exact part as it looks now, then how it looks afterwards: "Replace her light green
+    shirt with a bright yellow raincoat with a high collar and long sleeves." Garments: say colour, cut and length,
+    and which layers stay on top ("the dark green apron stays over it"). For a colour change, name the parts next
+    to it that keep their colour, above all ones close to the new colour ("her darker pink cardigan stays as it
+    is"): a white dress turned pink also paled her pink cardigan.
+  - Additions: say where (from the viewer's side: "on the left of the picture, above her ear"), how big compared to
+    her face or head, and a colour that stands out against what is behind it, so the addition is clearly visible.
+    If something like it is already there (she has a leaf clip and they ask for a leaf hairpin), say so in reply and
+    make the new one clearly different (other side, other colour, bigger), unless they plainly mean to replace it.
+  - Plain colours and shapes only: never "glossy", "shiny", "realistic", "detailed", "3D" or "photo"; the picture is
+    16-bit pixel art and gloss doesn't survive.
+  - End with "Keep everything else exactly the same, same pixel art style."
+  focus: where the change happens, so a small one is drawn on a zoomed crop: "head" for things on the head or face
+  only (glasses, earrings, hairpins, a hat, a scar, make-up, eye colour), "neck" for the neck and collar (necklace,
+  choker, scarf, tie, collar, headphones around the neck), "whole" for everything else (outfits, colours of big
+  parts, anything reaching below the chest or spanning the body). When in doubt, "whole".
+  - When unsure what they mean, ask with "none" instead of guessing.
+  redo true when the message is feedback on the newest edit rather than a new change ("no, more red", "too big",
+  "that's not what I meant", "try again", "the hat looks wrong"): the newest edit is taken back and your instruction,
+  the whole corrected change, is made on the picture from before it. Then name in the instruction what the last try
+  got wrong, so this one avoids it. Otherwise redo is false.
   from_locked true when the user wants this change made on the locked-in image instead of on top of the edits
   so far ("work from the original", "start from our baseline but ..."); otherwise false.
 - action "undo": the user wants the newest edit taken back.
 - action "restore": the user wants to go back to the locked-in image, dropping all edits ("back to the baseline",
   "start over from the original").
 - action "none": only answer or ask. instruction empty.
-For every action other than "edit", instruction is empty and from_locked false.
+For every action other than "edit", instruction is empty, from_locked and redo false, focus "whole".
 
 reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit.
 
@@ -286,6 +322,17 @@ voice and character, in one to three short spoken sentences, with action "none";
 greeting, laugh at a joke, shy at a compliment, wink when teasing, excited at good news, yes/no, thinking, surprised,
 sad, angry, happy). For an edit, mood is
 "yes" or "happy"."""
+
+
+VERIFY_SCHEMA = {"type": "object", "properties": {"done": {"type": "boolean"}, "problem": {"type": "string"}},
+                 "required": ["done", "problem"]}
+VERIFY_SYSTEM = """You check one edit of a pixel-art avatar. Look at the before and after pictures with the Read tool.
+done: true when the asked change is clearly there and reads as what the user asked for (a raincoat looks like a
+raincoat, headphones look like headphones and sit where asked), and nothing they would mind changed along with it.
+Small imperfections are fine. false when the change is missing or wrong, or something visible changed that wasn't
+asked for (another hairstyle, a new ornament, a different smile, another eye colour).
+problem: when done is false, one short sentence in plain English for the user naming what is off, the most
+noticeable thing first. Empty when done is true."""
 
 
 def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False,
@@ -803,7 +850,7 @@ class Handler(BaseHTTPRequestHandler):
         agent["messages"] = [{"role": "user", "text": description}, reply]
         soulforge.save(agent)
         job["agent"] = agent["slug"]
-        self.soul_grid(agent, answer["look"], job)
+        self.soul_grid(agent, answer["look"], job, answer["variations"])
         reply["grid"] = len(agent["grids"]) - 1
         return soulforge.save(agent)
 
@@ -922,7 +969,7 @@ class Handler(BaseHTTPRequestHandler):
                              answer["variations"])
         elif answer["action"] in ("grid", "refine"):  # refine with nothing chosen yet: start fresh
             agent["look"] = answer["look"] or agent["look"]
-            self.soul_grid(agent, agent["look"], job)
+            self.soul_grid(agent, agent["look"], job, answer["variations"] if answer["action"] == "grid" else None)
             reply["grid"] = len(agent["grids"]) - 1
         return soulforge.save(agent)
 
@@ -960,7 +1007,7 @@ class Handler(BaseHTTPRequestHandler):
                     f.unlink(missing_ok=True)
         reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
         agent["messages"] += [said, reply]
-        if answer["action"] == "undo":
+        if answer["action"] == "undo" or (answer["action"] == "edit" and answer.get("redo") and not answer["from_locked"]):
             soulforge.undo(agent)
         elif answer["action"] == "restore" or (answer["action"] == "edit" and answer["from_locked"]):
             soulforge.restore(agent)
@@ -969,9 +1016,35 @@ class Handler(BaseHTTPRequestHandler):
             job["status"] = "Editing the base image …"
             ensure_comfy()
             with gpu:
-                edit = soulforge.polish(agent, answer["instruction"], live=self.soul_live(job))
+                edit = soulforge.polish(agent, answer["instruction"], live=self.soul_live(job),
+                                        focus=answer.get("focus") or "whole")
             reply["edit"] = {"before": edit["before"]["file"], "after": edit["file"], "instruction": edit["instruction"]}
+            # her own look at the result, said plainly. A second try on her own judgement never came out better in
+            # 17 judged edits (it only cost 2-4 minutes), so the user decides what happens next
+            job["status"] = "Checking the result …"
+            verdict = self.soul_verify(agent, edit, message)
+            if not verdict["done"] and verdict["problem"].strip():
+                reply["text"] += f" One thing I see: {verdict['problem']} Tell me to fix it, or undo."
         return soulforge.save(agent)
+
+    @staticmethod
+    def soul_verify(agent: dict, edit: dict, request: str) -> dict:
+        """Her own look at an edit: did the asked change really happen, cleanly? If not, a corrected instruction."""
+        CHAT_DIR.mkdir(exist_ok=True)
+        tag = uuid.uuid4().hex[:8]
+        before, after = CHAT_DIR / f"before-{tag}.png", CHAT_DIR / f"after-{tag}.png"
+        copy_picture(edit["before"]["file"], before)
+        copy_picture(edit["file"], after)
+        try:
+            verdict, _ = ask_claude(f"The user asked: \"{request}\"\nThe edit instruction was: {edit['instruction']}\n"
+                                    f"Before: {before.name}. After: {after.name}.", None, ghost=True, see=True,
+                                    system=VERIFY_SYSTEM, schema=VERIFY_SCHEMA)
+        except RuntimeError:
+            return {"done": True, "problem": "", "retry": ""}  # a failed check must not cost the edit
+        finally:
+            before.unlink(missing_ok=True)
+            after.unlink(missing_ok=True)
+        return verdict
 
     @staticmethod
     def soul_candidate(agent: dict, n: int) -> dict | None:
@@ -999,13 +1072,13 @@ class Handler(BaseHTTPRequestHandler):
             soulforge.render_variations(agent, chosen, look, denoise, progress, looks, live=self.soul_live(job))
         reply["grid"] = len(agent["grids"]) - 1
 
-    def soul_grid(self, agent: dict, look: str, job: dict) -> None:
+    def soul_grid(self, agent: dict, look: str, job: dict, looks: list[str] | None = None) -> None:
         def progress(i, grid):
             job["status"] = f"Rendering candidate {i + 1} of {soulforge.GRID} …"
             job["candidates"], job["slot"] = list(grid["candidates"]), grid["slot"]  # the page shows each as it lands
         ensure_comfy()
         with gpu:
-            soulforge.render_grid(agent, look, progress, live=self.soul_live(job))
+            soulforge.render_grid(agent, look, progress, live=self.soul_live(job), looks=looks)
 
     @staticmethod
     def soul_live(job: dict):

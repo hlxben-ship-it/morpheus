@@ -18,6 +18,7 @@ import morpheus
 ROOT = morpheus.OUTPUT / "soulforge"
 WIDTH, HEIGHT = 832, 1216
 GRID = 9
+STEPS = 20  # same-seed test at 28/20/16: 20 holds the quality of 28 at 9.6 s instead of 14 s; 16 got muddy
 
 STYLE = ("pixel art, 16-bit, retro game sprite, {look}, solo, cowboy shot, standing, from waist up, arms at sides, "
          "straight-on, head in upper third, whole head visible, top of head visible, hair fully visible, wide shot, "
@@ -25,7 +26,7 @@ STYLE = ("pixel art, 16-bit, retro game sprite, {look}, solo, cowboy shot, stand
 # exclusions only work here: "halo-free" in the positive prompt painted halos (race round 3)
 NEGATIVE = ("worst quality, low quality, halo, multiple views, 2girls, 2boys, multiple persons, clone, reference sheet, "
             "character sheet, multiple heads, inset, cropped head, cropped hair, close-up, arms up, hand on head, "
-            "text, logo, letters, " + morpheus.SDXL_NEGATIVE)
+            "text, logo, letters, name tag, english text, child, loli, shota, aged down, " + morpheus.SDXL_NEGATIVE)
 workflow = morpheus.sdxl_workflow("NoobAI-XL-v1.1.safetensors", "euler_ancestral", "normal", 5.0, NEGATIVE,
                                   prefix="masterpiece, best quality, absurdres, ")
 
@@ -81,8 +82,33 @@ def create(name: str, soul: str, look: str, description: str) -> dict:
                  "grids": [], "pick": None, "base": None, "messages": [], "created": time.time()})
 
 
-def render_grid(agent: dict, look: str, progress=None, live=None) -> dict:
-    """Render GRID candidates of one look with fresh seeds; each lands in the agent as soon as it exists."""
+def figure_top(picture: Image.Image) -> float:
+    """Where she starts, as a share of the height: everything unlike the border's colour counts as her.
+
+    NoobAI draws about one in three "wide shot"s as a tiny figure in a sea of backdrop (her top at 0.37-0.49 of
+    the height); the usable ones start in the top tenth.
+    """
+    from PIL import ImageChops, ImageFilter
+    small = picture.convert("RGB").resize((picture.width // 8, picture.height // 8))
+    w, h = small.size
+    border = [small.getpixel((x, 0)) for x in range(w)] + [small.getpixel((x, y)) for y in range(h) for x in (0, w - 1)]
+    bg = tuple(sorted(c[i] for c in border)[len(border) // 2] for i in range(3))
+    mask = ImageChops.difference(small, Image.new("RGB", small.size, bg)).convert("L")
+    box = mask.point(lambda v: 255 if v > 38 else 0).filter(ImageFilter.MinFilter(3)).getbbox()
+    return box[1] / h if box else 1.0
+
+
+SMALL = 0.25  # a figure starting lower than this is drawn again
+REROLLS = 2
+
+
+def render_grid(agent: dict, look: str, progress=None, live=None, looks: list[str] | None = None) -> dict:
+    """Render GRID candidates with fresh seeds; each lands in the agent as soon as it exists.
+
+    looks, if given, are different takes on the agent drawn in turn (with three: one per column), so a first grid
+    offers a real choice instead of nine draws of one look.
+    """
+    looks = [l for l in (looks or []) if l.strip()] or [look]
     grid = {"look": look, "prompt": prompt(look), "candidates": []}
     agent["grids"].append(grid)
     number = len(agent["grids"])
@@ -90,12 +116,16 @@ def render_grid(agent: dict, look: str, progress=None, live=None) -> dict:
         grid["slot"] = i  # the slot being drawn, where the page shows the live preview
         if progress:
             progress(i, grid)
-        seed = random.randrange(2**31)
         t = time.time()
-        picture = morpheus.generate(workflow(grid["prompt"], WIDTH, HEIGHT, seed, 28), ghost=True, progress=live)
+        own = looks[i % len(looks)]
+        for _ in range(REROLLS + 1):
+            seed = random.randrange(2**31)
+            picture = morpheus.generate(workflow(prompt(own), WIDTH, HEIGHT, seed, STEPS), ghost=True, progress=live)
+            if figure_top(picture) < SMALL:
+                break
         file = f"g{number}_{i + 1}.png"
         picture.save(folder(agent["slug"]) / file)
-        grid["candidates"].append({"file": f"soulforge/{agent['slug']}/{file}", "seed": seed, "look": look,
+        grid["candidates"].append({"file": f"soulforge/{agent['slug']}/{file}", "seed": seed, "look": own,
                                    "seconds": round(time.time() - t, 1)})
         save(agent)
     return grid
@@ -108,7 +138,7 @@ STRENGTH = {"slight": 0.5, "strong": 0.75, "bold": 0.85}
 
 def variation_workflow(prompt_text: str, image: str, seed: int, denoise: float) -> dict:
     """The text-to-image graph, started from a picture in ComfyUI/input instead of empty noise."""
-    graph = workflow(prompt_text, WIDTH, HEIGHT, seed, 28)
+    graph = workflow(prompt_text, WIDTH, HEIGHT, seed, STEPS)
     del graph["7"]
     graph["20"] = {"class_type": "LoadImage", "inputs": {"image": image}}
     graph["21"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["20", 0], "vae": ["1", 2]}}
@@ -155,36 +185,85 @@ def render_variations(agent: dict, center: dict, look: str, denoise: float, prog
 
 
 EDIT_MODEL = "flux2-klein-4b-edit"
+# Qwen-Image-Edit reads the picture with a vision model before it edits: outfit changes keep her face, pose and
+# the clothing's shape where Klein repainted the whole torso; Klein stays for when it isn't installed
+EDIT_MODELS = ["qwen-image-edit-2511", EDIT_MODEL]
 
 
-def polish(agent: dict, instruction: str, live=None) -> dict:
-    """One edit of the base image by instruction (FLUX.2 Klein), kept only where the picture really changed.
+def edit_model() -> str:
+    return next(m for m in EDIT_MODELS if morpheus.installed(m))
 
-    Klein isn't a pixel-art model and shifts the whole picture a little; pasting back only the changed area keeps
+
+UNCHANGED = 0.002  # an edit touching less than this share of the picture counts as not done
+
+
+def changed_share(mask: Image.Image) -> float:
+    return sum(mask.point(lambda v: 1 if v > 128 else 0).getdata()) / (mask.width * mask.height)
+
+
+# Small additions get a zoomed crop: at the whole picture's scale headphones around the neck are a few dozen pixels
+# and came out as two brown blobs; on the crop (about 2x) Qwen drew the orange pair with its band. The windows are
+# share of width and of height, from where the figure starts (a waist-up portrait: the head in the upper third).
+FOCUS = {"head": (0.1, -0.12, 0.9, 0.42), "neck": (0.12, 0.08, 0.88, 0.55)}  # generous: dark hair on a dark
+# backdrop starts up to a tenth higher than figure_top() sees
+
+
+def focus_box(source: Image.Image, focus: str) -> tuple[int, int, int, int] | None:
+    if focus not in FOCUS:
+        return None
+    x0, y0, x1, y1 = FOCUS[focus]
+    top = figure_top(source)
+    W, H = source.size
+    return (int(x0 * W), max(0, int((top + y0) * H)), int(x1 * W), min(H, int((top + y1) * H)))
+
+
+def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> dict:
+    """One edit of the base image by instruction (Qwen-Image-Edit, else FLUX.2 Klein), kept only where the picture
+    really changed.
+
+    The edit model isn't a pixel-art model and shifts the whole picture a little; pasting back only the changed area keeps
     everything else pixel-identical to the base. The result becomes the new base; the edit remembers the one before.
     """
     before = agent["base"]
-    source = Image.open(morpheus.OUTPUT / before["file"]).convert("RGB")
+    whole = Image.open(morpheus.OUTPUT / before["file"]).convert("RGB")
+    box = focus_box(whole, focus)
+    source = whole.crop(box) if box else whole
     staged = morpheus.COMFY_INPUT / "morpheus" / f"soul_{agent['slug']}_polish.png"
     staged.parent.mkdir(parents=True, exist_ok=True)
     source.save(staged)
-    seed = random.randrange(2**31)
     w, h = morpheus.edit_size(*source.size)
-    m = morpheus.EDIT_MODELS[EDIT_MODEL]
+    model = edit_model()
+    m = morpheus.EDIT_MODELS[model]
     t = time.time()
     try:
-        edited = morpheus.generate(m["workflow"](instruction, f"morpheus/{staged.name}", w, h, seed, m["steps"]),
-                                   ghost=True, progress=live).convert("RGB").resize(source.size, Image.LANCZOS)
+        # an edit model now and then hands the picture back all but unchanged; a second seed usually does it
+        for _ in range(2):
+            seed = random.randrange(2**31)
+            edited = morpheus.generate(m["workflow"](instruction, f"morpheus/{staged.name}", w, h, seed, m["steps"]),
+                                       ghost=True, progress=live).convert("RGB").resize(source.size, Image.LANCZOS)
+            changed = changed_share(change_mask(source, edited, 40))
+            if changed >= UNCHANGED:
+                break
     finally:
         staged.unlink(missing_ok=True)
-    mixed = Image.composite(edited, source, change_mask(source, edited))
-    # the restyle only touches what clearly changed: Klein's drift around it passes the soft mask but must stay as is
-    result = restyle(agent, mixed, source, change_mask(source, edited, 40), staged, live)
+    # the finish only touches what clearly changed: the drift around it passes the soft mask but must stay as is
+    clear = change_mask(source, edited, 40)
+    # on a zoomed face the model also drifts skin tone and redraws eyes and mouth a little (a scar came with a darker
+    # face): there only what clearly changed is taken over at all
+    mixed = Image.composite(edited, source, clear if box else change_mask(source, edited))
+    if m.get("pixel_art"):  # its own pixels are clean art already: a restyle pass only mottled flat colours
+        result = Image.composite(mixed.quantize(palette=edit_palette(source, mixed, clear), dither=Image.Dither.NONE)
+                                 .convert("RGB"), mixed, clear)
+    else:
+        result = restyle(agent, mixed, source, clear, staged, live)
+    if box:
+        whole.paste(result, box[:2])
+        result = whole
     n = len(agent.get("edits", [])) + 1
     file = f"polish_{n}_{seed}.png"  # the seed keeps an undone and redone edit from hitting the browser's cache
     result.save(folder(agent["slug"]) / file)
     edit = {"file": f"soulforge/{agent['slug']}/{file}", "seed": seed, "instruction": instruction,
-            "before": before, "seconds": round(time.time() - t, 1)}
+            "before": before, "seconds": round(time.time() - t, 1), "model": model, "changed": round(changed, 4), "focus": focus}
     agent.setdefault("edits", []).append(edit)
     agent["base"] = {"file": edit["file"], "seed": seed, "look": before.get("look"), "edit": n}
     save(agent)
@@ -214,10 +293,20 @@ def restyle(agent: dict, picture: Image.Image, source: Image.Image, mask: Image.
         staged.unlink(missing_ok=True)
         staged_mask.unlink(missing_ok=True)
     styled = styled.resize(source.size, Image.NEAREST)
-    # only the base's colours: kills Klein's gradients and gloss, which no 16-bit palette has
-    palette = source.quantize(colors=48, method=Image.Quantize.MEDIANCUT)
-    styled = styled.quantize(palette=palette, dither=Image.Dither.NONE).convert("RGB")
+    # a limited palette kills the edit model's gradients and gloss, which no 16-bit art has. It is the base's
+    # colours plus the edit's own: from the base's alone a yellow raincoat on a girl in green came out mud brown
+    styled = styled.quantize(palette=edit_palette(source, picture, mask), dither=Image.Dither.NONE).convert("RGB")
     return Image.composite(styled, picture, mask)
+
+
+def edit_palette(source: Image.Image, edited: Image.Image, mask: Image.Image) -> Image.Image:
+    """48 colours of the base and 16 of the changed area, in one palette."""
+    box = mask.point(lambda v: 255 if v > 128 else 0).getbbox() or (0, 0, *source.size)
+    base = source.quantize(colors=48, method=Image.Quantize.MEDIANCUT).getpalette()[:48 * 3]
+    new = edited.crop(box).quantize(colors=16, method=Image.Quantize.MEDIANCUT).getpalette()[:16 * 3]
+    palette = Image.new("P", (1, 1))
+    palette.putpalette(base + new + base[:3] * (256 - 64))
+    return palette
 
 
 def change_mask(a: Image.Image, b: Image.Image, threshold: int = 18) -> Image.Image:
