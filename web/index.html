@@ -648,6 +648,60 @@
     .scenes { flex-wrap: wrap; }
   }
   @media (max-width: 860px) { .forge { margin-left: 6px; } .forge button { padding: 5px 8px; } .forge span { display: none; } .soul-card .portrait { width: 96px; } .soul-card .portrait.alive { width: 208px; } .cands { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+  /* ---------- The host: Morpheus speaks in a 16-bit dialogue box, a name tab over a framed night-blue box ---------- */
+  :root { --host-frame: #ba88f1; }
+  .msg.dlg { align-self: stretch; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .dlg-name, .dlg-box { position: relative; color: #f4f1ff; border: 3px solid #e9e4ff; border-radius: 7px;
+    background: linear-gradient(180deg, rgba(64, 52, 168, .92), rgba(26, 20, 82, .94) 60%, rgba(18, 12, 58, .95));
+    box-shadow: 0 0 0 2px #0b0820, inset 0 0 0 2px color-mix(in srgb, var(--host-frame) 70%, transparent), 0 10px 30px rgba(5, 3, 20, .55),
+      0 0 26px -8px var(--host-frame); }
+  .dlg-name::after, .dlg-box::after { content: ''; position: absolute; inset: 0; border-radius: 4px; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 2px, transparent 2px 4px); }
+  .dlg-name { font: 400 17px/1 var(--px); letter-spacing: .06em; padding: 9px 16px 8px; text-shadow: 2px 2px 0 #0b0820; }
+  .dlg-name small { font: 400 15px/1 var(--term); letter-spacing: .04em; color: color-mix(in srgb, var(--host-frame) 55%, #fff); margin-left: 8px; }
+  .dlg-box { align-self: stretch; display: flex; gap: 16px; align-items: flex-start; padding: 14px 18px 18px 14px; cursor: default; }
+  .dlg-face { flex: none; width: 148px; aspect-ratio: 1; position: relative; overflow: hidden; border-radius: 4px;
+    background: #0b0820; box-shadow: 0 0 0 2px rgba(233, 228, 255, .5), 0 0 0 4px #0b0820; }
+  .dlg-face > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .dlg-face .portrait { position: absolute; aspect-ratio: var(--ar); }
+  .dlg-face .portrait canvas.live, .dlg-face .portrait > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .dlg-text { flex: 1; min-width: 0; margin: 0; font: 400 24px/1.22 var(--term); letter-spacing: .02em; white-space: pre-wrap;
+    text-shadow: 2px 2px 0 #0b0820; min-height: 3.66em; }
+  .msg.dlg.err .dlg-text { color: #ffc2cc; }
+  .msg.dlg.typing .dlg-box { cursor: pointer; }
+  /* the advance arrow: a pixel triangle bobbing under the text once she has finished */
+  .dlg-next { position: absolute; left: 50%; bottom: 4px; width: 14px; height: 8px; margin-left: -7px; background: #f4f1ff;
+    clip-path: polygon(0 0, 100% 0, 50% 100%); filter: drop-shadow(2px 2px 0 #0b0820); opacity: 0; }
+  .msg.dlg.speaking.done .dlg-next { opacity: 1; animation: next-bob .8s steps(2, jump-none) infinite; }
+  @keyframes next-bob { 0% { translate: 0 0; } 100% { translate: 0 3px; } }
+  /* her thinking: three pixel dots lighting up one by one */
+  .dots { display: inline-flex; gap: 6px; margin-left: 10px; vertical-align: middle; }
+  .dots i { width: 6px; height: 6px; background: #f4f1ff; opacity: .25; box-shadow: 2px 2px 0 #0b0820; animation: dot 1.2s steps(1) infinite; }
+  .dots i:nth-child(2) { animation-delay: .4s; } .dots i:nth-child(3) { animation-delay: .8s; }
+  @keyframes dot { 0% { opacity: 1; } 33% { opacity: .25; } }
+  .msg.dlg .dlg-text b { font: inherit; color: color-mix(in srgb, var(--host-frame) 60%, #fff); font-size: 19px; margin-left: 8px; }
+  .msg.dlg .progress { align-self: stretch; }
+  .msg.dlg.working .dlg-text::before { content: none; }
+  .dlg-say { display: block; }
+  .dlg-say:empty { display: none; }
+  .dlg-say:not(:empty) + .dlg-wait { display: block; margin-top: 10px; font-size: 18px; color: color-mix(in srgb, var(--host-frame) 45%, #cfc8f0); }
+  .msg.dlg.working { background: none; border: 0; padding: 0; box-shadow: none; clip-path: none; animation: rise .35s ease-out both; }
+  /* the name tab sits on the box's edge; the speaking box stays in view over the picture, as a game's dialogue
+     sits over the scene, and slides back to its place under it once the picture's end scrolls up */
+  .dlg-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
+  .dlg-wrap .dlg-name { margin: 0 0 -3px 14px; z-index: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .msg.dlg.speaking .dlg-wrap { position: sticky; bottom: 10px; z-index: 5; }
+  /* older lines: a compact log, small face, no name tab, so the thread stays readable */
+  .msg.dlg.past .dlg-name { display: none; }
+  .msg.dlg.past .dlg-box { padding: 8px 12px 8px 8px; gap: 12px; align-items: center; background: linear-gradient(180deg, rgba(48, 40, 128, .7), rgba(20, 15, 64, .78));
+    border-width: 2px; box-shadow: 0 0 0 1px #0b0820, inset 0 0 0 1px color-mix(in srgb, var(--host-frame) 45%, transparent); }
+  .msg.dlg.past .dlg-face { width: 52px; }
+  .msg.dlg.past .dlg-text { font-size: 20px; min-height: 0; color: #dcd6f6; }
+  /* the empty thread: she greets */
+  .hero .msg.dlg { width: min(640px, 100%); margin: 6px auto 4px; text-align: left; animation: none; }
+  .hero.hosted > img, .hero.hosted .greet { display: none; }
+  @media (max-width: 640px) { .dlg-face { width: 84px; } .dlg-text { font-size: 21px; min-height: 0; } .dlg-box { gap: 12px; padding: 10px 12px 16px 10px; } }
 </style>
 </head>
 <body>
@@ -825,7 +879,7 @@
     set(k, v) { try { localStorage.setItem('morpheus.' + k, JSON.stringify(v)); } catch {} },
   };
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const url = file => '/output/' + file.split('/').map(encodeURIComponent).join('/');
+  const url = file => file.startsWith('/') ? file : '/output/' + file.split('/').map(encodeURIComponent).join('/');
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const ICON = {
     moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>',
@@ -1047,7 +1101,7 @@
       const hour = new Date().getHours();
       const hi = hour < 12 ? 'Good morning' : hour < 18 ? 'Hello' : 'Good evening';
       const recent = state.history.slice(0, 6);
-      col.innerHTML = `<div class="hero"><img src="/logo.png" alt="">
+      col.innerHTML = `<div class="hero${host ? ' hosted' : ''}"><img src="/logo.png" alt="">
         <p class="greet">${hi} — <span>what are we dreaming today?</span></p>
         <div class="kinds">${Object.entries(KIND_INFO).map(([k, [name, what]]) =>
           `<button type="button" class="kind-card" data-k="${k}" aria-pressed="${state.mode === k}"><b>${name}</b><span>${what}</span></button>`).join('')}</div>
@@ -1066,10 +1120,22 @@
         strip.append(b);
       });
       if (strip) $('all-recent').onclick = () => $('open-gallery').click();
+      if (host) {
+        greeting ||= { role: 'bot', text: greet(hi), mood: 'wave' };
+        speaker = greeting;
+        const el = Object.assign(document.createElement('div'), { className: 'msg bot' });
+        dialogue(el, greeting, true);
+        col.querySelector('.hero').prepend(el);
+        if (!greeted) fresh = greeting;
+        hostAfterRender();
+      }
       return;
     }
     const latest = s.messages.findLast(m => m.image || m.video);  // shown large, the older ones as thumbnails
+    // the host speaks in the newest box with words (or the one she is working in); older boxes are a compact log
+    speaker = host ? s.messages.findLast(m => m.role === 'bot' && (m.text || m.job)) : null;
     s.messages.forEach(m => col.append(messageEl(m, m === latest)));
+    hostAfterRender();
     // the picture that just landed loads at once, so the reveal plays on the picture and not on an empty box
     col.querySelectorAll('.fresh img').forEach(i => { i.loading = 'eager'; i.addEventListener('load', scrollDown, { once: true }); });
     scrollDown();
@@ -1086,9 +1152,10 @@
     }
     if (m.job) return workingEl(m);
     el.className = 'msg bot' + (m.error ? ' err' : '') + (m === fresh ? ' fresh' : '') + (latest ? ' latest' : '');
-    if (m.text) el.innerHTML = `<p>${esc(m.text)}</p>`;
+    if (m.text && !host) el.innerHTML = `<p>${esc(m.text)}</p>`;
     if (m.image) el.append(imageCard(m.image));
     if (m.video) el.append(videoCard(m.video));
+    if (m.text && host) dialogue(el, m, m === speaker);
     return el;
   }
 
@@ -1176,8 +1243,18 @@
       const steps = m.total ? `Step ${m.step} of ${m.total}` : '';
       const text = m.status || (m.round ? `${m.round}${steps ? ' · ' + steps : ''}` : steps || WAIT[m.kind]?.(s)) || 'Running …';
       const pct = m.kind === 'swap' ? m.pct || 0 : m.total ? 100 * m.step / m.total : null;
-      if (!el.firstChild) el.innerHTML = '<p></p><div class="progress" hidden><i></i></div><img class="live" alt="" hidden>';
-      el.querySelector('p').innerHTML = `${esc(text)} <b>${s} s</b>`;
+      if (!el.firstChild) {
+        el.innerHTML = '<p></p><div class="progress" hidden><i></i></div><img class="live" alt="" hidden>';
+        if (host) dialogue(el, m, m === speaker);
+      }
+      if (host) {  // her words as soon as she has them; under them what's happening, the dots say she's at it
+        const p = el.querySelector('p');
+        if (!p.querySelector('.dlg-wait')) p.innerHTML = '<span class="dlg-say"></span><span class="dlg-wait"><span></span><span class="dots"><i></i><i></i><i></i></span><b></b></span>';
+        if (m.said && !p.querySelector('.dlg-say').textContent && spoken.has(m)) p.querySelector('.dlg-say').textContent = m.said.text;
+        const line = hostLine(m, s);
+        if (el.dataset.line !== line) { el.dataset.line = line; p.querySelector('.dlg-wait > span').textContent = line; }
+        p.querySelector('.dlg-wait b').textContent = `${s} s`;
+      } else el.querySelector('p').innerHTML = `${esc(text)} <b>${s} s</b>`;
       el.querySelector('.progress').hidden = pct == null;
       el.querySelector('.progress i').style.width = (pct || 0) + '%';
       // the picture forming: ComfyUI's live preview, swapped in only when a newer frame exists
@@ -1210,6 +1287,7 @@
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
         if (m.kind !== 'swap') Object.assign(m, { step: job.step, total: job.total, previews: job.previews, round: job.status });
+        if (job.say && !m.said) { m.said = job.say; if (speaker === m && hostFace?._soul) hostSpeak(m, job.say.text, job.say.mood); }
         else {
           m.status = job.state === 'waiting' ? 'Waiting for the GPU to be free …' : job.total ? `Frame ${job.frame} of ${job.total}` : 'Loading models …';
           m.pct = job.total ? 100 * job.frame / job.total : 0;
@@ -1222,7 +1300,7 @@
         if (out.image) await landed(out.image);
         // refine rounds before the final picture: each one stays in the thread with what was off
         (out.trail || []).forEach(t => s.messages.splice(s.messages.indexOf(m), 0, { role: 'bot', text: t.note, image: t.image }));
-        Object.assign(m, { text: out.reply, image: out.image });
+        Object.assign(m, { text: out.reply, image: out.image, mood: out.mood });
       } else if (m.kind === 'swap') {
         m.video = { file: job.video, ghost: job.ghost, total: job.total, missed: job.missed, seconds: job.seconds,
           label: `Face Swap ${m.label}${job.hair ? ' + hair colour' : ''}${job.upscale > 1 ? ` · ×${job.upscale}` : ''}` };
@@ -1232,9 +1310,9 @@
         m.image = out;
       }
     } catch (err) {
-      Object.assign(m, { error: true, text: err.message });
+      Object.assign(m, { error: true, text: err.message, mood: 'sad' });
     }
-    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews', 'round']) delete m[k];
+    for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews', 'round', 'said']) delete m[k];
     following.delete(id);
     fresh = m;
     setTimeout(() => { if (fresh === m) fresh = null; }, 2000); // later re-renders show it plain
@@ -1356,7 +1434,7 @@
   async function sendChat() {
     const text = $('input').value.trim();
     if (!text) return $('input').focus();
-    $('input').value = ''; grow();
+    $('input').value = ''; grow(); stashDraft();  // sent: a reload mustn't bring it back
     const s = ensureSession();
     const pic = state.chatPic;
     // a gallery picture shows by its URL; an upload keeps only a small thumbnail in the saved session
@@ -1414,7 +1492,7 @@
     const prompt = $('input').value.trim();
     if (!prompt) return $('input').focus();
     const res = options.resolutions[state.res];
-    $('input').value = ''; grow();
+    $('input').value = ''; grow(); stashDraft();
     const s = ensureSession();
     addMessage({ role: 'user', kind: KIND.manual, text: prompt }, s);
     try {
@@ -1537,7 +1615,7 @@
       return addMessage({ role: 'bot', error: true, text: 'Pick a source picture first (in the settings, or “Edit” on a result).' });
     }
     if (!prompt) return $('input').focus();
-    $('input').value = ''; grow();
+    $('input').value = ''; grow(); stashDraft();
     const s = ensureSession();
     addMessage({ role: 'user', kind: KIND.edit, text: prompt, thumb: state.editSource.file ? url(state.editSource.file) : null }, s);
     try {
@@ -1749,6 +1827,7 @@
 
   async function init() {
     options = await (await fetch('/api/options')).json();
+    await loadHost();
     buildForms();
     setMode(state.mode);
     renderSessions();
@@ -2330,14 +2409,14 @@
     try {
       pics = await Promise.all([idle.base, idle.plate, idle.rig, ...['blush', 'smirk', 'half', 'closed'].map(n => idle.frames[n])].map(load));
     } catch { return idleLoop(p); }  // frames from before the rig existed: the plain overlay loop
-    if (!p.isConnected) return;
+    if (!p.isConnected && !p._keep) return;
     const [base, plate, rig, ...ovs] = pics;
     const ov = Object.fromEntries(['blush', 'smirk', 'half', 'closed'].map((n, i) => [n, ovs[i]]));
     // the glance came later: sets drawn before it simply don't glance
     ov.glance = idle.frames.glance ? await load(idle.frames.glance).catch(() => null) : null;
     ov.glance_l = idle.frames.glance_l ? await load(idle.frames.glance_l).catch(() => null) : null;  // and the other way
     for (const n of [...MOUTHS, ...ARMS]) ov[n] = idle.frames[n] ? await load(idle.frames[n]).catch(() => null) : null;
-    if (!p.isConnected) return;
+    if (!p.isConnected && !p._keep) return;
     const W = base.naturalWidth, H = base.naturalHeight, B = idle.block || 6, N = W * H;
     const ease = x => x * x * (3 - 2 * x);
     const pixels = img => { const c = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true }); c.drawImage(img, 0, 0); return c.getImageData(0, 0, W, H).data; };
@@ -2589,7 +2668,7 @@
     // the hair on the head's spring: it chases the head, overshoots, swings back
     const lag = { x: 0, y: 0, r: 0 }, vel = { x: 0, y: 0, r: 0 };
     function emote(name) {
-      const e = EMOTES[name];
+      const e = (idle.recipes || EMOTES)[name];
       if (!e) return;
       const now = performance.now();
       for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'eyes', 'mood'].includes(timeline[k][1])) timeline.splice(k, 1);
@@ -2607,7 +2686,7 @@
     // speech, as game dialogue animates it: one open mouth per syllable (a vowel group), held a beat, a half-shut
     // mouth between, shut between the words, rests at the stops; a cheerful mood rests on a smile. Per letter it
     // flapped at fifteen a second, which read as jitter. A stressed word nods, a question cocks the head
-    function say(text, after) {
+    function say(text, after, pace = 1) {
       const now = performance.now();
       for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth') timeline.splice(k, 1);
       const rest = ['happy', 'laugh', 'wave', 'yes', 'shy'].includes(after) && ov.smile ? 'smile' : null;
@@ -2619,16 +2698,16 @@
           const stress = tok.length > 6 || /^[A-ZÄÖÜ]/.test(tok);
           for (let k = 0; k < syl; k++) {
             const big = stress && k === 0 ? 'open3' : Math.random() < .55 ? 'open2' : 'open1';
-            timeline.push([t, 'mouth', big], [t, 'blip', big === 'open3']); t += 105 + Math.random() * 35;
-            if (k < syl - 1) { timeline.push([t, 'mouth', 'open1']); t += 55; }
+            timeline.push([t, 'mouth', big], [t, 'blip', big === 'open3']); t += (105 + Math.random() * 35) * pace;
+            if (k < syl - 1) { timeline.push([t, 'mouth', 'open1']); t += 55 * pace; }
           }
-          timeline.push([t, 'mouth', rest]); t += 70;
+          timeline.push([t, 'mouth', rest]); t += 70 * pace;
           if (stress && ++n % 3 === 0) timeline.push([t - 200, 'gesture', 'beat']);
-        } else if (/[,;:]/.test(tok)) t += 200;
+        } else if (/[,;:]/.test(tok)) t += 200 * pace;
         else if (/[.!?]/.test(tok)) {
           if (tok.includes('?')) timeline.push([t, 'gesture', 'cock']);
           if (tok.includes('!')) timeline.push([t - 150, 'gesture', 'beat']);
-          t += 360;
+          t += 360 * pace;
         }
       }
       timeline.push([t, 'mouth', null]);
@@ -2645,7 +2724,19 @@
       if (!mouthNow || mouthNow === 'smile') { set('mouth', 'smile'); for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth' && timeline[k][2] === null && timeline[k].listen) timeline.splice(k, 1); const e = [now + 2200, 'mouth', null]; e.listen = 1; timeline.push(e); }
       listenTill = now;
     }
-    p._soul = { emote, say, listen };
+    let thinkOn = false, nextThink = 0;
+    function think(on) {
+      if (on === thinkOn) return;
+      thinkOn = on;
+      const now = performance.now();
+      if (on) nextThink = now;
+      else {  // back to rest: the hand down, the face plain
+        for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'eyes', 'mood', 'arm'].includes(timeline[k][1])) timeline.splice(k, 1);
+        timeline.push([now, 'arm', 0], [now, 'mouth', null], [now, 'eyes', null], [now, 'mood', {}]);
+        icons.length = 0;
+      }
+    }
+    p._soul = { emote, say, listen, think };
     // sparkles: plus-shaped stars glowing up and fading in the background around her
     const sparks = Array.from({ length: 6 }, () => ({}));
     function place(s, fresh) {
@@ -2670,7 +2761,7 @@
     const breathCurve = p => p < .38 ? ease(p / .38) : p < .86 ? 1 - ease((p - .38) / .48) : 0;
     const hairRow = new Float32Array(H), cloakRow = new Float32Array(H);
     function frame(now) {
-      if (!p.isConnected) return;
+      if (!p.isConnected) { if (p._keep) requestAnimationFrame(frame); return; }
       requestAnimationFrame(frame);
       if (now > nextBlink) {
         const slow = Math.random() < .15 ? 3 : 1;  // now and then a slow, fond blink: the lid rests a while
@@ -2695,6 +2786,7 @@
         else timeline.push([now, 'gesture', 'ponder']);
         nextMoment = now + rand(22000, 45000);
       }
+      if (thinkOn && now > nextThink && now > speakTill) { emote('thinking'); nextThink = now + 4200; }
       if (now > nextSmirk) { const hold = rand(2500, 4000); timeline.push([now, 'smirk', 1], [now + hold, 'smirk', 0]); nextSmirk = now + hold + rand(25000, 45000); }
       if (now > nextBlush) { const hold = rand(3000, 5000); timeline.push([now, 'blush', 1], [now + hold, 'blush', 0]); nextBlush = now + hold + rand(35000, 60000); }
       for (let k = 0; k < timeline.length; k++) if (timeline[k][0] <= now) {
@@ -2821,6 +2913,104 @@
     }
     requestAnimationFrame(frame);
   }
+
+  // ---------- The host: Morpheus answers in Dreamforge, in a dialogue box with her living face ----------
+  // She comes as an agent package (agents/<id>/agent.json, "glia-agent/1"): the persona, the overlays, the mood
+  // recipes. One living face is made once and moved into whichever box is speaking, so it never restarts.
+  let host = null, hostFace = null, speaker = null, greeting = null, greeted = false;
+  const spoken = new WeakSet();
+  async function loadHost() {
+    try { host = await (await fetch('/api/host')).json(); } catch { host = null; }
+    if (!host) return;
+    const r = f => f && host.root + f, a = host.art.anchors;
+    host.live = { base: r(host.art.portrait), plate: r(host.idle.plate), rig: r(host.idle.rig), block: host.art.pixel,
+      eyes: a.eyes, mouth: a.mouth, chest: a.chest, waist: a.waist, recipes: host.mood_recipes,
+      frames: Object.fromEntries(Object.entries(host.idle.overlays).map(([k, f]) => [k, r(f)])) };
+    document.documentElement.style.setProperty('--host-frame', host.colors.frame);
+  }
+  function face() {
+    if (hostFace) return hostFace;
+    const [x0, y0, x1] = host.art.bust.box, [W, H] = host.art.size, k = 100 / (x1 - x0);
+    hostFace = Object.assign(document.createElement('div'), { className: 'portrait host', _keep: true });
+    hostFace.style.cssText = `--ar:${W}/${H};width:${W * k}%;left:${-x0 * k}%;top:${-y0 * k}%`;
+    hostFace.innerHTML = `<img src="${host.live.base}" alt="">`;
+    return hostFace;
+  }
+  // a box of hers: the name tab, her face (alive when she's the one speaking), her words
+  function dialogue(el, m, live) {
+    const p = el.querySelector(':scope > p') || document.createElement('p');
+    p.className = 'dlg-text';
+    if (!el.contains(p)) p.textContent = m.text || '';
+    el.classList.add('dlg');
+    el.classList.toggle('speaking', live);
+    el.classList.toggle('past', !live);
+    el.classList.toggle('done', live && !m.job && !(m === fresh && !spoken.has(m)));
+    const name = Object.assign(document.createElement('span'), { className: 'dlg-name' });
+    name.innerHTML = `${esc(host.name)}${host.title ? `<small>${esc(host.title)}</small>` : ''}`;
+    const box = Object.assign(document.createElement('div'), { className: 'dlg-box' });
+    const slot = Object.assign(document.createElement('div'), { className: 'dlg-face' });
+    if (live) slot.append(face()); else slot.innerHTML = `<img src="${host.root}${host.art.bust.file}" alt="">`;
+    box.append(slot, p, Object.assign(document.createElement('i'), { className: 'dlg-next' }));
+    const wrap = Object.assign(document.createElement('div'), { className: 'dlg-wrap' });
+    wrap.append(name, box);
+    el.append(wrap);
+  }
+  // after each render: start her face once, think while she works, speak a reply that just landed
+  async function hostAfterRender() {
+    if (!host || !hostFace?.isConnected) return;
+    const pt = hostFace;
+    if (!pt._started) { pt._started = true; livePortrait(pt, host.live, false); }
+    for (let k = 0; k < 50 && !pt._soul; k++) await new Promise(r => setTimeout(r, 100));
+    if (!pt._soul || !speaker) return;
+    pt._soul.think(!!speaker.job);
+    if (speaker === fresh && !spoken.has(speaker) && speaker.text) hostSpeak(speaker);
+  }
+  // the words type out as she says them; a click shows them all at once
+  function hostSpeak(m, text = m.text, said = m.mood) {
+    spoken.add(m);
+    if (m === greeting) greeted = true;
+    const el = hostFace.closest('.msg.dlg'), p = el?.querySelector('.dlg-say') || el?.querySelector('.dlg-text');
+    if (!p) return;
+    const soul = hostFace._soul, mood = m.error ? 'sad' : said, lead = ['wave', 'yes', 'no', 'surprised', 'excited'].includes(mood);
+    p.textContent = '';
+    el.classList.add('typing'); el.classList.remove('done');
+    let stop = false;
+    const finish = () => { stop = true; p.textContent = text; el.classList.remove('typing'); if (!m.job) el.classList.add('done'); };
+    el.querySelector('.dlg-box').addEventListener('click', finish, { once: true });
+    const go = () => {
+      if (stop) return;
+      const d = Math.max(400, soul.say(text, lead ? 'happy' : mood || 'happy', .55)), t0 = performance.now();
+      const step = now => {
+        if (stop || !p.isConnected) return;
+        const k = Math.min(1, (now - t0) / d);
+        p.textContent = text.slice(0, Math.ceil(text.length * k));
+        if (k < 1) requestAnimationFrame(step); else finish();
+      };
+      requestAnimationFrame(step);
+    };
+    if (lead) { soul.emote(mood); setTimeout(go, 750); } else go();
+  }
+  // what she says while she works, by what's happening: her words, not a log line
+  const HOST_WAIT = {
+    chat: (s, m) => m.previews || m.step ? 'I can see it forming in the mist'
+      : !m.said ? (s < 10 ? 'Let me dream on that' : 'Weaving the threads together')
+      : s < 40 ? 'Warming up the dream engine' : s < 100 ? 'Waking the big dream engine, it rises slowly' : 'A deep dream, this one. The first takes a few minutes',
+    manual: (s, m) => m.step ? 'Painting exactly what you wrote' : 'Gathering the colours for your prompt',
+    edit: () => 'Reshaping your picture, keeping the rest',
+    swap: () => 'Sewing the new face in, frame by frame',
+  };
+  function hostLine(m, s) {
+    const steps = m.total ? ` · step ${m.step} of ${m.total}` : '';
+    if (m.round) return m.round + steps;  // a refine round says what was off, in her words already
+    return (HOST_WAIT[m.kind]?.(s, m) || 'One moment') + steps;
+  }
+  const GREETINGS = [
+    h => `${h}, dreamer. Tell me what you want to see, and I'll shape it out of the night.`,
+    h => `${h}. I've been waiting. Describe a dream, a scene, a face, and I'll weave it for you.`,
+    h => `${h}! The moon is up and the canvas is empty. What shall we dream?`,
+  ];
+  const greet = hi => GREETINGS[Math.random() * GREETINGS.length | 0](hi);
+  addEventListener('input', e => { if (e.target.id === 'input' && hostFace?.isConnected) hostFace._soul?.listen(); });
   // nine slots; a slot fills as its candidate lands, a click picks it through the chat
   function candGrid(cands, live, a) {
     const g = Object.assign(document.createElement('div'), { className: 'cands' });

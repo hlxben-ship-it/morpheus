@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import agents
 import morpheus
 import soulforge
 
@@ -96,9 +97,31 @@ CHAT_SCHEMA = {
         "style": {"type": "string"},
         "width": {"type": "integer"},
         "height": {"type": "integer"},
+        "mood": {"type": "string", "enum": agents.MOODS},
     },
-    "required": ["reply", "action", "prompt", "model", "style", "width", "height"],
+    "required": ["reply", "action", "prompt", "model", "style", "width", "height", "mood"],
 }
+
+
+def host() -> dict | None:
+    """The agent who answers in Dreamforge's chat, from her package (written now if her look is newer)."""
+    try:
+        return agents.ensure(soulforge.load(agents.HOST))
+    except Exception:
+        return agents.load(agents.HOST)  # not in Soulforge (any more) or not alive: a package alone still speaks
+
+
+def host_system_prompt() -> str:
+    """The host's persona over the picture assistant's rules; the rules win, so the prompts stay plain."""
+    h = host()
+    if not h:
+        return chat_system_prompt()
+    return (h["persona"]["system_prompt"] + "\n\nWhat you do in this app follows. These rules always win over the "
+            "persona: image prompts stay plain, detailed English, never in your voice.\n\n" + chat_system_prompt()
+            + "\n\nmood: the face you make while saying the reply: " + ", ".join(agents.MOODS) + ". \"happy\" is the "
+            "usual; \"excited\" or \"wink\" when a picture idea delights you, \"thinking\" when you ask or weigh "
+            "something, \"wave\" for hello and goodbye, \"yes\"/\"no\" for a plain answer, \"surprised\", \"shy\" "
+            "(praise), \"laugh\" (a joke), \"sad\" (something failed or isn't possible); \"angry\" almost never.")
 
 
 def chat_system_prompt() -> str:
@@ -665,6 +688,11 @@ class Handler(BaseHTTPRequestHandler):
                            for k, m in morpheus.EDIT_MODELS.items()]
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]
             return self.send_json({"models": models, "edit_models": edit_models, "styles": styles, "resolutions": RESOLUTIONS})
+        if route == "/api/host":
+            h = host()
+            return self.send_json({**h, "root": f"/agents/{h['id']}/"} if h else None)
+        if route.startswith("/agents/"):
+            return self.send_file(agents.ROOT / urllib.parse.unquote(route.removeprefix("/agents/")), agents.ROOT)
         if route == "/api/soul/agents":
             return self.send_json(soulforge.agents())
         if route == "/api/status":
@@ -775,8 +803,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # per turn, because a resumed conversation that began in German outweighs the system prompt
             answer, session = ask_claude("[Reply in English.]\n\n" + message, req.get("session") or None, ghost,
-                                         see=bool(seen or latest))
-            result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"], "image": None}
+                                         see=bool(seen or latest), system=host_system_prompt())
+            result = {"session": None if ghost else session, "reply": answer["reply"], "action": answer["action"],
+                      "mood": answer.get("mood") or "happy", "image": None}
+            if req.get("_job") is not None:  # her words go out at once; the picture follows
+                req["_job"]["say"] = {"text": answer["reply"], "mood": result["mood"]}
             if answer["action"] == "edit" and not attach and isinstance(last, dict) and last.get("image"):
                 attach = {"source": str(last["image"])}  # no picture attached: the edit is of the latest one
             if answer["action"] == "edit" and attach:
@@ -875,6 +906,10 @@ class Handler(BaseHTTPRequestHandler):
         ensure_comfy()
         with gpu:
             soulforge.idle(agent, progress, live=self.soul_live(job))
+        try:
+            agents.export(agent)  # the package follows her new look
+        except Exception:
+            traceback.print_exc()
         agent["messages"] += [said, {"role": "bot", "idle": True,
                                      "text": f"{agent['name']} is awake: breathing, hair and cloak in the air, blinking, a glance aside, a smirk now and then, a blush, "
                                              "standing in front of her own emblem, in a world of her own. "
