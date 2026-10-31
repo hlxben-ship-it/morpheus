@@ -7,6 +7,7 @@ import base64
 import json
 import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from pathlib import Path
 from PIL import Image
 
 import morpheus
+import soulforge
 
 PORT = 5196
 WEB = morpheus.ROOT / "web"
@@ -169,6 +171,110 @@ Models:
 """ + "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k)) + \
         "\n\nStyles:\n" + "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items()) + \
         "\n\nFormats: " + ", ".join(f"{r['width']}x{r['height']}" for r in RESOLUTIONS)
+
+
+SOUL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "action": {"type": "string", "enum": ["grid", "refine", "base", "none"]},
+        "name": {"type": "string"},
+        "soul": {"type": "string"},
+        "look": {"type": "string"},
+        "pick": {"type": "integer"},
+        "strength": {"type": "string", "enum": ["slight", "strong", "bold"]},
+        "variations": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["reply", "action", "name", "soul", "look", "pick", "strength", "variations"],
+}
+
+MOTIF_SCHEMA = {"type": "object", "properties": {"motif": {"type": "string"}}, "required": ["motif"]}
+MOTIF_SYSTEM = """You design the backdrop emblem for an AI agent's portrait in Soulforge. Name one object or symbol that
+stands for this agent: a moon, sun, flame ring, crystal, gate, tree, wave, gear, sigil, weapon or the like, with its
+colours, in one English sentence that describes only the object. Never a person, a face or a scene; no style words.
+Example: "A large glowing silver crescent moon inside swirling purple dream vortex rings."""
+
+
+WORLD_SCHEMA = {"type": "object", "properties": {k: {"type": "string"} for k in ("sky", "far", "near")},
+                "required": ["sky", "far", "near"]}
+WORLD_SYSTEM = """You design the home world behind an AI agent's portrait in Soulforge, as three parallax layers of a
+16-bit backdrop. Write one English sentence each, describing only scenery with its colours, never a person:
+- sky: the sky with its light (time of day, moon, sun, clouds, aurora, nebula ...),
+- far: distant landmarks along the horizon (a skyline, mountains, ruins, a tower ...),
+- near: dark foreground silhouettes at the very bottom and the sides (branches, rocks, railings, machinery ...).
+Make it unmistakably hers, from her story and look, and different from a plain forest, city or night sky.
+Example for a moon sorceress: {"sky": "A deep violet night sky with a huge pale moon and slow silver star trails.",
+"far": "Distant floating marble temples with glowing violet windows on small islands of rock.",
+"near": "Dark crystal spires and broken marble columns overgrown with ivy."}"""
+
+
+SOUL_SYSTEM = """You are the character designer in Soulforge, the part of Morpheus that makes avatars for AI agents.
+The user gives a short description of an agent. You give it a soul: a name (keep the user's if they gave one), a
+personality and role in two or three sentences, and a look that shows that soul — expression, posture details,
+accessories, colours that fit who they are.
+
+The art style is fixed and added automatically: pixel art, a waist-up portrait facing the viewer. Never put style,
+framing, quality or background tags into look.
+look: 12 to 25 comma-separated Danbooru tags for appearance only, in this order: 1girl or 1boy (for a man add
+"male focus, masculine, adult male"), age and build, skin, hair colour and style, eye colour, face details,
+outfit with colours, accessories, expression. Concrete colours, no vague words. Never "coral" for a colour (it draws
+coral reefs): say "salmon pink" or "orange".
+
+Each turn picks one action:
+- "grid": 9 brand-new candidates of look, from scratch. On the first message always "grid". Later only when the user
+  wants to start over or none of the candidates is close.
+- "refine": the user chose a candidate or wants one changed ("number 5", "the one with the scar", "like 4 but with a
+  red coat", "keep the face, darker hair"). The chosen one goes into the middle of the next grid, with 8 variations
+  of it around. pick is its number 1-9 in the latest grid, or 0 for the one already in the middle.
+  strength: "slight" for small tweaks, "strong" for one clear change ("make the coat red"), "bold" when they invite
+  exploring ("play with the hair", "try other outfits", "surprise me") or want something very different.
+  variations: 8 complete looks, one per variation. Each keeps what the user wants kept, word for word, and tries a
+  clearly different idea for what they want changed: with "play with hair and outfit" that is 8 different hairstyles
+  and 8 different outfits (colours, cuts, materials), not 8 rewordings of one idea. Be brave, the user picks. For
+  "slight" tweaks you may repeat the revised look 8 times. look is the revised look the variations start from.
+  Look at the grid picture with the Read tool when they describe a candidate instead of naming its number.
+- "base": the user is happy and takes a candidate as the agent's base image ("take it", "that's her", "use 7").
+  pick is its number, 0 for the one in the middle.
+- "none": only answer or ask. Repeat name, soul and look unchanged; pick 0, strength "slight", variations [].
+For "grid" and "base" variations is [].
+After "refine", ask in reply whether they want to lock one in or keep fine-tuning, and that they can say what to
+keep or change.
+Keep the agent's name and soul from the [Agent: …] line unless the user asks to change them.
+
+reply: one or two sentences, English, no Markdown. On the first turn introduce the agent in one line and say the
+user can pick a number or ask for changes."""
+
+
+POLISH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "action": {"type": "string", "enum": ["edit", "undo", "restore", "none"]},
+        "instruction": {"type": "string"},
+        "from_locked": {"type": "boolean"},
+    },
+    "required": ["reply", "action", "instruction", "from_locked"],
+}
+
+POLISH_SYSTEM = """You polish an agent's avatar in Soulforge. The base image is settled; the user asks for detail
+changes ("fix the cloak", "lower neckline", "add a scar over the left eye"). An image edit model (FLUX.2 Klein)
+carries them out from one instruction; only the area that changes is kept, the rest stays as it is.
+
+Look at the base image with the Read tool (and the locked-in image when it is given), then:
+- action "edit": instruction is one precise English edit instruction for the edit model. Change exactly what the
+  user asked for and nothing else: never add things they didn't ask for (no hood when they said "fix the cloak"),
+  never restyle hair, face or colours they didn't mention. Name the exact part and how it should look afterwards
+  (shape, colour, position), and end with "Keep everything else exactly the same, same pixel art style."
+  When unsure what they mean, ask with "none" instead of guessing.
+  from_locked true when the user wants this change made on the locked-in image instead of on top of the edits
+  so far ("work from the original", "start from our baseline but ..."); otherwise false.
+- action "undo": the user wants the newest edit taken back.
+- action "restore": the user wants to go back to the locked-in image, dropping all edits ("back to the baseline",
+  "start over from the original").
+- action "none": only answer or ask. instruction empty.
+For every action other than "edit", instruction is empty and from_locked false.
+
+reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit."""
 
 
 def ask_claude(message: str, session: str | None, ghost: bool = False, see: bool = False,
@@ -499,6 +605,8 @@ class Handler(BaseHTTPRequestHandler):
                            for k, m in morpheus.EDIT_MODELS.items()]
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]
             return self.send_json({"models": models, "edit_models": edit_models, "styles": styles, "resolutions": RESOLUTIONS})
+        if route == "/api/soul/agents":
+            return self.send_json(soulforge.agents())
         if route == "/api/status":
             return self.send_json(status())
         if route == "/api/history":
@@ -543,13 +651,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
         handlers = {"/api/generate": self.generate, "/api/chat": self.chat, "/api/edit": self.edit,
-                    "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap, "/api/delete": self.delete}
+                    "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap, "/api/delete": self.delete,
+                    "/api/soul/new": self.soul_new, "/api/soul/chat": self.soul_chat}
         if self.path not in handlers:
             return self.send_error(404)
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             handler = handlers[self.path]
-            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit"):
+            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat"):
                 # runs on after the page is gone (a reload mid-render); the page polls /api/job/<id> and finds it again
                 job_id = f"{time.time_ns():x}"
                 JOBS[job_id] = {"state": "running"}
@@ -668,6 +777,235 @@ class Handler(BaseHTTPRequestHandler):
         return {"trail": trail, "image": current,
                 "reply": f"{answer['reply']}\n\nReached {REFINE_MAX} rounds. Last: {note}\n"
                          "Shall I keep tuning the prompt?"}
+
+    def soul_new(self, req):
+        """A new agent from a short description: Claude gives it a soul and a look, then the first grid renders."""
+        description = str(req.get("description", "")).strip()
+        if not description:
+            raise ValueError("Describe the agent in a few words.")
+        job = req.get("_job") or {}
+        job["status"] = "Giving it a soul …"
+        answer, _ = ask_claude(description, None, ghost=True, system=SOUL_SYSTEM, schema=SOUL_SCHEMA)
+        agent = soulforge.create(answer["name"] or "Agent", answer["soul"], answer["look"], description)
+        reply = {"role": "bot", "text": answer["reply"]}
+        # saved before the render, so a failed grid leaves an agent whose conversation can go on ("try again")
+        agent["messages"] = [{"role": "user", "text": description}, reply]
+        soulforge.save(agent)
+        job["agent"] = agent["slug"]
+        self.soul_grid(agent, answer["look"], job)
+        reply["grid"] = len(agent["grids"]) - 1
+        return soulforge.save(agent)
+
+    def soul_idle(self, agent: dict, said: dict, job: dict) -> dict:
+        """The idle animation's frames of the base image; the page plays them as a loop."""
+        names = soulforge.IDLE_STEPS
+
+        def progress(i, name):
+            job["status"] = f"Bringing to life: step {i + 1} of {len(names)} ({name.replace('_', ' ')}) …"
+        if not agent.get("motif") and not (agent.get("scene") or {}).get("motif"):
+            job["status"] = "Bringing to life: choosing her emblem …"
+            answer, _ = ask_claude(f"Agent: {agent['name']}. {agent['soul']}\nLook: {agent['look']}", None, ghost=True,
+                                   system=MOTIF_SYSTEM, schema=MOTIF_SCHEMA)
+            agent["motif"] = answer["motif"]
+        if not agent.get("world") and not (agent.get("scene") or {}).get("world"):
+            job["status"] = "Bringing to life: imagining her world …"
+            answer, _ = ask_claude(f"Agent: {agent['name']}. {agent['soul']}\nLook: {agent['look']}", None, ghost=True,
+                                   system=WORLD_SYSTEM, schema=WORLD_SCHEMA)
+            agent["world"] = answer
+        ensure_comfy()
+        with gpu:
+            soulforge.idle(agent, progress, live=self.soul_live(job))
+        agent["messages"] += [said, {"role": "bot", "idle": True,
+                                     "text": f"{agent['name']} is awake: breathing, hair and cloak in the air, blinking, a glance aside, a smirk now and then, a blush, "
+                                             "standing in front of her own emblem, in a world of her own. "
+                                             "Not happy with a frame? Ask for new frames again."}]
+        return soulforge.save(agent)
+
+    def soul_world(self, agent: dict, said: dict, job: dict) -> dict:
+        """A new world for her: Claude imagines another one (not the last), Klein paints it, the old one goes."""
+        old = (agent.get("scene") or {}).get("world") or {}
+        job["status"] = "Imagining a new world …"
+        before = f"\nHer last world, which this one must not repeat: {json.dumps(agent['world'])}" if agent.get("world") else ""
+        answer, _ = ask_claude(f"Agent: {agent['name']}. {agent['soul']}\nLook: {agent['look']}{before}", None, ghost=True,
+                               system=WORLD_SYSTEM, schema=WORLD_SCHEMA)
+        agent["world"] = answer
+        job["status"] = "Painting her new world (sky, far, near) …"
+        ensure_comfy()
+        with gpu:
+            agent.setdefault("scene", {})["world"] = soulforge.world(agent, live=self.soul_live(job))
+        for layer in ("sky", "far", "near"):
+            if old.get(layer):
+                (morpheus.OUTPUT / old[layer]).unlink(missing_ok=True)
+        agent["messages"] += [said, {"role": "bot", "text": f"A new world for {agent['name']}: {answer['sky']} {answer['far']} "
+                                                            f"{answer['near']} Pick “Her world” to stand her in it."}]
+        return soulforge.save(agent)
+
+    def soul_chat(self, req):
+        """One turn in an agent's conversation: pick a candidate, change the look and render a new grid, or talk."""
+        agent = soulforge.load(str(req.get("agent", "")))
+        message = str(req.get("message", "")).strip()
+        if not message:
+            raise ValueError("Please write something.")
+        job = req.get("_job") or {}
+        job["agent"] = agent["slug"]
+        said = {"role": "user", "text": message}
+        if agent.get("base") and req.get("idle"):
+            return self.soul_idle(agent, said, job)
+        if agent.get("scene") and req.get("world"):
+            return self.soul_world(agent, said, job)
+        if agent.get("base") and req.get("base") is None:
+            return self.soul_polish(agent, message, said, job, undo=bool(req.get("undo")), restore=bool(req.get("restore")))
+        # The two clicks need no one to read them: a candidate (refine around it), the base button (settle on it)
+        if req.get("base") is not None:
+            chosen = self.soul_candidate(agent, int(req["base"]))
+            if chosen:
+                agent["base"] = chosen
+                agent["messages"] += [said, {"role": "bot", "base": chosen,
+                                             "text": f"Done: this is {agent['name']}'s base image now. Tell me details to polish, one at a "
+                                                     "time (\"fix the cloak\", \"add a scar\"); every edit can be undone."}]
+                return soulforge.save(agent)
+        number = re.fullmatch(r"(?:number|nr\.?|no\.?|#)?\s*([1-9])\.?", message, re.I)
+        chosen = number and self.soul_candidate(agent, int(number[1]))
+        if chosen:
+            # nothing renders yet: the page offers "Lock in", and a chat message instead fine-tunes this pick
+            agent["pick"] = chosen
+            agent["look"] = chosen.get("look") or agent["look"]
+            agent["messages"] += [said, {"role": "bot", "ask": chosen["number"],
+                                         "text": f"Want to lock in number {chosen['number']} for further creation? "
+                                                 "Or tell me what to fine-tune."}]
+            return soulforge.save(agent)
+        # Every turn is a fresh Claude call with the agent and the recent chat spelled out: resuming one session per
+        # agent grew with every grid picture it had looked at, up to 80 s a turn against 7-15 s fresh.
+        recent = "\n".join(f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}" for m in agent["messages"][-8:])
+        context = (f"[Agent: {agent['name']}. Soul: {agent['soul']}. Look: {agent['look']}. "
+                   f"First description: {agent['description']}]\n[Conversation so far:\n{recent}]")
+        if agent["messages"] and agent["messages"][-1].get("ask"):
+            context += (f"\n[The user just picked number {agent['messages'][-1]['ask']} and was asked to lock it in or "
+                        f"say what to fine-tune. It is the one in focus: pick 0. A change request is \"refine\" with "
+                        f"pick 0; agreeing (\"ok\", \"lock it in\") is \"base\" with pick 0.]")
+        seen = None
+        if agent["grids"] and agent["grids"][-1]["candidates"]:
+            CHAT_DIR.mkdir(exist_ok=True)
+            seen = CHAT_DIR / f"grid-{uuid.uuid4().hex[:8]}.png"
+            soulforge.sheet(agent["grids"][-1], seen)
+            context += (f"\n[The latest grid is {seen.name}, candidates numbered 1-9. Look at it with the Read tool when "
+                        f"the user describes a candidate instead of naming its number.]")
+        job["status"] = "Thinking …"
+        try:
+            answer, _ = ask_claude(f"[Reply in English.]\n{context}\n\nNew message:\n{message}", None, ghost=True,
+                                   see=bool(seen), system=SOUL_SYSTEM, schema=SOUL_SCHEMA)
+        finally:
+            if seen:
+                seen.unlink(missing_ok=True)
+        agent["messages"].append(said)  # only now: a turn Claude never answered leaves no trace
+        agent["name"], agent["soul"] = answer["name"] or agent["name"], answer["soul"] or agent["soul"]
+        reply = {"role": "bot", "text": answer["reply"]}
+        chosen = self.soul_candidate(agent, answer["pick"])
+        if answer["action"] == "base" and chosen:
+            agent["base"] = reply["base"] = chosen
+        agent["messages"].append(reply)
+        soulforge.save(agent)
+        if answer["action"] == "refine" and chosen:
+            agent["look"] = answer["look"] or agent["look"]
+            self.soul_refine(agent, chosen, agent["look"], soulforge.STRENGTH.get(answer["strength"], 0.4), reply, job,
+                             answer["variations"])
+        elif answer["action"] in ("grid", "refine"):  # refine with nothing chosen yet: start fresh
+            agent["look"] = answer["look"] or agent["look"]
+            self.soul_grid(agent, agent["look"], job)
+            reply["grid"] = len(agent["grids"]) - 1
+        return soulforge.save(agent)
+
+    def soul_polish(self, agent: dict, message: str, said: dict, job: dict, undo: bool = False,
+                    restore: bool = False) -> dict:
+        """After lock-in: each message is one detail edit of the base image; undo and restore take edits back."""
+        if restore:
+            soulforge.restore(agent)
+            agent["messages"] += [said, {"role": "bot", "text": "Back to the locked-in image; all edits are dropped."}]
+            return soulforge.save(agent)
+        if undo:
+            gone = soulforge.undo(agent)
+            agent["messages"] += [said, {"role": "bot", "text": f"Undone: {gone['instruction']}" if gone
+                                         else "There is no edit to undo."}]
+            return soulforge.save(agent)
+        CHAT_DIR.mkdir(exist_ok=True)
+        tag = uuid.uuid4().hex[:8]
+        seen, locked = CHAT_DIR / f"base-{tag}.png", None
+        copy_picture(agent["base"]["file"], seen)
+        note = f"The base image (with all edits so far) is {seen.name}."
+        if agent.get("edits"):
+            locked = CHAT_DIR / f"locked-{tag}.png"
+            copy_picture(agent["edits"][0]["before"]["file"], locked)
+            note += (f" The locked-in image, before any edit, is {locked.name}. Edits so far: "
+                     + "; ".join(e["instruction"] for e in agent["edits"]))
+        recent = "\n".join(f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}" for m in agent["messages"][-6:])
+        job["status"] = "Thinking …"
+        try:
+            answer, _ = ask_claude(f"[Reply in English.]\n[Agent: {agent['name']}. {note}]\n"
+                                   f"[Conversation so far:\n{recent}]\n\nNew message:\n{message}", None, ghost=True,
+                                   see=True, system=POLISH_SYSTEM, schema=POLISH_SCHEMA)
+        finally:
+            for f in (seen, locked):
+                if f:
+                    f.unlink(missing_ok=True)
+        reply = {"role": "bot", "text": answer["reply"]}
+        agent["messages"] += [said, reply]
+        if answer["action"] == "undo":
+            soulforge.undo(agent)
+        elif answer["action"] == "restore" or (answer["action"] == "edit" and answer["from_locked"]):
+            soulforge.restore(agent)
+        soulforge.save(agent)
+        if answer["action"] == "edit" and answer["instruction"].strip():
+            job["status"] = "Editing the base image …"
+            ensure_comfy()
+            with gpu:
+                edit = soulforge.polish(agent, answer["instruction"], live=self.soul_live(job))
+            reply["edit"] = {"before": edit["before"]["file"], "after": edit["file"], "instruction": edit["instruction"]}
+        return soulforge.save(agent)
+
+    @staticmethod
+    def soul_candidate(agent: dict, n: int) -> dict | None:
+        """Candidate n (1-9) of the latest grid, or for 0 the one being refined."""
+        if n == 0:
+            return agent.get("pick")
+        candidates = agent["grids"][-1]["candidates"] if agent["grids"] else []
+        if 1 <= n <= len(candidates) and candidates[n - 1]:
+            return {**candidates[n - 1], "grid": len(agent["grids"]) - 1, "number": n}
+        return None
+
+    def soul_refine(self, agent: dict, chosen: dict, look: str, denoise: float, reply: dict, job: dict,
+                    looks: list[str] | None = None) -> None:
+        """The chosen candidate into the middle, eight variations around; the reply shows the new grid."""
+        agent["pick"] = chosen
+        if reply not in agent["messages"]:
+            agent["messages"].append(reply)
+        soulforge.save(agent)
+
+        def progress(i, grid):
+            job["status"] = f"Rendering variation {i + 1} of {soulforge.GRID - 1} …"
+            job["candidates"], job["slot"] = list(grid["candidates"]), grid["slot"]
+        ensure_comfy()
+        with gpu:
+            soulforge.render_variations(agent, chosen, look, denoise, progress, looks, live=self.soul_live(job))
+        reply["grid"] = len(agent["grids"]) - 1
+
+    def soul_grid(self, agent: dict, look: str, job: dict) -> None:
+        def progress(i, grid):
+            job["status"] = f"Rendering candidate {i + 1} of {soulforge.GRID} …"
+            job["candidates"], job["slot"] = list(grid["candidates"]), grid["slot"]  # the page shows each as it lands
+        ensure_comfy()
+        with gpu:
+            soulforge.render_grid(agent, look, progress, live=self.soul_live(job))
+
+    @staticmethod
+    def soul_live(job: dict):
+        """Sampler steps and ComfyUI's preview frames of the picture forming, served by /api/job/<id>/preview."""
+        def update(step=None, total=None, preview=None):
+            if step is not None:
+                job["step"], job["total"] = step, total
+            if preview is not None:
+                job["_preview"] = preview
+                job["previews"] = job.get("previews", 0) + 1
+        return update
 
     def generate(self, req):
         """The manual form: exact prompt and settings, no Claude in between."""

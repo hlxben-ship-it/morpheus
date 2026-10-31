@@ -275,9 +275,11 @@
   .send:hover:not(:disabled) { transform: translateY(-1px) scale(1.04); }
   .field > .label { font-weight: 600; letter-spacing: .08em; }
   .msg.working { background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow);
-    background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 14%, transparent) 50%, transparent 70%);
-    background-size: 220% 100%; animation: rise .35s ease-out both, shimmer 1.8s linear infinite; }
-  @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+    background-image: linear-gradient(100deg, transparent 22%, color-mix(in srgb, var(--accent) 3%, transparent) 36%,
+      color-mix(in srgb, var(--accent) 7%, transparent) 50%, color-mix(in srgb, var(--accent) 3%, transparent) 64%, transparent 78%);
+    background-size: 200% 100%; animation: rise .35s ease-out both, shimmer 4.2s ease-in-out infinite; }
+  /* one sweep moves the band exactly one tile (200% of the box), so the loop's end is its start: no jump */
+  @keyframes shimmer { from { background-position: 0 0; } to { background-position: -200% 0; } }
   @media (prefers-reduced-motion: reduce) { .msg.working { animation: none; } }
   .live { border-radius: 14px; }
 
@@ -362,6 +364,7 @@
   .hud-tip .foot { margin-top: 8px; font-size: 14px; color: var(--muted); }
   @media (max-width: 900px) { .hud .bar, .hud-meter b { display: none; } }
   @media (max-width: 640px) { .hud-meter { display: none; } }
+  @media (max-width: 520px) { .brand .word, .hud-comfy b { display: none; } }  /* room for the forge switch */
   /* CRT scanlines over the backdrop, never over pictures' clicks */
   body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50; mix-blend-mode: overlay; opacity: .35;
     background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .35) 0 1px, transparent 1px 3px); }
@@ -505,6 +508,135 @@
     -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, .6) 35%, transparent 85%); mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, .6) 35%, transparent 85%); }
   :root[data-theme="light"] body::before { opacity: .07; }
   @media (min-width: 861px) { body::before { left: 272px; } }  /* starts where the chat does, so the sun isn't behind the sidebar */
+
+  /* ---------- Soulforge ---------- */
+  .forge { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-left: 14px; background: var(--glass); }
+  .forge button { border: 0; background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 12px; font: 600 11px/1 var(--px, monospace); letter-spacing: .08em; }
+  .forge button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 14px var(--glow); }
+  .soul-side { display: none; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+  body.soul-mode .soul-side { display: flex; }
+  body.soul-mode .side > :not(.soul-side),
+  body.soul-mode .modes, body.soul-mode .done-bar, body.soul-mode [id^="opts-"], body.soul-mode #chat-pic,
+  body.soul-mode #chat-attach, body.soul-mode #swap-hint { display: none !important; }
+  .sess .av { flex: none; width: 30px; height: 30px; border-radius: 8px; object-fit: cover; object-position: top; image-rendering: pixelated; background: var(--raised); }
+  .soul-card { display: flex; gap: 18px; align-items: flex-start; background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); }
+  .soul-card .portrait { flex: none; width: 150px; aspect-ratio: 832 / 1216; border-radius: 12px; overflow: hidden; background: var(--raised); display: grid; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
+  .soul-card .portrait img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+  .soul-card h2 { font: 400 22px/1.2 var(--px, sans-serif); letter-spacing: .06em; }
+  .soul-card p { color: var(--muted); margin-top: 6px; }
+  .soul-card details { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cands { display: grid; grid-template-columns: repeat(3, minmax(0, 170px)); gap: 8px; margin-top: 8px; }
+  .cand { position: relative; aspect-ratio: 832 / 1216; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--raised); padding: 0; }
+  .cand img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block; }
+  .cand b { position: absolute; left: 6px; top: 6px; background: rgba(0, 0, 0, .7); color: #fff; font: 13px/1 var(--term, monospace); padding: 3px 6px; border-radius: 6px; }
+  .cand .pick { position: absolute; inset: 0; border: 0; background: transparent; padding: 0; cursor: pointer; }
+  .cand .zoom, .polish .zoom { position: absolute; top: 6px; right: 6px; z-index: 2; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line);
+    border-radius: 8px; background: rgba(0, 0, 0, .65); color: #fff; font-size: 14px; line-height: 1; cursor: zoom-in; opacity: .75; }
+  .cand .zoom:hover, .cand .zoom:focus-visible, .polish .zoom:hover, .polish .zoom:focus-visible { opacity: 1; border-color: var(--accent); }
+  .lock-in { margin-top: 10px; border: 0; border-radius: 999px; padding: 9px 18px; background: var(--accent); color: var(--accent-ink);
+    font: 600 12px/1 var(--px, sans-serif); letter-spacing: .06em; box-shadow: 0 0 16px var(--glow); }
+  .cand.open:hover, .cand.open:focus-within { border-color: var(--accent); box-shadow: 0 0 16px var(--glow); }
+    .cand.orig { border: 2px solid var(--cyan, var(--accent)); }
+  .cand em { position: absolute; left: 6px; bottom: 6px; background: var(--cyan, var(--accent)); color: #000; font: 11px/1 var(--term, monospace);
+    font-style: normal; padding: 3px 6px; border-radius: 6px; }
+  .cand[aria-pressed="true"] { border: 2px solid var(--pink); box-shadow: 0 0 18px var(--pink); }
+  .soul-card .portrait { position: relative; }
+  /* the idle animation: transparent overlays of eyes, mouth and cheeks on the base; the loop toggles them */
+  /* integer scale: 832 art px at 416 css px is exactly 3 screen px per art pixel; at 340 the blocks alternated 2 and 3
+     px wide and crawled while she breathed */
+  .soul-card .portrait.alive { width: 416px; }
+  .soul-card .portrait.scened { box-shadow: 0 0 34px -6px var(--scene-glow, transparent), 0 0 0 1px color-mix(in srgb, var(--scene-glow, transparent) 45%, transparent); transition: box-shadow .6s; }
+  .history { margin: 4px 0 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); padding: 0 14px; }
+  .history > summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 13px; }
+  .history > summary small { margin-left: 6px; font: 11px var(--term, monospace); }
+  .history[open] { padding-bottom: 10px; }
+  .soul-card .portrait canvas.live { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .soul-card .portrait img.ov { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .soul-card .portrait img.ov.on { opacity: 1; }
+  .portrait img.ov { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; image-rendering: pixelated; }
+  .portrait img.ov.on { opacity: 1; }
+  .portrait img.ov.blush { transition: opacity 1.6s ease-in-out; }
+  .portrait img.ov.smirk { transition: opacity .45s ease-in-out; }
+  /* the gallery of living agents on Soulforge's home */
+  /* scenes: shared parallax layers behind every agent, the agent's own motif last, the cut-out figure on top */
+  .scene { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: #07060f; }
+  .scene > *, .front { animation: scene-in .6s ease-out both; }
+  .scene > .far { animation-delay: .12s; } .scene > .near { animation-delay: .3s; } .front { animation-delay: .4s; }
+  .scene > .near, .scene > .far { animation-name: scene-in-up; }
+  @keyframes scene-in-up { from { opacity: 0; translate: 0 3%; } }
+  @keyframes scene-in { from { opacity: 0; } }
+  .scene i { position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated; will-change: background-position, transform; }
+  .scene .sky, .scene .far, .scene .near { background-size: auto 100%; background-position: 50% 100%; }
+  /* the layers are wide landscapes: on a tall portrait their horizon sat behind her legs and the fog. Raised, it
+     sits at her chest, the far one higher; the near one and the dark ground cover what that opens below */
+  .scene .far { inset: -17% 0 17%; } .scene .near { inset: -7% 0 7%; }
+  .scene::after { content: ''; position: absolute; inset: auto 0 0; height: 8%; background: #05040c; }
+  .scene .motif { inset: 2% 4% auto; height: 58%; background-size: contain; background-position: 50% 50%; animation: motif-glow 4.6s ease-in-out infinite; }
+  @keyframes motif-glow { 0%, 100% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow) 35%, transparent)) brightness(.96); }
+    50% { filter: drop-shadow(0 0 16px color-mix(in srgb, var(--glow) 70%, transparent)) brightness(1.08); } }
+  /* in front of her: the air (motes, rain, fireflies on the art's own pixel grid), ground fog and a vignette */
+  /* an aurora breathes: its sky shifts hue and glow, slowly, on top of the per-agent nudge */
+  .scene.aurora .sky { animation: aurora 11s ease-in-out infinite; }
+  @keyframes aurora { 50% { filter: brightness(.95) saturate(1.25) hue-rotate(var(--shim)); } }
+  /* lava breathes: the near rocks' cracks and the far eruption glow up and down, out of step */
+  .scene.lava .near { animation: lava 3.2s ease-in-out infinite; } .scene.lava .far { animation: lava 4.7s ease-in-out infinite reverse; }
+  @keyframes lava { 50% { filter: brightness(1.28) saturate(1.2); } }
+  /* a day sky's light comes down in slow rays, from the sun's side */
+  .scene .rays { inset: -20%; background: repeating-conic-gradient(from 180deg at calc(50% - var(--side) * 38%) 0%, rgba(255, 244, 214, .16) 0 4deg, transparent 4deg 11deg);
+    mix-blend-mode: screen; animation: rays 14s ease-in-out infinite alternate; transform-origin: 50% 0; }
+  @keyframes rays { from { opacity: .55; rotate: -2deg; } to { opacity: 1; rotate: 2deg; } }
+  .scene canvas.back { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  .front { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .front canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  .front::before { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 38%, transparent 55%, var(--vig, rgba(4, 3, 12, .55))); }
+  .front::after { content: ''; position: absolute; inset: auto -30% 0; height: 34%; animation: fog 9s ease-in-out infinite, bank 23s ease-in-out infinite alternate;
+    background: radial-gradient(40% 55% at 30% 70%, var(--fog), transparent 70%), radial-gradient(35% 50% at 75% 80%, var(--fog), transparent 70%), linear-gradient(transparent, var(--fog)); }
+  @keyframes bank { to { translate: 12% 0; } }
+  @keyframes fog { 50% { opacity: .75; transform: translateY(3%); } }
+  .portrait.scened > img:not(.ov), .portrait.scened > canvas.live { position: relative; z-index: 1; }
+  .portrait.scened img.ov { z-index: 2; }
+  .scenes { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+  .scenes button { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 4px 11px; font: 11.5px var(--term, monospace); cursor: pointer; }
+  .scenes button:hover { color: var(--text); border-color: var(--accent); }
+  .scenes button[aria-pressed="true"] { color: #fff; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  .gallery-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .gallery-head .scenes { margin: 0 0 12px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; padding: 4px 0 8px; }
+  .agent-card { display: flex; flex-direction: column; gap: 4px; text-align: left; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--glass); padding: 8px; color: var(--text); cursor: pointer; transition: border-color .2s, box-shadow .2s, transform .2s; }
+  .agent-card { animation: card-in .5s calc(var(--i, 0) * 45ms) ease-out both; }
+  @keyframes card-in { from { opacity: 0; translate: 0 8px; } }
+  .agent-card:hover, .agent-card:focus-visible { border-color: var(--accent); box-shadow: 0 0 18px var(--glow); transform: translateY(-2px); }
+  .agent-card .portrait { position: relative; aspect-ratio: 832 / 1216; border-radius: 10px; overflow: hidden; background: var(--raised); }
+  .agent-card .portrait img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; display: block; }
+  .agent-card b { font: 400 14px/1.2 var(--px, sans-serif); letter-spacing: .05em; margin-top: 4px; }
+  .agent-card small { color: var(--muted); font-size: 11.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .soul-hero.compact { padding: 3vh 0 2vh; }
+  .gallery-title { font: 400 15px/1.2 var(--px, sans-serif); letter-spacing: .08em; margin: 6px 0 12px; }
+  .gallery-title small { font: 12px var(--term, monospace); color: var(--muted); margin-left: 8px; letter-spacing: 0; }
+  .side-label.h.link { cursor: pointer; background: none; border: 0; text-align: left; width: 100%; }
+  .side-label.h.link:hover { color: var(--accent); }
+  .soul-card .portrait .tag { position: absolute; left: 6px; bottom: 6px; background: rgba(0, 0, 0, .7); color: #fff; font: 11px/1 var(--term, monospace);
+    padding: 3px 6px; border-radius: 6px; }
+  .cand.empty { animation: pulse 1.4s ease-in-out infinite; }
+  .cand img.forming { filter: saturate(.8); opacity: .9; }
+  .polish { display: grid; grid-template-columns: repeat(2, minmax(0, 200px)); gap: 10px; margin-top: 8px; }
+  .polish figure { margin: 0; position: relative; }
+  .polish img, img.forming-edit { width: 100%; aspect-ratio: 832 / 1216; object-fit: cover; border-radius: 10px; border: 1px solid var(--line);
+    image-rendering: pixelated; display: block; }
+  img.forming-edit { max-width: 200px; margin-top: 8px; opacity: .9; }
+  .polish figcaption { position: absolute; left: 6px; top: 6px; background: rgba(0, 0, 0, .7); color: #fff; font: 11px/1 var(--term, monospace);
+    padding: 3px 6px; border-radius: 6px; }
+  .lock-in.ghosty { background: transparent; color: var(--text); border: 1px solid var(--line); box-shadow: none; }  /* a preview frame, not the picture yet */
+  @keyframes pulse { 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .cand.empty { animation: none; } }
+  .soul-hero { text-align: center; padding: 8vh 0 2vh; }
+  .soul-hero h2 { font: 400 26px/1.3 var(--px, sans-serif); letter-spacing: .08em; }
+  .soul-hero p { color: var(--muted); margin-top: 10px; }
+  .soul-hero .ideas { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+  .soul-hero .ideas button { border: 1px solid var(--line); background: var(--glass); border-radius: 999px; padding: 7px 14px; color: var(--text); font-size: 13px; }
+  .soul-hero .ideas button:hover { border-color: var(--accent); }
+  @media (max-width: 860px) { .forge { margin-left: 6px; } .forge button { padding: 5px 8px; } .forge span { display: none; } .soul-card .portrait { width: 96px; } .soul-card .portrait.alive { width: 208px; } .cands { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
@@ -513,6 +645,10 @@
     <button type="button" class="icon-btn menu" id="menu" aria-label="Show sessions">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <a class="brand" href="/"><img src="/logo.png" alt=""><span class="word">MORPH<b>E</b>US</span><small>v0.2</small></a>
+    <div class="forge" role="tablist" aria-label="Forge">
+      <button type="button" role="tab" data-f="dream" aria-selected="true" title="Pictures, edits and Guise">Dream<span>forge</span></button>
+      <button type="button" role="tab" data-f="soul" aria-selected="false" title="Avatars for agents">Soul<span>forge</span></button>
+    </div>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
         <span class="hud-comfy" id="hud-comfy" data-s="off" data-tip="comfy"><i></i><b>Comfy</b> <em>…</em></span>
@@ -529,6 +665,13 @@
   </header>
 
   <aside class="side" id="side">
+    <div class="soul-side" id="soul-side">
+      <button type="button" class="new" id="new-agent">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        New agent</button>
+      <button type="button" class="side-label h link" id="gallery-link" title="All agents">Agents</button>
+      <nav class="sessions" id="agents" aria-label="Agents"></nav>
+    </div>
     <button type="button" class="new" id="new-session">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       New session</button>
@@ -690,7 +833,7 @@
     sessions: store.get('sessions', []), currentId: store.get('current', null), ghost: false, ghostSession: null, rerun: new Set(),
     mode: store.get('mode', 'chat'), optsOpen: store.get('optsOpen', true), view: 'thread',
     style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, upscale: 1,
-    history: [], ghostHistory: [], busy: false,
+    history: [], ghostHistory: [], busy: false, forge: store.get('forge', 'dream'),
   };
   let options;
   const modelLabel = key => [...(options?.models || []), ...(options?.edit_models || [])].find(m => m.key === key)?.label || key;
@@ -812,7 +955,7 @@
   let draftKey = null;
   const keyOf = () => state.ghost ? 'ghost' : current()?.id || 'new';
   function stashDraft(key = draftKey) {
-    if (key === null) return;
+    if (key === null || state.forge === 'soul') return;  // the Soulforge composer is not a session's draft
     const text = $('input').value;
     if (text || state.mode !== 'chat') drafts[key] = { text, mode: state.mode }; else delete drafts[key];
     state.chatPic ? draftPics.set(key, state.chatPic) : draftPics.delete(key);
@@ -884,6 +1027,7 @@
   }
 
   function renderThread() {
+    if (state.forge === 'soul') return renderSoul();
     syncComposer();
     if (state.view === 'gallery') return renderGallery();
     const col = $('col'), s = current();
@@ -1174,11 +1318,12 @@
   $('input').addEventListener('input', () => stashDraft()); // so a reload keeps what was typed
   $('input').addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
-    if (state.mode === 'chat' ? !e.shiftKey : (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+    if (state.forge === 'soul' || state.mode === 'chat' ? !e.shiftKey : (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
   });
   $('composer').addEventListener('submit', e => { e.preventDefault(); submit(); });
 
   async function submit() {
+    if (state.forge === 'soul') return soulSend();
     if (state.busy) return;
     if (state.view === 'gallery') { state.view = 'thread'; $('open-gallery').setAttribute('aria-pressed', 'false'); renderThread(); }
     const run = { chat: sendChat, manual: generateManual, edit: runEdit, swap: runSwap }[state.mode];
@@ -1739,8 +1884,712 @@
     }
   });
 
+  // ---------- Soulforge: a short description, a soul, a 3x3 grid, a pick in the chat ----------
+  const soul = { agents: [], current: store.get('soul.current', null), job: store.get('soul.job', null) };
+  function setForge(f) {
+    if (f !== state.forge) {
+      stashDraft();  // leaving Dreamforge keeps its draft; arriving back brings it again
+      $('input').value = f === 'soul' ? '' : drafts[draftKey]?.text || ''; grow();
+    }
+    state.forge = f; store.set('forge', f);
+    document.body.classList.toggle('soul-mode', f === 'soul');
+    document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
+    if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
+    else $('input').placeholder = 'Describe what you want to see …';
+    renderThread();
+  }
+  document.querySelectorAll('.forge button').forEach(b => b.onclick = () => setForge(b.dataset.f));
+  $('new-agent').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); $('input').focus(); };
+  $('gallery-link').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); };
+
+  async function loadAgents() {
+    try { soul.agents = await (await fetch('/api/soul/agents')).json(); } catch { return; }
+    renderAgents();
+    if (state.forge === 'soul') renderSoul();
+  }
+  function renderAgents() {
+    $('agents').replaceChildren(...soul.agents.map(a => {
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'sess' });
+      b.setAttribute('aria-current', a.slug === soul.current);
+      const face = a.base?.file || a.pick?.file || a.grids?.at(-1)?.candidates?.find(Boolean)?.file;
+      const grids = a.grids?.length || 0;
+      b.innerHTML = `${face ? `<img class="av" src="${url(face)}" alt="">` : '<span class="av"></span>'}
+        <span><b>${esc(a.name)}</b><small>${a.base && a.idle?.base === a.base.file ? 'Alive' : a.base ? 'Base image set' : a.pick ? 'Fine-tuning' : grids + ' grid' + (grids === 1 ? '' : 's')}</small></span>${soul.job?.agent === a.slug ? '<i class="live"></i>' : ''}`;
+      b.onclick = () => { soul.current = a.slug; store.set('soul.current', a.slug); renderAgents(); setForge('soul'); };
+      return b;
+    }));
+  }
+
+  function renderSoul() {
+    const col = $('col');
+    const a = soul.agents.find(x => x.slug === soul.current);
+    $('input').placeholder = !a ? 'Describe your agent in a few words …' : a.base ? 'Polish a detail: "fix the cloak", "add a scar" …' : 'Pick a number or ask for changes …';
+    const job = soul.job && soul.job.agent === (a?.slug ?? null) ? soul.job : null;
+    idleTimers.forEach(clearTimeout);
+    idleTimers = [];
+    if (!a) {
+      // the gallery: every agent that's alive, each card with its own light loop (blink, smirk, blush)
+      const alive = soul.agents.filter(x => x.base && x.idle?.base === x.base.file && x.idle.frames);
+      const gallery = alive.length ? `<div class="gallery-head"><h3 class="gallery-title">Your agents <small>${alive.length} alive</small></h3>${scenePicker()}</div><div class="gallery">${alive.map((x, i) => `<button type="button" class="agent-card" data-slug="${esc(x.slug)}"${scened(x) ? ` title="${esc(sceneOf(x).theme === 'home' ? `${x.name}'s world` : SCENES[sceneOf(x).theme])}"` : ''}${scened(x) ? ` style="--i:${i};--glow:${lightOf(x, sceneOf(x).theme).glow}aa;--accent:${lightOf(x, sceneOf(x).theme).glow}"` : ''}>
+          <div class="portrait${scened(x) ? ' scened' : ''}">${scened(x) ? sceneLayers(x) : ''}${`<img src="${url(scened(x) ? x.scene.cut : x.base.file)}" alt="${esc(x.name)}">`}${['blush', 'smirk', 'half', 'closed'].map(n => `<img class="ov ${n}" src="${url(x.idle.frames[n])}" alt="">`).join('')}</div>
+          <b>${esc(x.name)}</b><small>${esc((x.soul || '').split(/(?<=[.!?])\s/)[0])}</small></button>`).join('')}</div>` : '';
+      col.innerHTML = `${gallery}<div class="soul-hero${alive.length ? ' compact' : ''}"><h2>SOULFORGE</h2><p>Describe an agent in a few words. Glia gives it a soul, Morpheus renders nine candidates, you pick one.</p>
+        <div class="ideas">${['A grumpy old librarian who guards the docs', 'Cyborg girl, calm security agent', 'Cheerful intern who writes tests'].map(t => `<button type="button">${t}</button>`).join('')}</div></div>`;
+      col.querySelectorAll('.ideas button').forEach(b => b.onclick = () => { $('input').value = b.textContent; grow(); $('input').focus(); });
+      wireScenes(col);
+      col.querySelectorAll('.agent-card').forEach(c => {
+        c.onclick = () => { soul.current = c.dataset.slug; store.set('soul.current', c.dataset.slug); renderAgents(); setForge('soul'); };
+        idleLoop(c.querySelector('.portrait'));
+      });
+      if (job) col.append(soulWorking(job));
+      return;
+    }
+    const face = a.base || a.pick;
+    // the idle frames belong to one base image; after a new edit they're stale until drawn again
+    const alive = a.base && a.idle?.base === a.base.file;
+    const layers = alive ? ['blush', 'smirk', 'half', 'closed'].map(n => `<img class="ov ${n}" src="${url(a.idle.frames[n])}" alt="">`).join('') : '';
+    const sc = alive && scened(a);
+    col.innerHTML = `<div class="soul-card"><div class="portrait${alive ? ' alive' : ''}${sc ? ' scened' : ''}">${sc ? sceneLayers(a) : ''}${face ? `<img src="${url(face.file)}" alt="${esc(a.name)}">${layers}${alive ? '' : `<span class="tag">${a.base ? 'Base image' : 'Fine-tuning'}</span>`}` : 'No pick yet'}</div>
+      <div><h2>${esc(a.name)}</h2><p>${esc(a.soul)}</p><details><summary>Look</summary><p>${esc(a.look)}</p></details>${alive && a.scene ? scenePicker() : ''}</div></div>`;
+    wireScenes(col);
+    if (sc) col.querySelector('.portrait').style.setProperty('--scene-glow', lightOf(a, sceneOf(a).theme).glow);
+    if (a.base && !job) {
+      const wake = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in' + (alive ? ' ghosty' : ''),
+        textContent: alive ? 'Draw new idle frames' : a.idle ? 'Wake up the new look' : `Bring ${a.name} to life` });
+      wake.onclick = () => { $('input').value = `Bring ${a.name} to life`; soulSend({ idle: true }); };
+      col.querySelector('.soul-card > div:last-child').append(wake);
+      if (alive && a.scene) {  // her world can be dreamt again on its own, without drawing the frames anew
+        const world = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: '🌍 New world' });
+        world.onclick = () => { $('input').value = `Dream up a new world for ${a.name}`; soulSend({ world: true }); };
+        wake.after(world);
+      }
+    }
+    if (alive && a.idle.rig) livePortrait(col.querySelector('.portrait.alive'), a.idle, sc);
+    else idleLoop(alive && col.querySelector('.portrait.alive'));
+    const last = a.grids.length - 1;
+    // an agent that's alive opens as a profile: how it was made folds away, newer polish talk stays in view
+    const cut = alive ? a.messages.findLastIndex(m => m.idle) : -1;
+    let history = null;
+    if (cut > 0) {
+      history = Object.assign(document.createElement('details'), { className: 'history' });
+      history.innerHTML = `<summary>Creation history <small>${cut + 1} messages</small></summary>`;
+      col.append(history);
+    }
+    a.messages.forEach((m, i) => {
+      const dest = history && i <= cut ? history : col;
+      const el = document.createElement('div');
+      el.className = 'msg ' + (m.role === 'user' ? 'user' : 'bot');
+      if (m.role === 'user') { el.textContent = m.text; dest.append(el); return; }
+      el.innerHTML = `<p>${esc(m.text)}</p>`;
+      if (m.grid != null && a.grids[m.grid]) el.append(candGrid(a.grids[m.grid].candidates, m.grid === last && !job, a));
+      if (m.edit) {
+        const pair = Object.assign(document.createElement('div'), { className: 'polish' });
+        pair.innerHTML = ['Before', 'After'].map(n => { const f = m.edit[n.toLowerCase()]; return `<figure><img src="${url(f)}" alt="${n}"><figcaption>${n}</figcaption>
+          <button type="button" class="zoom" data-zoom="${esc(f)}" data-label="${n}" title="Enlarge ${n.toLowerCase()}" aria-label="Enlarge ${n.toLowerCase()}">🔍</button></figure>`; }).join('');
+        el.append(pair);
+        if (m.edit.after === a.base?.file && !job) {
+          const undo = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: 'Undo this edit' });
+          undo.onclick = () => { $('input').value = 'Undo'; soulSend({ undo: true }); };
+          el.append(undo);
+          if (a.edits?.length > 1) {
+            const back = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: 'Back to the locked-in image' });
+            back.onclick = () => { $('input').value = 'Back to the locked-in image'; soulSend({ restore: true }); };
+            el.append(' ', back);
+          }
+        }
+      }
+      // the open question after a pick: one click locks it in, a chat message fine-tunes it instead
+      if (m.ask && m === a.messages.at(-1) && !job) {
+        const ok = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in', textContent: `Lock in #${m.ask}` });
+        ok.onclick = () => { $('input').value = `Lock in number ${m.ask}`; soulSend({ base: 0 }); };
+        el.append(ok);
+      }
+      dest.append(el);
+    });
+    if (job) col.append(soulWorking(job));
+    scrollDown();
+  }
+  // Scenes: a shared backdrop of three parallax layers (sky, far, near) that the viewer can swap, and in front of
+  // it the agent's own motif (Morpheus's moon). The figure is cut out of its picture and stands on top.
+  const SCENES = { shuffle: '🎲 Shuffle', home: 'Her world', dream: 'Dream', city: 'Neon city', forest: 'Twilight forest', sakura: 'Sakura', desert: 'Desert dusk', ocean: 'Moonlit sea', snow: 'Aurora peaks', volcano: 'Volcano', space: 'Deep space', castle: 'Gothic castle', original: 'Original' };
+  // each backdrop's light: key and fill rim colours, the side the key comes from (1 = left), how strong the rim is,
+  // the ambient her colours are graded toward (rgb, amount), and what drifts in the air in front of her
+  const LIGHT = {
+    dream: { shimmer: 12, key: [225, 200, 255], fill: [120, 150, 255], side: 1, rim: .72, amb: [200, 185, 255, .14], fog: 'rgba(70, 40, 140, .55)', glow: '#b48cff',
+      motes: { n: 26, col: ['#e9dcff', '#b9a0ff', '#8fd0ff'], vy: -2.2, vx: .6, size: 1, twinkle: 1 } },
+    city: { own: 'rain', key: [255, 90, 220], fill: [70, 230, 255], side: -1, rim: .78, amb: [215, 190, 255, .16], fog: 'rgba(120, 20, 110, .5)', glow: '#ff4fd8',
+      motes: { n: 46, col: ['#8fe9ff', '#c9f6ff'], vy: 34, vx: -6, size: 1, streak: 3 } },
+    forest: { key: [175, 240, 255], fill: [90, 200, 190], side: 1, rim: .7, amb: [180, 215, 225, .14], fog: 'rgba(30, 80, 95, .55)', glow: '#9fe8ff',
+      motes: { n: 18, col: ['#e6ff8a', '#b8ff6a', '#fff3a0'], vy: -.8, vx: 1.2, size: 1, twinkle: 1, wander: 1 } },
+    sakura: { day: 1, own: 'petals', key: [255, 214, 170], fill: [255, 160, 205], side: -1, rim: .55, amb: [255, 228, 225, .1], fog: 'rgba(255, 160, 200, .32)', vig: 'rgba(110, 40, 80, .3)', glow: '#ffb7d5',
+      motes: { n: 26, col: ['#ffb7d5', '#ff9ec4', '#ffe0ee'], vy: 6, vx: 4, sway: 3, petal: 1 } },
+    desert: { own: 'dust', key: [255, 190, 120], fill: [120, 120, 255], side: 1, rim: .62, amb: [255, 215, 190, .12], fog: 'rgba(150, 80, 60, .45)', glow: '#ffc36b',
+      motes: { n: 34, col: ['#ffe3a8', '#f2c48a'], vy: .6, vx: 9, sway: 1.5 } },
+    ocean: { key: [200, 230, 255], fill: [60, 200, 210], side: -1, rim: .68, amb: [185, 210, 240, .14], fog: 'rgba(20, 70, 120, .5)', glow: '#8fd8ff',
+      motes: { n: 20, col: ['#e6fbff', '#9fe3ff', '#ffffff'], vy: -5, vx: .3, sway: 1.4, bubble: 1 } },
+    snow: { shimmer: 22, own: 'snow', key: [150, 255, 200], fill: [190, 150, 255], side: 1, rim: .7, amb: [200, 225, 255, .14], fog: 'rgba(120, 160, 220, .42)', glow: '#9fffd0',
+      motes: { n: 46, col: ['#ffffff', '#dfefff'], vy: 9, vx: -1.5, sway: 2.2, big: .35 } },
+    volcano: { lava: 1, own: 'embers', key: [255, 226, 160], fill: [110, 140, 255], side: 1, rim: .8, amb: [255, 210, 190, .1], fog: 'rgba(120, 25, 10, .55)', glow: '#ff7a2f',
+      motes: { n: 34, col: ['#ffb347', '#ff7a2f', '#ffe08a'], vy: -7, vx: 1.5, sway: 1.8, twinkle: 1, glow: 1 } },
+    space: { nonear: 1, shimmer: 14, key: [150, 200, 255], fill: [255, 120, 220], side: -1, rim: .7, amb: [200, 200, 255, .14], fog: 'rgba(30, 20, 80, .5)', glow: '#a8c8ff',
+      motes: { n: 30, col: ['#ffffff', '#cfe0ff', '#ffd0f0'], vy: .4, vx: -.8, twinkle: 1 } },
+    castle: { storm: 1, key: [235, 225, 255], fill: [200, 40, 70], side: 1, rim: .66, amb: [215, 190, 220, .15], fog: 'rgba(60, 10, 40, .55)', glow: '#e0d0ff',
+      motes: { n: 14, col: ['#2a1630', '#3b1d40'], vy: -1, vx: 6, sway: 3, petal: 1 } },
+  };
+  const sceneNow = () => SCENES[store.get('soul.scene')] ? store.get('soul.scene') : 'shuffle';
+  const scened = a => sceneNow() !== 'original' && !!a.scene?.cut && a.scene.base === a.base?.file;
+  // a small seeded random: the same agent and roll always give the same backdrop, a new roll a new one
+  const seeded = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => ((h = Math.imul(h ^ h >>> 15, 2246822507) ^ Math.imul(h ^ h >>> 13, 3266489909)) >>> 0) / 4294967296; };
+  const VARIANTS = { dream: 'sky far near', city: 'sky far near', forest: 'sky far near', sakura: 'sky far near',
+    desert: 'sky far near', ocean: 'sky', snow: 'sky far near', volcano: 'sky far', castle: 'sky far near' };
+  const THEMES = () => Object.keys(SCENES).filter(k => LIGHT[k]);
+  // her world is a theme of one: its layers and its light are hers
+  const lightOf = (a, theme) => theme === 'home' ? a.scene.world.light : LIGHT[theme];
+  // on Shuffle every agent draws her own theme, and every backdrop is composed afresh: each layer mirrored or not,
+  // slid along, the sky's hue nudged; no two cards share a backdrop
+  function sceneOf(a) {
+    const roll = store.get('soul.roll', 1), r = seeded(`${a.slug}:${roll}`);
+    // dealt like cards: the themes are shuffled once per roll and handed round, so nobody shares a theme until
+    // every one is out (drawn at random, four of ten once stood in the same neon city)
+    const deck = THEMES().map(k => [k, seeded(`${k}:${roll}`)()]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+    const seat = soul.agents.map(x => x.slug).sort().indexOf(a.slug);
+    let pick = sceneNow() !== 'shuffle' ? sceneNow() : a.scene.world && r() < .25 ? 'home' : deck[Math.max(0, seat) % deck.length];
+    if (pick === 'home' && !a.scene.world) pick = 'dream';
+    // most layers come in two drawings: which one is drawn too
+    const v = l => ({ flip: r() < .5, x: 20 + r() * 60 | 0, hue: l === 'near' ? 0 : (r() - .5) * 26 | 0, alt: VARIANTS[pick]?.includes(l) && r() < .5 ? '2' : '' });
+    // a weather of her own, now and then, only on Shuffle and never one her theme already has
+    const w = Object.keys(WEATHER).filter(k => k !== lightOf(a, pick).own);
+    const weather = sceneNow() === 'shuffle' && r() < .45 ? w[r() * w.length | 0] : '';
+    // and now and then a remix: another night's sky over this ground (an aurora over the castle, a nebula over
+    // the forest); her rim light follows the sky, the air and fog stay the ground's
+    const night = THEMES().filter(k => !LIGHT[k].day && !LIGHT[k].lava);
+    const skyOf = sceneNow() === 'shuffle' && night.includes(pick) && r() < .33 ? night[r() * night.length | 0] : pick;
+    const shuffled = sceneNow() === 'shuffle';
+    const motif = { scale: shuffled ? .9 + r() * .18 : 1, dx: shuffled ? (r() - .5) * 8 : 0 };
+    return { theme: pick, skyTheme: skyOf, weather, motif, sky: v('sky'), far: v('far'), near: v('near') };
+  }
+  const sceneLayers = a => {
+    const s = sceneOf(a), L = lightOf(a, s.theme), S = lightOf(a, s.skyTheme);
+    const lay = l =>  `<i class="${l}" data-x="${s[l].x}" style="background-image:url('${url(s.theme === 'home' ? a.scene.world[l] : `soulforge/_scenes/${l === 'sky' ? s.skyTheme : s.theme}_${l}${l === 'sky' && s.skyTheme !== s.theme ? '' : s[l].alt}.png`)}');${s[l].flip ? 'transform:scaleX(-1);' : ''}filter:${{ sky: 'brightness(.82) saturate(.9) ', far: 'brightness(.9) saturate(.82) ', near: 'brightness(.78) ' }[l]}${s[l].hue ? `hue-rotate(${s[l].hue}deg)` : ''};"></i>`;
+    return `<div class="scene${S.shimmer ? ' aurora' : ''}${L.lava ? ' lava' : ''}" style="--shim:${S.shimmer || 0}deg">${lay('sky')}<canvas class="back" width="139" height="203" data-day="${S.day ? 1 : ''}" data-often="${S.nonear ? 1 : ''}" data-storm="${S.storm || s.weather === 'rain' ? 1 : ''}"></canvas>${S.day ? `<i class="rays" style="--side:${s.sky.flip ? -1 : 1}"></i>` : ''}${lay('far')}${L.nonear ? '' : lay('near')}${a.scene.motif ? `<i class="motif" style="background-image:url('${url(a.scene.motif)}');--glow:${L.glow};scale:${s.motif.scale.toFixed(3)};translate:${s.motif.dx.toFixed(1)}% 0"></i>` : ''}</div><div class="front ${s.theme}" style="--fog:${L.fog}${L.vig ? `;--vig:${L.vig}` : ''}"><canvas width="139" height="203" data-theme="${s.theme}"${s.theme === 'home' ? ` data-light='${JSON.stringify(L)}'` : ''} data-sky="${s.skyTheme}" data-side="${s.sky.flip ? -1 : 1}" data-weather="${s.weather}"></canvas></div>`;
+  };
+  const scenePicker = () => `<div class="scenes" role="group" aria-label="Backdrop">${Object.entries(SCENES).map(([k, v]) => `<button type="button" data-scene="${k}" aria-pressed="${k === sceneNow()}"${k === 'shuffle' ? ' title="Every agent gets her own random backdrop; click again for new ones (R)"' : k === 'home' ? ' title="A world painted for her alone; agents without one stand in Dream"' : ''}>${k === 'shuffle' && sceneNow() === 'shuffle' ? '🎲 Reroll' : v}</button>`).join('')}</div>`;
+  addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'r' || e.ctrlKey || e.metaKey || e.altKey || /input|textarea/i.test(e.target.tagName)) return;
+    document.querySelector('[data-scene="shuffle"]')?.click();
+  });
+  function wireScenes(root) {
+    root.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => {
+      if (b.dataset.scene === 'shuffle' && sceneNow() === 'shuffle') store.set('soul.roll', store.get('soul.roll', 1) + 1);  // again: a new roll
+      store.set('soul.scene', b.dataset.scene);
+      renderSoul();
+    });
+  }
+  // one loop for every scene on the page: each layer drifts on its own slow swing, nearer layers further, and
+  // leans a little toward the pointer; whole pixels only, so the art stays crisp
+  let lean = 0, leanTo = 0, gust = 0, gustAt = performance.now() + 9000;
+  // reduced motion: the scene and the figure hold still; blinks and expressions stay
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  addEventListener('pointermove', e => { leanTo = (e.clientX / innerWidth - .5) * 2; }, { passive: true });
+  const DRIFT = { sky: [6, .05, 0], far: [16, .07, 1.3], near: [30, .09, 2.1] };
+  (function drift(now) {
+    requestAnimationFrame(drift);
+    const t = now / 1000;
+    lean += (leanTo - lean) * .04;
+    // a gust now and then: it swells and fades over three seconds, and everything in the air feels it at once
+    const g = (now - gustAt) / 3000;
+    gust = g < 0 ? 0 : g < 1 ? Math.sin(Math.PI * g) ** 2 : 0;
+    if (g >= 1) gustAt = now + 12000 + Math.random() * 14000;
+    if (calm) return;
+    for (const sc of document.querySelectorAll('.scene')) {
+      const w = sc.clientWidth / 340;  // the same swing at every card size
+      for (const [l, [amp, sp, ph]] of Object.entries(DRIFT)) {
+        const el = sc.querySelector('.' + l);
+        // a mirrored layer slides mirrored too: its lean is turned back so every layer leans the same way
+        if (el) el.style.backgroundPosition = `calc(${el.dataset.x || 50}% + ${Math.round(w * (amp * Math.sin(t * sp * 2 * Math.PI + ph) - (el.style.transform ? -1 : 1) * lean * amp * .6))}px) 100%`;
+      }
+      const fig = sc.parentElement.querySelector('canvas.live');
+      if (fig) fig.style.translate = `${Math.round(-lean * 7 * w)}px 0`;
+      const m = sc.querySelector('.motif');
+      if (m) m.style.transform = `translate(${Math.round(-lean * 4 * w)}px, ${Math.round(w * 5 * Math.sin(t * .9))}px)`;
+    }
+    const dt = Math.min(.1, t - (drift.last || t)); drift.last = t;
+    for (const cv of document.querySelectorAll('canvas.back')) sky(cv, now, dt);  // first: it clears the back canvas
+    for (const cv of document.querySelectorAll('.front canvas')) air(cv, t, dt);
+  })(0);
+  // the air in front of her, one canvas pixel per art pixel so every mote is as crisp as the art: the theme's own
+  // and, now and then on a shuffled backdrop, a weather of its own on top
+  const WEATHER = {
+    snow: { n: 40, col: ['#ffffff', '#dfefff'], vy: 9, vx: -1.5, sway: 2.2, big: .35 },
+    petals: { n: 22, col: ['#ffb7d5', '#ff9ec4', '#ffe0ee'], vy: 6, vx: 4, sway: 3, petal: 1 },
+    embers: { n: 26, col: ['#ffb347', '#ff7a2f', '#ffe08a'], vy: -7, vx: 1.5, sway: 1.8, twinkle: 1, glow: 1 },
+    rain: { n: 50, col: ['#a9c8ff', '#d6e6ff'], vy: 40, vx: -5, streak: 4 },
+    leaves: { n: 16, col: ['#e0782f', '#c9542a', '#f0b040'], vy: 7, vx: 5, sway: 3.5, petal: 1 },
+    fireflies: { n: 14, col: ['#e6ff8a', '#fff3a0'], vy: -.6, vx: .8, twinkle: 1, wander: 1 },
+    dust: { n: 30, col: ['#fff6d8', '#ffe3a8'], vy: -.6, vx: 2.2, sway: 1, twinkle: 1 },
+  };
+  // now and then a shooting star crosses a night sky, behind the far layer: something to catch, not a loop
+  const skies = new WeakMap();
+  function sky(cv, now, dt) {
+    if (cv.dataset.day) { cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); if (cv.dataset.storm) storm(cv, now); return; }
+    let st = skies.get(cv);
+    if (!st) skies.set(cv, st = { next: now + 2000 + Math.random() * 9000, s: null });
+    const g = cv.getContext('2d');
+    if (!st.s && now > st.next) {
+      const dir = Math.random() < .5 ? 1 : -1;
+      st.s = { x: dir > 0 ? Math.random() * 60 : 79 + Math.random() * 60, y: 4 + Math.random() * 40, vx: dir * (55 + Math.random() * 30), vy: 16 + Math.random() * 12, life: 0, max: .7 + Math.random() * .5 };
+    }
+    g.clearRect(0, 0, cv.width, cv.height);
+    if (cv.dataset.storm) storm(cv, now);
+    const s = st.s;
+    if (!s) return;
+    s.life += dt; s.x += s.vx * dt; s.y += s.vy * dt;
+    const a = Math.sin(Math.PI * Math.min(1, s.life / s.max));
+    g.globalAlpha = a * .35; g.fillStyle = '#dff0ff'; g.fillRect(Math.round(s.x) - 1, Math.round(s.y) - 1, 3, 3);  // its glow
+    for (let k = 0; k < 15; k++) {  // the tail, one art pixel per step, fading
+      g.globalAlpha = a * (1 - k / 15) ** 1.4;
+      g.fillStyle = k ? '#bfe3ff' : '#ffffff';
+      g.fillRect(Math.round(s.x - s.vx / 90 * k), Math.round(s.y - s.vy / 90 * k), 1, 1);
+    }
+    g.globalAlpha = 1;
+    if (s.life > s.max) { st.s = null; st.next = now + (cv.dataset.often ? 2500 : 7000) + Math.random() * (cv.dataset.often ? 5000 : 14000); }
+  }
+  const lights = new WeakMap();
+  const canvasLight = cv => cv.dataset.light ? lights.get(cv) || (lights.set(cv, JSON.parse(cv.dataset.light)), lights.get(cv)) : LIGHT[cv.dataset.theme];
+  // a storm: now and then the sky behind the far layers flashes twice, so the silhouettes stand out against it
+  const storms = new WeakMap();
+  function storm(cv, now) {
+    let st = storms.get(cv);
+    if (!st) storms.set(cv, st = { next: now + 3000 + Math.random() * 8000 });
+    const t = now - st.next, flash = t < 0 ? 0 : t < 70 ? .55 : t < 160 ? 0 : t < 260 ? .35 * (1 - (t - 160) / 100) : -1;
+    if (flash < 0) { st.next = now + 6000 + Math.random() * 12000; return; }
+    const g = cv.getContext('2d');
+    if (flash) { g.globalAlpha = flash; g.fillStyle = '#e8e6ff'; g.fillRect(0, 0, cv.width, cv.height * .75); g.globalAlpha = 1; }
+    const her = cv.closest('.portrait')?.querySelector('canvas.live, img:not(.ov)');  // the flash lights her too
+    if (her) her.style.filter = flash > 0 ? `brightness(${1 + flash * .7}) saturate(${1 - flash * .4})` : '';
+  }
+  const airs = new WeakMap();
+  function air(cv, t, dt) {
+    const kinds = [canvasLight(cv)?.motes, WEATHER[cv.dataset.weather]].filter(Boolean);
+    const W = cv.width, H = cv.height, g = cv.getContext('2d'), front = g;
+    const spawn = (p, L, any) => Object.assign(p, { L, x: Math.random() * W, y: any ? Math.random() * H : (L.vy > 0 ? -4 : H + 2),
+      c: L.col[Math.random() * L.col.length | 0], ph: Math.random() * 7, sp: .6 + Math.random() * .8, z: Math.random() });
+    let ps = airs.get(cv);
+    if (!ps) { ps = kinds.flatMap(L => Array.from({ length: L.n }, () => spawn({}, L, true))); airs.set(cv, ps); }
+    g.clearRect(0, 0, W, H);
+    const back = cv.parentElement.previousElementSibling?.querySelector?.('canvas.back')?.getContext('2d');
+    for (const p of ps) {
+      const g = back && p.z < .33 ? back : front;  // the farthest third behind her
+      const L = p.L, sway = L.sway || (L.wander ? 1.6 : 0);
+      p.x += (L.vx * p.sp + sway * Math.sin(t * .7 + p.ph) + gust * (L.streak ? 10 : 16) * p.sp) * dt - lean * .05 * p.z;
+      p.y += (L.vy * p.sp + (L.wander ? 1.2 * Math.cos(t * .5 + p.ph * 1.3) : 0)) * dt;
+      if (p.y < -6 || p.y > H + 6 || p.x < -6 || p.x > W + 6) spawn(p, L);
+      const a = L.twinkle ? Math.max(0, Math.sin(t * (1.1 + p.sp) + p.ph)) ** 2 * .95 : .4 + .45 * p.z;
+      if (a < .03) continue;
+      const x = Math.round(p.x), y = Math.round(p.y);
+      g.fillStyle = p.c;
+      g.globalAlpha = a;
+      if (L.streak) { g.fillRect(x, y, 1, L.streak + (p.z * 2 | 0)); continue; }
+      if (L.petal) { const f = Math.sin(t * 3 + p.ph) > 0; g.fillRect(x, y, f ? 2 : 1, f ? 1 : 2); continue; }  // a petal tumbling
+      if (L.bubble) { g.globalAlpha = a * .8; g.fillRect(x, y, 1, 1); if (p.z > .6) { g.globalAlpha = a * .35; g.fillRect(x + 1, y, 1, 1); g.fillRect(x, y - 1, 1, 1); } continue; }  // a bubble with its glint
+      if (L.big && p.z > 1 - L.big) { g.fillRect(x, y, 2, 2); continue; }  // the nearest flakes are bigger
+      if (L.wander || L.glow) { g.globalAlpha = a * .22; g.fillRect(x - 1, y - 1, 3, 3); g.globalAlpha = a; }  // a glow
+      g.fillRect(x, y, 1, 1);
+    }
+    g.globalAlpha = 1;
+    if (back) back.globalAlpha = 1;
+  }
+  // The idle loop: blinks every few seconds (half, closed, half: a 16-bit blink is three frames), a smirk now and
+  // then, a blush that fades in and out. Each renderSoul starts it afresh on the new portrait.
+  let idleTimers = [];
+  // several run at once (the gallery); renderSoul clears them all before it draws
+  function idleLoop(p) {
+    if (!p) return;  // no reduced-motion opt-out: the animation is the feature, and Windows sets it system-wide
+    const ov = n => p.querySelector(`img.ov.${n}`);
+    const later = (f, ms) => idleTimers.push(setTimeout(() => p.isConnected && f(), ms));
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const show = (n, on) => ov(n).classList.toggle('on', on);
+    function blink(again) {
+      show('half', true);
+      later(() => { show('half', false); show('closed', true); }, 50);
+      later(() => { show('closed', false); show('half', true); }, 150);
+      later(() => { show('half', false); }, 210);
+      later(() => blink(Math.random() < .12), again ? 420 : rand(5000, 9000));  // now and then a double blink
+    }
+    function smirk() {
+      show('smirk', true);
+      later(() => show('smirk', false), rand(2500, 4000));
+      later(smirk, rand(25000, 45000));
+    }
+    function blush() {
+      show('blush', true);
+      later(() => show('blush', false), rand(3000, 5000));
+      later(blush, rand(35000, 60000));
+    }
+    later(blink, rand(1000, 5000));  // cards out of step with each other
+    later(smirk, rand(6000, 30000));
+    later(blush, rand(12000, 40000));
+  }
+  // The living portrait: the base with its expression overlays, warped every frame by the rig. Breathing lifts the
+  // upper body one art pixel, hair and cloak sway with a lag toward their tips, and a pixel that the figure moves
+  // off of shows the clean background plate. Every shift is a whole art pixel, so it stays crisp pixel art.
+  async function livePortrait(p, idle, cut) {
+    const load = f => new Promise((ok, no) => Object.assign(new Image(), { onload() { ok(this); }, onerror: no, src: url(f) }));
+    let pics;
+    try {
+      pics = await Promise.all([idle.base, idle.plate, idle.rig, ...['blush', 'smirk', 'half', 'closed'].map(n => idle.frames[n])].map(load));
+    } catch { return idleLoop(p); }  // frames from before the rig existed: the plain overlay loop
+    if (!p.isConnected) return;
+    const [base, plate, rig, ...ovs] = pics;
+    const ov = Object.fromEntries(['blush', 'smirk', 'half', 'closed'].map((n, i) => [n, ovs[i]]));
+    // the glance came later: sets drawn before it simply don't glance
+    ov.glance = idle.frames.glance ? await load(idle.frames.glance).catch(() => null) : null;
+    ov.glance_l = idle.frames.glance_l ? await load(idle.frames.glance_l).catch(() => null) : null;  // and the other way
+    if (!p.isConnected) return;
+    const W = base.naturalWidth, H = base.naturalHeight, B = idle.block || 6, N = W * H;
+    const ease = x => x * x * (3 - 2 * x);
+    const pixels = img => { const c = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true }); c.drawImage(img, 0, 0); return c.getImageData(0, 0, W, H).data; };
+    const plate32 = new Uint32Array(pixels(plate).buffer), r = pixels(rig);
+    const fig = new Uint8Array(N), hairW = new Float32Array(N), cloakW = new Float32Array(N), breathW = new Float32Array(N);
+    const zone = [];  // the pixels that can change: the figure and a margin around it for what it moves into
+    for (let i = 0; i < N; i++) {
+      fig[i] = r[i * 4] > 128;
+      hairW[i] = r[i * 4 + 1] / 255;
+      cloakW[i] = r[i * 4 + 2] / 255;
+      const y = (i / W) | 0;
+      // by row, not only on the figure: the background above her shoulders takes them in when she breathes in.
+      // The chest and shoulders rise; the head barely does (a head riding along as one block, or a chest swelling
+      // sideways, looked like the picture being pushed around)
+      const chin = idle.mouth[3];
+      breathW[i] = ease(Math.min(1, Math.max(0, (idle.waist - y) / (idle.waist - idle.chest))))
+        * (y > idle.chest ? 1 : y < chin ? .25 : .25 + .75 * ease((y - chin) / (idle.chest - chin)));
+    }
+    // the margin around the figure, with the sway of the nearest figure pixel in its row: a strand swinging out
+    // lands on background pixels, and those need to know they're swinging too
+    const pad = B * 3, inZone = new Uint8Array(N);
+    for (let y = 0; y < H; y++) {
+      for (const dir of [1, -1]) {
+        let near = -1e9, h = 0, c = 0;
+        for (let k = 0; k < W; k++) {
+          const x = dir > 0 ? k : W - 1 - k, i = y * W + x;
+          if (fig[i]) { near = k; h = hairW[i]; c = cloakW[i]; inZone[i] = 1; }
+          else if (k - near <= pad) { inZone[i] = 1; hairW[i] = Math.max(hairW[i], h); cloakW[i] = Math.max(cloakW[i], c); }
+        }
+      }
+      // a breath lifts the head into the rows above it
+      for (let x = 0; x < W; x++) for (let k = 1; k <= B && y + k < H; k++) if (fig[(y + k) * W + x]) inZone[y * W + x] = 1;
+    }
+    for (let i = 0; i < N; i++) if (inZone[i]) zone.push(i);
+    // the motion is worked out per art pixel (a B×B block) and every screen pixel in it moves alike: moved one by
+    // one, neighbours with different weights tore the blocks into slivers and combed the edges of hair and sleeves
+    const BW = Math.ceil(W / B), BH = Math.ceil(H / B), NB = BW * BH;
+    const bHair = new Float32Array(NB), bCloak = new Float32Array(NB), bBreath = new Float32Array(NB), bRow = new Float32Array(NB);
+    const blockOf = new Int32Array(N);
+    for (let i = 0; i < N; i++) {
+      const y = (i / W) | 0, b = ((y / B) | 0) * BW + (((i - y * W) / B) | 0);
+      blockOf[i] = b;
+      bHair[b] += hairW[i]; bCloak[b] += cloakW[i]; bBreath[b] += breathW[i];
+    }
+    for (let b = 0; b < NB; b++) { bHair[b] /= B * B; bCloak[b] /= B * B; bBreath[b] /= B * B; bRow[b] = ((b / BW) | 0) * B + B / 2; }
+    const bdx = new Int16Array(NB), bdy = new Int16Array(NB);
+    // on a scene its light falls on her: a rim of the key light along her edges on its side (the fill on the
+    // other), whole art pixels deep so it reads as painted, and her colours graded toward the scene's ambient
+    const fx = p.querySelector('.front canvas');  // the light comes from where her sky puts it: a mirrored sky, a mirrored key
+    const look = { ...((fx && canvasLight(fx)) || LIGHT.dream), ...(fx?.dataset.sky && LIGHT[fx.dataset.sky] ? (({ key, fill, side }) => ({ key, fill, side }))(LIGHT[fx.dataset.sky]) : {}) }, lit = new Float32Array(N);
+    look.side *= +(fx?.dataset.side || 1);
+    {
+      const hue = ([r, g, b]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn || 1;
+        return (mx === r ? (g - b) / d + 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60 % 360; };
+      const px = pixels(base);
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < N; i += 7) if (fig[i]) { r += px[i * 4]; g += px[i * 4 + 1]; b += px[i * 4 + 2]; n++; }
+      const d = Math.abs(hue([r / n, g / n, b / n]) - hue(look.key));
+      if (n && Math.min(d, 360 - d) < 35) [look.key, look.fill] = [look.fill, look.key];  // red on red: the cool light wins
+    }
+    if (cut) {
+      const bFig = new Uint8Array(NB), cnt = new Uint16Array(NB);
+      for (let i = 0; i < N; i++) if (fig[i]) cnt[blockOf[i]]++;
+      for (let b = 0; b < NB; b++) bFig[b] = cnt[b] > B * B / 2;
+      const depth = [0, 1, .38, .12], rim = new Float32Array(NB);
+      for (let b = 0; b < NB; b++) {
+        if (!bFig[b]) continue;
+        const bx = b % BW;
+        let w = 0;
+        for (let d = 1; d <= 3; d++) {  // open space d art pixels away: toward the key side, the fill side, above
+          if (bx - d * look.side >= 0 && bx - d * look.side < BW && !bFig[b - d * look.side]) { w = Math.max(w, depth[d]); }
+          else if (bx + d * look.side >= 0 && bx + d * look.side < BW && !bFig[b + d * look.side]) { w = -depth[d] * .7; }
+          else if (b - d * BW >= 0 && !bFig[b - d * BW]) w = Math.max(w, depth[d] * .8);
+          if (w) break;
+        }
+        rim[b] = w;
+      }
+      for (let i = 0; i < N; i++) lit[i] = rim[blockOf[i]] * look.rim;
+    }
+    const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H, className: 'live' });
+    p.querySelectorAll('img').forEach(i => i.remove());
+    p.prepend(canvas);
+    const ctx = canvas.getContext('2d');
+    const out = ctx.createImageData(W, H), out32 = new Uint32Array(out.data.buffer);
+    const comp = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true });
+    let src32, dirty = true;
+    const state = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 };
+    p.addEventListener('click', () => {
+      const now = performance.now();
+      timeline.push([now, 'smirk', 1], [now + 1800, 'smirk', 0], [now, 'blush', 1], [now + 2600, 'blush', 0]);
+      nextSmirk = Math.max(nextSmirk, now + 15000); nextBlush = Math.max(nextBlush, now + 20000);
+    });
+    function compose() {  // the base with the expression overlays that are on right now
+      comp.clearRect(0, 0, W, H);
+      comp.drawImage(base, 0, 0);
+      for (const n of ['blush', 'smirk', 'glance', 'glance_l', 'half', 'closed']) if (state[n] && ov[n]) { comp.globalAlpha = state[n]; comp.drawImage(ov[n], 0, 0); comp.globalAlpha = 1; }
+      src32 = new Uint32Array(comp.getImageData(0, 0, W, H).data.buffer);
+      if (cut) for (let i = 0; i < N; i++) {  // on a scene only she is drawn, lit by it
+        if (!fig[i]) { src32[i] = 0; continue; }
+        const s = lit[i];
+        if (!s && !look.amb[3]) continue;
+        const v = src32[i], t = look.amb[3];
+        let r = v & 255, g = v >> 8 & 255, bl = v >> 16 & 255;
+        r += (look.amb[0] * r / 255 - r) * t; g += (look.amb[1] * g / 255 - g) * t; bl += (look.amb[2] * bl / 255 - bl) * t;
+        if (s) { const c = s > 0 ? look.key : look.fill, a = Math.abs(s); r += (c[0] - r) * a; g += (c[1] - g) * a; bl += (c[2] - bl) * a; }
+        src32[i] = (v & 0xff000000) | (bl << 16) | (g << 8) | r;
+      }
+      out32.set(src32);
+    }
+    // smirk and blush fade (seconds for a full fade); the blink cuts, as a real one does
+    const target = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 }, fade = { blush: 1.6, smirk: .45 };
+    const set = (n, v) => { target[n] = v; if (!fade[n]) { state[n] = v; dirty = true; } };
+    // sparkles: plus-shaped stars glowing up and fading in the background around her
+    const sparks = Array.from({ length: 6 }, () => ({}));
+    function place(s, fresh) {
+      for (let k = 0; k < 50; k++) {
+        const x = (Math.random() * (W / B - 4) + 2 | 0) * B, y = (Math.random() * (idle.chest / B) | 0) * B;
+        if (!fig[y * W + x] && !fig[(y + B) * W + x]) {
+          Object.assign(s, { x, y, life: 2.5 + Math.random() * 2.5, t: fresh ? -Math.random() * 6 : -Math.random() * 3 });
+          return;
+        }
+      }
+    }
+    sparks.forEach(s => place(s, true));
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const t0 = performance.now();
+    let nextBlink = t0 + rand(1500, 3500), nextSmirk = t0 + rand(12000, 20000), nextBlush = t0 + rand(20000, 30000),
+      nextGlance = t0 + rand(6000, 10000);
+    const timeline = [];  // [when, overlay, value]
+    let last = 0;
+    // a breath: in quickly, out slower, a short rest; its own clock drifts a little so it never feels metronomic
+    const BREATH = 5.2;
+    let breathPhase = 0, sigh = false, swing = 0;
+    const breathCurve = p => p < .38 ? ease(p / .38) : p < .86 ? 1 - ease((p - .38) / .48) : 0;
+    const hairRow = new Float32Array(H), cloakRow = new Float32Array(H);
+    function frame(now) {
+      if (!p.isConnected) return;
+      requestAnimationFrame(frame);
+      if (now > nextBlink) {
+        const slow = Math.random() < .15 ? 3 : 1;  // now and then a slow, fond blink: the lid rests a while
+        const b = [[0, 'half', 1], [70 * slow, 'half', 0], [70 * slow, 'closed', 1], [70 * slow + 100 * slow ** 1.6, 'closed', 0], [70 * slow + 100 * slow ** 1.6, 'half', 1], [140 * slow + 100 * slow ** 1.6, 'half', 0]];
+        b.forEach(([d, n, v]) => timeline.push([now + d, n, v]));
+        nextBlink = now + (Math.random() < .12 ? 420 : rand(5000, 9000));  // now and then a double blink
+      }
+      // a glance aside: the eyes jump there and back, as eyes do; a blink often comes with the return
+      if (ov.glance && now > nextGlance) {
+        const hold = rand(1100, 2000);
+        const way = ov.glance_l && Math.random() < .5 ? 'glance_l' : 'glance';
+        timeline.push([now, way, 1], [now + hold, way, 0]);
+        if (Math.random() < .3) timeline.push([now + 260, way, 0], [now + 520, way, 1]);  // a double take
+        if (Math.random() < .5) [[0, 'half', 1], [50, 'half', 0], [50, 'closed', 1], [150, 'closed', 0], [150, 'half', 1], [210, 'half', 0]].forEach(([d, n, v]) => timeline.push([now + hold - 60 + d, n, v]));
+        nextGlance = now + hold + rand(15000, 30000);
+        nextBlink = Math.max(nextBlink, now + hold + 1500);
+      }
+      if (now > nextSmirk) { const hold = rand(2500, 4000); timeline.push([now, 'smirk', 1], [now + hold, 'smirk', 0]); nextSmirk = now + hold + rand(25000, 45000); }
+      if (now > nextBlush) { const hold = rand(3000, 5000); timeline.push([now, 'blush', 1], [now + hold, 'blush', 0]); nextBlush = now + hold + rand(35000, 60000); }
+      for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][0] <= now) { set(timeline[k][1], timeline[k][2]); timeline.splice(k, 1); }
+      const t = now / 1000, dt = last ? Math.min(.1, t - last) : 0; last = t;
+      for (const n in fade) if (state[n] !== target[n]) {
+        const d = dt / fade[n];
+        state[n] = target[n] > state[n] ? Math.min(target[n], state[n] + d) : Math.max(target[n], state[n] - d);
+        dirty = true;
+      }
+      if (dirty) {  // the fade's curve, not its linear clock
+        const lin = { ...state };
+        for (const n in fade) state[n] = ease(lin[n]);
+        compose();
+        Object.assign(state, lin);
+      }
+      dirty = false;
+      // all motion in real pixels, every frame: one-pixel steps at display size read as smooth, and nearest
+      // sampling keeps the art crisp
+      const was = breathPhase;
+      breathPhase = (breathPhase + dt / (BREATH * (1 + .08 * Math.sin(t * .37)) * (sigh ? 1.5 : 1))) % 1;
+      if (breathPhase < was) sigh = Math.random() < .12;  // a new breath: now and then a sigh
+      const breath = calm ? 0 : breathCurve(breathPhase) * (sigh ? 1.6 : 1);
+      // the sway: a slow drift of air, never one clean sine (that read as the picture sliding), small enough to
+      // stay a sway; the tips follow the root later, as cloth and hair do
+      swing = swing * Math.exp(-dt * 1.4) + Math.abs(leanTo - lean) * dt * 9;  // the pointer's sweep, dying away
+      const air = calm ? 0 : (.55 + .25 * Math.sin(t * .41) + .2 * Math.sin(t * .93 + 1.7)) * (1 + 1.1 * gust + Math.min(1.2, swing));
+      for (let y = 0; y < H; y++) {
+        hairRow[y] = air * (3.2 * Math.sin(t * 1.63 - y * .009) + 1.3 * Math.sin(t * 2.71 - y * .017 + .6));
+        cloakRow[y] = air * (4.5 * Math.sin(t * 1.21 - y * .005 + .8) + 1.6 * Math.sin(t * 2.07 - y * .011 + 2.1));
+      }
+      // the head rides on the shoulders a beat behind them, as a real one does: risen together it read as one block
+      const breathLate = breathCurve((breathPhase + .94) % 1);
+      for (let b = 0; b < NB; b++) {
+        const y = bRow[b], late = ease(Math.min(1, Math.max(0, (idle.chest - y) / (idle.chest - idle.mouth[3]))));
+        bdy[b] = -Math.round((breath + (breathLate - breath) * late) * bBreath[b] * 3);
+        bdx[b] = Math.round(bHair[b] * hairRow[y] + bCloak[b] * cloakRow[y]);
+      }
+      for (let k = 0; k < zone.length; k++) {
+        const i = zone[k], y = (i / W) | 0, x = i - y * W, b = blockOf[i];
+        // where this pixel's content comes from: up when breathing in, sideways in the sway
+        const sx = x - bdx[b], sy = y - bdy[b];
+        const q = sy * W + sx;
+        // figure that lands here wins; where the figure moved away the clean plate shows, elsewhere the background
+        if (sx >= 0 && sx < W && sy >= 0 && sy < H && fig[q]) out32[i] = src32[q];
+        else out32[i] = fig[i] && !cut ? plate32[i] : src32[i];
+      }
+      ctx.putImageData(out, 0, 0);
+      ctx.fillStyle = cut ? `rgb(${look.key.map(c => c + (255 - c) * .55 | 0)})` : '#e9e2ff';  // on a scene, its light
+      for (const sp of sparks) {
+        sp.t += dt;
+        if (sp.t > sp.life) { place(sp); continue; }
+        if (sp.t < 0) continue;
+        const a = Math.sin(Math.PI * sp.t / sp.life) ** 2;
+        ctx.globalAlpha = a;
+        ctx.fillRect(sp.x, sp.y, B, B);
+        ctx.globalAlpha = a * .55;
+        ctx.fillRect(sp.x - B, sp.y, B, B); ctx.fillRect(sp.x + B, sp.y, B, B); ctx.fillRect(sp.x, sp.y - B, B, B); ctx.fillRect(sp.x, sp.y + B, B, B);
+      }
+      ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(frame);
+  }
+  // nine slots; a slot fills as its candidate lands, a click picks it through the chat
+  function candGrid(cands, live, a) {
+    const g = Object.assign(document.createElement('div'), { className: 'cands' });
+    for (let i = 0; i < 9; i++) {
+      const c = cands[i];
+      const b = Object.assign(document.createElement('div'), { className: 'cand' + (c ? '' : ' empty') + (c?.original ? ' orig' : '') });
+      if (c) {
+        b.dataset.file = c.file;
+        b.innerHTML = candInner(c, i);
+        b.setAttribute('aria-pressed', a?.base?.file === c.file);
+        if (live) {
+          b.classList.add('open');
+          b.innerHTML += `<button type="button" class="pick" title="Pick number ${i + 1}" aria-label="Pick number ${i + 1}"></button>`;
+          b.querySelector('.pick').onclick = () => { $('input').value = `Number ${i + 1}`; soulSend(); };
+        }
+      }
+      g.append(b);
+    }
+    return g;
+  }
+  const candInner = (c, i) => `<img src="${url(c.file)}" alt="Candidate ${i + 1}"><b>${i + 1}</b>${c.original ? '<em>Original</em>' : ''}
+    <button type="button" class="zoom" data-zoom="${esc(c.file)}" data-n="${i + 1}" title="Enlarge number ${i + 1}" aria-label="Enlarge number ${i + 1}">🔍</button>`;
+  // the magnifier sits on top of the pick button; delegated, since slots are filled in place while a grid renders
+  document.addEventListener('click', e => {
+    const z = e.target.closest('.zoom[data-zoom]');
+    if (!z) return;
+    e.stopPropagation();
+    const label = z.dataset.label || `Number ${z.dataset.n}`;
+    $('lb-inner').innerHTML = `<img src="${url(z.dataset.zoom)}" alt="${label}" class="pixel">
+      <div class="acts"><span class="meta">${label}</span><button type="button" data-a="close" aria-label="Close">✕</button></div>`;
+    $('lb-inner').querySelector('[data-a="close"]').onclick = () => lb.close();
+    if (!lb.open) lb.showModal();
+  }, true);
+  function soulWorking(job) {
+    const el = Object.assign(document.createElement('div'), { className: 'msg bot working', id: 'soul-working' });
+    el.innerHTML = '<p></p>';
+    paintWorking(el, job);
+    return el;
+  }
+  // updated in place while the job runs: rebuilding the view every poll reloaded every picture and replayed
+  // the messages' entrance animation, which flickered
+  function paintWorking(el, job) {
+    const steps = job.total ? ` · step ${job.step} of ${job.total}` : '';
+    el.querySelector('p').innerHTML = `${esc(job.status || 'Working …')}${steps} <b>${Math.round((Date.now() - job.since) / 1000)} s</b>`;
+    if (/Editing/.test(job.status || '') && job.previews && el.dataset.n !== String(job.previews)) {
+      el.dataset.n = job.previews;
+      const next = new Image();
+      next.onload = () => {
+        let img = el.querySelector('img.forming-edit');
+        if (!img) { img = Object.assign(document.createElement('img'), { className: 'forming-edit', alt: '' }); el.append(img); }
+        img.src = next.src;
+      };
+      next.src = `/api/job/${soul.job.id}/preview?n=${job.previews}`;
+    }
+    if (!job.candidates?.length && !/Rendering/.test(job.status || '')) return;
+    let g = el.querySelector('.cands');
+    if (!g) { g = candGrid([], false); el.append(g); scrollDown(); }
+    const forming = job.slot != null && !job.candidates?.[job.slot] && g.children[job.slot];
+    if (forming && job.previews && forming.dataset.n !== String(job.previews)) {
+      forming.dataset.n = job.previews;
+      const next = new Image();
+      next.onload = () => {
+        if (forming.dataset.file) return;  // the finished picture landed meanwhile
+        let img = forming.querySelector('img.forming');
+        if (!img) { forming.classList.remove('empty'); img = Object.assign(document.createElement('img'), { className: 'forming', alt: '' }); forming.append(img); }
+        img.src = next.src;
+      };
+      next.src = `/api/job/${soul.job.id}/preview?n=${job.previews}`;
+    }
+    (job.candidates || []).forEach((c, i) => {
+      const b = g.children[i];
+      if (!c || !b || b.dataset.file === c.file) return;
+      b.dataset.file = c.file;
+      b.className = 'cand' + (c.original ? ' orig' : '');
+      b.innerHTML = candInner(c, i);
+    });
+  }
+
+  async function soulSend(extra = {}) {
+    const text = $('input').value.trim();
+    if (!text) return $('input').focus();
+    if (soul.job) return toast('Soulforge is still working on the last request.');
+    $('input').value = ''; grow();
+    const a = soul.agents.find(x => x.slug === soul.current);
+    if (a) a.messages.push({ role: 'user', text });
+    try {
+      const r = await (await fetch(a ? '/api/soul/chat' : '/api/soul/new', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...(a ? { agent: a.slug, message: text, ...extra } : { description: text }), background: true }) })).json();
+      if (r.error) throw new Error(r.error);
+      soul.job = { id: r.job, agent: a?.slug ?? null, since: Date.now(), status: 'Starting …' };
+      store.set('soul.job', soul.job);
+      renderSoul(); followSoul();
+    } catch (err) { toast(err.message, true); if (a) a.messages.pop(); renderSoul(); }
+  }
+  let soulFollowing = false;
+  async function followSoul() {
+    if (soulFollowing) return;
+    soulFollowing = true;
+    try {
+      while (soul.job) {
+        let j;
+        try {
+          const r = await fetch('/api/job/' + soul.job.id);
+          j = r.status === 404 ? { state: 'error', error: 'The server restarted; that request was lost.' } : await r.json();
+        } catch { await new Promise(r => setTimeout(r, 2000)); continue; }
+        if (j.agent && !soul.job.agent) {  // a new agent exists from here on: show its page while the grid renders
+          soul.job.agent = j.agent; soul.current = j.agent; store.set('soul.current', j.agent);
+          await loadAgents();
+        }
+        Object.assign(soul.job, { status: j.status, candidates: j.candidates, slot: j.slot, previews: j.previews, step: j.step, total: j.total });
+        store.set('soul.job', soul.job);
+        if (j.state !== 'running') {
+          soul.job = null; store.set('soul.job', null);
+          if (j.state === 'error') toast(j.error || 'Soulforge failed.', true);
+          await loadAgents();
+          break;
+        }
+        const el = $('soul-working');
+        if (state.forge === 'soul') el ? paintWorking(el, soul.job) : renderSoul();
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } finally { soulFollowing = false; }
+  }
+
   boot();
   init();
+  setForge(state.forge);
+  if (soul.job) followSoul();
 </script>
 </body>
 </html>

@@ -31,6 +31,8 @@ def describe(patcher) -> dict:
 async def loaded(request):
     models = []
     for lm in list(mm.current_loaded_models):
+        if lm.real_model() is None:  # being freed: holding its patcher now could outlive ComfyUI's cleanup
+            continue
         patcher = lm.model
         if patcher is None:
             continue
@@ -39,3 +41,12 @@ async def loaded(request):
         except Exception as e:  # one odd model shouldn't hide the others
             models.append({"name": type(patcher).__name__, "kind": "?", "loaded": 0, "size": 0, "error": str(e)})
     return web.json_response(models)
+
+
+@PromptServer.instance.routes.post("/morpheus/cleanup")
+async def cleanup(request):
+    """Drop entries whose model is already gone. ComfyUI's finalizer sometimes misses one, and every later load
+    then fails in free_memory with "'NoneType' object has no attribute 'model_size'" until a restart."""
+    before = len(mm.current_loaded_models)
+    mm.cleanup_models()
+    return web.json_response({"removed": before - len(mm.current_loaded_models)})

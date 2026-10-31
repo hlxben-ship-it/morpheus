@@ -239,7 +239,14 @@ def generate(graph: dict, ghost: bool = False, progress=None) -> Image.Image:
         threading.Thread(target=watch, args=(client, progress, ready, done), daemon=True).start()
         ready.wait(3)
     try:
-        return wait(call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"], ghost)
+        try:
+            return wait(call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"], ghost)
+        except RuntimeError as e:
+            if "has no attribute 'model_size'" not in str(e):
+                raise
+            # a dead model left in ComfyUI's list (see comfy_ext/morpheus_status.py): clear it, try once more
+            call("/morpheus/cleanup", {"now": True})  # call() sends an empty dict as a GET
+            return wait(call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"], ghost)
     finally:
         done.set()
 
