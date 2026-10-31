@@ -692,6 +692,11 @@
   .dlg-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
   .dlg-wrap .dlg-name { margin: 0 0 -3px 14px; z-index: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .msg.dlg.speaking .dlg-wrap { position: sticky; bottom: 10px; z-index: 5; }
+  /* a new line opens like a game window: the box unfolds from its middle in a few hard steps, the tab drops in */
+  .msg.dlg.speaking.typing .dlg-box, .msg.dlg.speaking.working .dlg-box { animation: dlg-open .22s steps(4, end) both; }
+  .msg.dlg.speaking.typing .dlg-name, .msg.dlg.speaking.working .dlg-name { animation: dlg-tab .3s steps(3, end) both; }
+  @keyframes dlg-open { from { transform: scaleY(.08); filter: brightness(1.8); } }
+  @keyframes dlg-tab { from { transform: translateY(10px); opacity: 0; } }
   /* older lines: a compact log, small face, no name tab, so the thread stays readable */
   .msg.dlg.past .dlg-name { display: none; }
   .msg.dlg.past .dlg-box { padding: 8px 12px 8px 8px; gap: 12px; align-items: center; background: linear-gradient(180deg, rgba(48, 40, 128, .7), rgba(20, 15, 64, .78));
