@@ -78,6 +78,7 @@
     animation: live 1.6s ease-out infinite; }
   @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(255, 45, 61, .6); } 70% { box-shadow: 0 0 0 7px rgba(255, 45, 61, 0); opacity: .75; } 100% { box-shadow: 0 0 0 0 rgba(255, 45, 61, 0); } }
   @media (prefers-reduced-motion: reduce) { .sess .live { animation: none; } }
+  .sess .thumb { flex: none; width: 34px; height: 34px; border-radius: 6px; object-fit: cover; background: var(--raised); }
   .sess .del { opacity: 0; border: 0; background: transparent; color: var(--muted); padding: 2px 6px; border-radius: 6px; }
   .sess:hover .del, .sess:focus-within .del { opacity: 1; }
   .sess .del:hover { color: var(--danger); }
@@ -190,6 +191,7 @@
   .range-row .link:first-of-type { margin-left: auto; }
   .link { background: none; border: 0; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
   .input-row { display: flex; align-items: flex-end; gap: 10px; padding: 10px 10px 10px 16px; }
+  .input-row textarea:placeholder-shown { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }  /* a long hint on a phone: one line with …, no scrollbar */
   .input-row textarea { flex: 1; border: 0; background: transparent; resize: none; min-height: 44px; max-height: 200px; padding: 8px 0; line-height: 1.5; outline: none; }
   .input-row .spacer { flex: 1; color: var(--muted); font-size: 12.5px; padding: 8px 0; }
   .send { flex: none; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); height: 42px; min-width: 42px; padding: 0 14px;
@@ -201,9 +203,40 @@
   dialog.lb { margin: auto; border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 96vh; color: var(--text); }
   dialog.lb::backdrop { background: rgba(5, 3, 11, .94); backdrop-filter: blur(6px); }
   .lb-inner { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-  .lb-inner img { max-width: 94vw; max-height: 84vh; border-radius: 10px; box-shadow: var(--shadow); display: block; }
+  .lb-inner img { max-width: 94vw; max-height: 78vh; border-radius: 10px; box-shadow: var(--shadow); display: block; }
   .lb-inner img.pixel { image-rendering: pixelated; }
   .lb .acts { justify-content: center; }
+  .lb-prompt { max-width: min(900px, 92vw); margin: 0; color: var(--muted, #9a92c0); font-size: 14px; line-height: 1.45; text-align: center; cursor: copy;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lb-prompt:hover { color: var(--text); -webkit-line-clamp: 6; }
+  .offline { position: fixed; top: 64px; left: 50%; translate: -50% 0; z-index: 200; max-width: calc(100vw - 32px); padding: 10px 16px;
+    border: 1px solid #ff2e6e; border-radius: 8px; background: rgba(40, 6, 20, .95); color: #ffd6e2; font-size: 14px; box-shadow: var(--shadow); }
+  .gal-find { margin-left: auto; width: min(280px, 50%); padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line, #3a2f6b);
+    background: var(--bg); color: var(--text); font: inherit; font-size: 14px; }
+  .tile[hidden], .sess[hidden], .gal-day[hidden] { display: none; }
+  .gal-day { grid-column: 1 / -1; margin: 14px 0 0; font: 400 15px/1 var(--term); letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #9a92c0); }
+  .gal-day:first-child { margin-top: 0; }
+  .sess-find { width: 100%; margin: 0 0 8px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line, #3a2f6b);
+    background: var(--bg); color: var(--text); font: inherit; font-size: 13px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 12px 0 4px; align-items: baseline; }
+  .keys dt { text-align: right; } .keys dd { margin: 0; color: var(--muted, #9a92c0); }
+  .keys kbd { font: 400 15px/1 var(--term); padding: 3px 7px; border: 1px solid var(--line, #3a2f6b); border-bottom-width: 2px; border-radius: 4px; color: var(--text); }
+  .meta.seedy { cursor: copy; } .meta.seedy:hover { color: var(--text); }
+  .msg .retry { align-self: flex-start; margin-top: 10px; font: 400 18px/1 var(--term); padding: 7px 14px; cursor: pointer; color: var(--text);
+    background: transparent; border: 1px solid var(--line, #3a2f6b); border-radius: 6px; }
+  .msg .retry:hover { border-color: var(--accent, #ff2e6e); }
+  /* back to the newest message, when you scrolled up to look at older ones */
+  .to-latest { position: absolute; right: 28px; bottom: 132px; z-index: 60; width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 20px; box-shadow: var(--shadow);
+    opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .to-latest.on { opacity: 1; pointer-events: auto; }
+  .lb-nav { position: fixed; top: 50%; translate: 0 -50%; width: 48px; height: 72px; border: 1px solid var(--line, #3a2f6b); border-radius: 8px;
+    background: var(--panel); color: var(--text); font-size: 34px; line-height: 1; cursor: pointer; }
+  .lb-nav.prev { left: 14px; } .lb-nav.next { right: 14px; }
+  @media (max-width: 640px) { .lb-nav { top: auto; bottom: 18px; translate: none; height: 52px; } }  /* on a phone: under the picture, by the thumb */
+  .lb-nav:hover:not(:disabled) { background: var(--raised); }
+  .lb-nav:disabled { opacity: .2; cursor: default; }
+  .lb-count { position: fixed; top: 14px; left: 50%; translate: -50% 0; font: 400 14px/1 var(--term); color: var(--muted, #9a92c0); }
 
   @media (max-width: 860px) {
     .app { grid-template-columns: 1fr; }
@@ -714,20 +747,12 @@
   @media (max-width: 640px) { .dlg-face { width: 84px; } .dlg-text { font-size: 21px; min-height: 0; } .dlg-box { gap: 12px; padding: 10px 12px 16px 10px; } }
 
   /* choices under her box, as a game's answer menu: a cursor jumps to the one under the pointer */
-  .dlg-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0 14px; }
+  .dlg-choices { margin: 8px 0 0; }
   .msg.dlg:not(.done) .dlg-choices { visibility: hidden; }
   .msg.dlg.done .dlg-choices button { animation: choice-in .3s steps(3, end) both; }
   .msg.dlg.done .dlg-choices button:nth-child(2) { animation-delay: .08s; } .msg.dlg.done .dlg-choices button:nth-child(3) { animation-delay: .16s; }
   @keyframes choice-in { from { opacity: 0; transform: translateY(6px); } }
-  .dlg-choices button { position: relative; font: 400 20px/1 var(--term); color: #f4f1ff; padding: 8px 14px 8px 26px; cursor: pointer;
-    background: linear-gradient(180deg, rgba(64, 52, 168, .85), rgba(26, 20, 82, .9)); border: 2px solid #e9e4ff; border-radius: 6px;
-    box-shadow: 0 0 0 2px #0b0820, inset 0 0 0 1px color-mix(in srgb, var(--host-frame) 60%, transparent); text-shadow: 2px 2px 0 #0b0820; }
-  .dlg-choices button::before { content: ''; position: absolute; left: 10px; top: 50%; width: 7px; height: 10px; margin-top: -5px;
-    background: #f4f1ff; clip-path: polygon(0 0, 100% 50%, 0 100%); opacity: 0; }
-  .dlg-choices button:hover, .dlg-choices button:focus-visible { outline: none; background: linear-gradient(180deg, rgba(110, 86, 220, .95), rgba(48, 34, 130, .95));
-    box-shadow: 0 0 0 2px #0b0820, 0 0 18px -4px var(--host-frame); }
-  .dlg-choices button:hover::before, .dlg-choices button:focus-visible::before { opacity: 1; animation: cursor .5s steps(2, jump-none) infinite alternate; }
-  @keyframes cursor { to { translate: 3px 0; } }
+  /* the choices look like the picture's own buttons (Again, Edit) and sit under the picture */
   /* the picture's progress inside her box: a pixel bar of whole blocks */
   .dlg-bar { display: flex; gap: 3px; margin-top: 8px; }
   .dlg-bar i { width: 12px; height: 8px; background: rgba(233, 228, 255, .16); box-shadow: 1px 1px 0 #0b0820; }
@@ -737,6 +762,15 @@
   .dlg-sound:hover { opacity: 1; }
   .dlg-sound[aria-pressed="true"] { opacity: 1; color: color-mix(in srgb, var(--host-frame) 50%, #fff); }
   .msg.dlg.past .dlg-choices { display: none; }
+  .hero .msg.dlg .dlg-choices { visibility: visible; }
+  .hero .msg.dlg.done .dlg-choices button { animation: none; }  /* the starters are there at once: no waiting for her greeting to finish */
+  .dlg-choices button::after { content: attr(data-n); margin-left: 8px; font-size: 13px; opacity: .45; }
+  /* her live line while she works or waits for your answer: the big box; once a picture is under it, compact again */
+  .msg.dlg.speaking.working .dlg-box, .msg.dlg.speaking:not(:has(.out)) .dlg-box { padding: 12px 18px 12px 10px; gap: 16px; border-width: 3px;
+    box-shadow: 0 0 0 2px #0b0820, inset 0 0 0 2px color-mix(in srgb, var(--host-frame) 70%, transparent), 0 0 26px -8px var(--host-frame); }
+  .msg.dlg.speaking.working .dlg-face, .msg.dlg.speaking:not(:has(.out)) .dlg-face { width: 76px; }
+  .msg.dlg.speaking.working .dlg-text, .msg.dlg.speaking:not(:has(.out)) .dlg-text { font-size: 23px; }
+  @media (hover: none) { .dlg-choices button::after { content: none; } }  /* no keyboard on a phone */
 </style>
 </head>
 <body>
@@ -980,7 +1014,8 @@
   function addMessage(m, s = ensureSession()) {
     if (!s.messages.length && !s.kind) s.kind = state.mode;  // the first message fixes the kind
     // her greeting stays on top of the thread as history once you answer it
-    if (host && greeting && !s.messages.length && m.role === 'user') { s.messages.push({ role: 'bot', text: greeting.text, mood: greeting.mood }); greeting = null; }
+    // (she talks in chats only)
+    if (host && greeting && !s.messages.length && m.role === 'user' && s.kind === 'chat') { s.messages.push({ role: 'bot', text: greeting.text, mood: greeting.mood }); greeting = null; }
     s.messages.push(m);
     if (!s.title && m.role === 'user') s.title = (m.kind ? m.kind + ': ' : '') + (m.text || '').slice(0, 48);
     s.updated = Date.now();
@@ -1002,11 +1037,24 @@
     $('sessions-label').hidden = box.hidden = state.ghost;
     if (state.ghost) return;
     if (!state.sessions.length) box.innerHTML = '<p class="none">No sessions yet. Just start below.</p>';
+    if (state.sessions.length > 8) {  // a long list gets a filter on top
+      const f = Object.assign(document.createElement('input'), { type: 'search', className: 'sess-find', placeholder: 'Find a session …', value: state.sessFind || '' });
+      f.setAttribute('aria-label', 'Find a session');
+      f.oninput = () => {
+        state.sessFind = f.value;
+        const q = f.value.toLowerCase().trim();
+        box.querySelectorAll('.sess').forEach(b => { b.hidden = !!q && !b.dataset.find.includes(q); });
+      };
+      box.append(f);
+      queueMicrotask(f.oninput);
+    }
     state.sessions.forEach(s => {
       const b = Object.assign(document.createElement('div'), { className: 'sess', role: 'button', tabIndex: 0 });
       b.setAttribute('aria-current', String(s.id === state.currentId && state.view === 'thread'));
+      b.dataset.find = [s.title, ...s.messages.filter(m => m.role === 'user').map(m => m.text)].join(' ').toLowerCase();
       const live = s.messages.some(m => m.job);
-      b.innerHTML = `${live ? '<i class="live" title="Running"></i>' : ''}<span><b>${esc(s.title || 'New session')}</b><small>${when(s.updated)} · ${plural(s.messages.filter(m => m.image || m.video).length, 'result')}</small></span>
+      const pic = s.messages.findLast(m => m.image && !m.image.ghost)?.image;  // its newest picture, small, so you find it by eye
+      b.innerHTML = `${live ? '<i class="live" title="Running"></i>' : ''}${pic ? `<img class="thumb" src="${url(pic.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span><b>${esc(s.title || 'New session')}</b><small>${when(s.updated)} · ${plural(s.messages.filter(m => m.image || m.video).length, 'result')}</small></span>
         <button type="button" class="del" aria-label="Delete session" title="Delete">✕</button>`;
       const open = () => { openSession(s.id); document.body.classList.remove('side-open'); };
       b.onclick = e => { if (!e.target.closest('.del')) open(); };
@@ -1183,6 +1231,16 @@
     scrollDown();
   }
   const scrollDown = () => { $('thread').scrollTop = $('thread').scrollHeight; };
+  const toLatest = Object.assign(document.createElement('button'), { type: 'button', className: 'to-latest', textContent: '↓', title: 'To the newest' });
+  toLatest.setAttribute('aria-label', 'Scroll to the newest message');
+  $('thread').parentElement.style.position = 'relative';
+  $('thread').after(toLatest);
+  toLatest.onclick = () => $('thread').scrollTo({ top: $('thread').scrollHeight, behavior: 'smooth' });
+  $('thread').addEventListener('scroll', () => {
+    const t = $('thread'), away = t.scrollHeight - t.scrollTop - t.clientHeight > 500 && state.view === 'thread';
+    toLatest.style.bottom = ($('composer')?.offsetHeight || 100) + 16 + 'px';
+    toLatest.classList.toggle('on', away);
+  }, { passive: true });
 
   let fresh = null; // the message that just landed gets the scanline reveal, once
   function messageEl(m, latest) {
@@ -1198,6 +1256,16 @@
     if (m.text && host) dialogue(el, m, m === speaker);  // she speaks first, the picture follows under her words
     if (m.image) el.append(imageCard(m.image));
     if (m.video) el.append(videoCard(m.video));
+    const menu = el.querySelector(':scope > .dlg-choices');
+    const row = el.querySelector(':scope > .out > .acts');  // her suggestions go right under the picture's own buttons
+    if (menu) row ? row.after(menu) : el.append(menu);
+    // a failed chat turn: one click sends the same words again
+    const s = current(), prev = m.error && s?.messages[s.messages.indexOf(m) - 1];
+    if (prev?.role === 'user' && !prev.kind && prev.text && m === s.messages.at(-1)) {
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'retry', textContent: '↻ Try again' });
+      b.onclick = () => { if (state.busy) return; setMode('chat'); $('input').value = prev.text; submit(); };
+      el.append(b);
+    }
     return el;
   }
 
@@ -1216,6 +1284,7 @@
     img.onclick = () => lightbox(h);
     card.querySelector('[data-a="again"]').onclick = () => again(h);
     card.querySelector('[data-a="copy"]').onclick = e => copyPrompt(h, e.currentTarget);
+    seedCopy(card.querySelector('.meta'), h);
     img.onerror = () => img.replaceWith(Object.assign(document.createElement('p'), { className: 'hint',
       textContent: h.ghost ? 'Ghost picture, no longer in memory.' : 'This picture no longer exists.' }));
     card.querySelector('[data-a="edit"]').onclick = () => editInChat({ source: h.image });
@@ -1248,6 +1317,15 @@
     if (icon) { button.innerHTML = ok ? ACT_ICON.check : '✕'; button.classList.toggle('ok', ok); }
     else button.textContent = ok ? 'Copied ✓' : 'Not possible';
     setTimeout(() => { icon ? (button.innerHTML = was, button.classList.remove('ok')) : (button.textContent = was); }, 1500);
+  }
+  // a click on the meta line copies the seed, for Manual's seed field
+  function seedCopy(meta, h) {
+    if (!meta || h.seed == null) return;
+    meta.classList.add('seedy');
+    meta.title = 'Click to copy the seed';
+    meta.onclick = async () => {
+      try { await navigator.clipboard.writeText(String(h.seed)); toast(`Seed ${h.seed} copied`); } catch { toast('Could not copy', true); }
+    };
   }
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -1338,6 +1416,8 @@
           m.status = job.state === 'waiting' ? 'Waiting for the GPU to be free …' : job.total ? `Frame ${job.frame} of ${job.total}` : 'Loading models …';
           m.pct = job.total ? 100 * job.frame / job.total : 0;
         }
+        const pct = m.kind === 'swap' ? m.pct : job.total ? 100 * job.step / job.total : null;
+        tabTitle(pct == null ? '⋯ Morpheus' : `${Math.round(pct)}% · Morpheus`);
         await new Promise(res => setTimeout(res, m.kind === 'swap' ? 1000 : 400));
       }
       const out = job.result;
@@ -1361,12 +1441,18 @@
     }
     for (const k of ['job', 'kind', 'since', 'status', 'pct', 'label', 'step', 'total', 'previews', 'round', 'said']) delete m[k];
     following.delete(id);
+    tabTitle(following.size ? '⋯ Morpheus' : document.hidden ? (m.error ? '✕ Morpheus' : '✓ Ready · Morpheus') : null);
     fresh = m;
     setTimeout(() => { if (fresh === m) fresh = null; }, 2000); // later re-renders show it plain
     s.updated = Date.now();
     save();
     if (current() === s) renderThread();
   }
+
+  // the tab says how far the picture is, and that it's ready while you look elsewhere; back on the tab it's plain again
+  const TITLE = document.title;
+  const tabTitle = t => { document.title = t || TITLE; };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !following.size) tabTitle(null); });
 
   // Post a job and put its waiting message into the session; the reply only carries the job id.
   async function startJob(s, kind, path, body, extra = {}) {
@@ -1542,6 +1628,7 @@
     $('input').value = ''; grow(); stashDraft();
     const s = ensureSession();
     addMessage({ role: 'user', kind: KIND.manual, text: prompt }, s);
+    state.optsOpen = false; setMode(state.mode);  // the settings fold away so the picture has the room; "Settings ▾" brings them back
     try {
       await startJob(s, 'manual', '/api/generate',
         { prompt, style: state.style, model: state.model, width: res.width, height: res.height, seed: $('seed').value, ghost: state.ghost });
@@ -1644,10 +1731,20 @@
     }
     return false;
   }
-  document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+  // one of our own pictures, dragged from the thread or the gallery onto the input: edit it in a chat
+  const ownPic = dt => {
+    const u = (dt?.getData('text/uri-list') || '').split('\n')[0].trim();
+    try { const p = new URL(u, location.href); if (p.origin === location.origin && p.pathname.startsWith('/output/')) return decodeURIComponent(p.pathname.slice(8)); } catch {}
+    return null;
+  };
+  document.addEventListener('dragover', e => {
+    if (e.dataTransfer?.types.includes('Files') || (e.dataTransfer?.types.includes('text/uri-list') && e.target.closest?.('#composer'))) e.preventDefault();
+  });
   document.addEventListener('drop', e => {
     if (e.target.closest?.('.drop')) return;
     e.preventDefault();
+    const own = !e.dataTransfer.files.length && e.target.closest?.('#composer') && ownPic(e.dataTransfer);
+    if (own) return editInChat({ source: own });
     takeAnywhere(e.dataTransfer.files[0]);
   });
   document.addEventListener('paste', e => {
@@ -1778,9 +1875,25 @@
       field?.select();
     });
   }
+  // "?" lists the keys, in the same dialog frame
+  const KEYS = [['Enter', 'send in a chat (Ctrl + Enter in Manual, Edit, Guise)'], ['Shift + Enter', 'new line in a chat'], ['/', 'jump to the input'], ['Ctrl + K', 'commands and sessions'],
+    ['1 – 3', 'pick one of her suggestions (input empty)'], ['Esc', 'skip her typing, close a dialog'], ['← →', 'previous / next picture in the big view'], ['B (hold)', 'the picture before the edit, in the big view'],
+    ['?', 'this list']];
+  function shortcuts() {
+    dlg.classList.remove('danger');
+    dlg.innerHTML = `<h3>Keys</h3><dl class="keys">${KEYS.map(([k, v]) => `<dt><kbd>${esc(k)}</kbd></dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      <div class="ask-acts"><button type="button" class="go">OK</button></div>`;
+    dlg.querySelector('.go').onclick = () => dlg.close();
+    dlg.onclick = e => { if (e.target === dlg) dlg.close(); };
+    dlg.oncancel = null;
+    dlg.showModal();
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === '?' && !e.target.closest?.('input, textarea, [contenteditable], dialog')) { e.preventDefault(); shortcuts(); }
+  });
   function toast(text, bad = false) {
     const t = Object.assign(document.createElement('div'), { className: 'toast' + (bad ? ' bad' : ''), textContent: text });
-    document.body.append(t);
+    (document.querySelector('dialog[open]') || document.body).append(t);  // over an open dialog, not hidden behind it
     setTimeout(() => t.classList.add('out'), 2600);
     setTimeout(() => t.remove(), 3000);
   }
@@ -1805,6 +1918,7 @@
     // ghost results come first and only while ghost mode is on; dashed frames mark them
     const r = await fetch('/api/history');
     state.saved = await r.json();
+    state.galAll = false;
     state.savedTotal = +r.headers.get('X-Total-Count') || state.saved.length;
     state.history = [...(state.ghost ? state.ghostHistory : []), ...state.saved];
     if (state.view === 'gallery') renderGallery();
@@ -1823,11 +1937,21 @@
   }
   function renderGallery() {
     const col = $('col'), rest = (state.savedTotal || 0) - (state.saved?.length || 0);
-    col.innerHTML = `<div class="gal-head"><h2 class="h">Gallery</h2><span class="hint">${rest > 0 ? `${state.saved.length} of ${state.savedTotal}` : state.history.length} pictures</span></div><div class="grid" id="grid"></div>
+    col.innerHTML = `<div class="gal-head"><h2 class="h">Gallery</h2><span class="hint">${rest > 0 ? `${state.saved.length} of ${state.savedTotal}` : state.history.length} pictures</span>
+      <input type="search" id="gal-find" class="gal-find" placeholder="Find by prompt or model …" aria-label="Find pictures" value="${esc(state.galFind || '')}"></div><div class="grid" id="grid"></div>
       ${rest > 0 ? `<button type="button" class="more-btn" id="gal-more">Load ${Math.min(rest, 60)} more</button>` : ''}`;
     $('gal-more')?.addEventListener('click', e => loadMore(e.currentTarget));
     if (!state.history.length) $('grid').outerHTML = '<p class="hint">Your pictures will appear here.</p>';
+    let day = null;
     state.history.forEach(h => {
+      const d = (h.created || '').slice(0, 10);  // a heading per day, newest first
+      if (d && d !== day) {
+        day = d;
+        const t = new Date(d + 'T12:00'), today = new Date(), y = new Date(Date.now() - 864e5);
+        const label = t.toDateString() === today.toDateString() ? 'Today' : t.toDateString() === y.toDateString() ? 'Yesterday'
+          : t.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+        $('grid')?.append(Object.assign(document.createElement('h3'), { className: 'gal-day', textContent: label }));
+      }
       const tile = Object.assign(document.createElement('div'), { className: 'tile' });
       const b = Object.assign(document.createElement('button'), { type: 'button', title: h.prompt, className: h.ghost ? 'ghosted' : '' });
       b.innerHTML = `<img src="${url(h.image)}" alt="" loading="lazy">`;
@@ -1836,8 +1960,35 @@
       x.setAttribute('aria-label', 'Delete picture');
       x.onclick = () => deletePicture(h);
       tile.append(b, x);
+      tile.dataset.find = `${h.prompt || ''} ${modelLabel(h.model)} ${h.style || ''} ${h.seed}`.toLowerCase();
       $('grid').append(tile);
     });
+    // typing filters the loaded pictures at once; the words stay while you come and go
+    const find = () => {
+      const q = (state.galFind = $('gal-find').value).toLowerCase().trim().split(/\s+/).filter(Boolean);
+      $('grid')?.querySelectorAll('.tile').forEach(t => { t.hidden = !q.every(w => t.dataset.find.includes(w)); });
+      $('grid')?.querySelectorAll('.gal-day').forEach(hd => {  // a day with no match loses its heading
+        let n = hd.nextElementSibling, any = false;
+        for (; n && !n.classList.contains('gal-day'); n = n.nextElementSibling) any ||= !n.hidden;
+        hd.hidden = !any;
+      });
+      const none = q.length && !$('grid')?.querySelector('.tile:not([hidden])');
+      let msg = $('gal-none');
+      if (none && !msg) $('grid')?.after(msg = Object.assign(document.createElement('p'), { id: 'gal-none', className: 'hint' }));
+      if (msg) { msg.hidden = !none; msg.textContent = `No picture matches “${q.join(' ')}”.`; }
+    };
+    $('gal-find').oninput = async () => {
+      if (rest > 0 && !state.galAll) {  // a search looks through all pictures, not only the loaded ones
+        state.galAll = true; state.galFind = $('gal-find').value;
+        const more = await (await fetch(`/api/history?offset=${state.saved.length}&limit=500`)).json();
+        state.saved.push(...more); state.history.push(...more);
+        renderGallery();
+        const f = $('gal-find'); f.focus(); f.setSelectionRange(f.value.length, f.value.length);
+        return;
+      }
+      find();
+    };
+    if (state.galFind) find();
   }
   $('open-gallery').onclick = () => {
     state.view = state.view === 'gallery' ? 'thread' : 'gallery';
@@ -1853,14 +2004,23 @@
     const pixel = h.image !== h.raw;
     const file = raw || !pixel ? h.raw : h.image;
     const linked = h.source && !h.source.includes(':');
+    const at = state.history.findIndex(x => x.image === h.image);  // its place in the gallery, for ‹ ›
     $('lb-inner').innerHTML = `<img src="${url(file)}" alt="${esc(h.prompt)}" class="${pixel && !raw ? 'pixel' : ''}">
       <div class="acts"><span class="meta">${h.ghost ? 'Ghost · ' : ''}${h.width}×${h.height} · ${esc(modelLabel(h.model))} · Seed ${h.seed} · ${h.seconds} s</span>
         ${pixel ? `<button type="button" data-a="raw" aria-pressed="${raw}">Raw</button>` : ''}
-        ${linked ? `<a href="${url(h.source)}" target="_blank" rel="noopener">Before</a>` : ''}
+        ${linked ? `<button type="button" data-a="before" title="Hold to see the picture before this edit (or hold B)">Before</button>` : ''}
         <button type="button" data-a="again">Again</button>
         ${'source' in h ? '' : '<button type="button" data-a="reuse">Variant</button>'}<button type="button" data-a="edit">Edit</button>
-        <a href="${url(file)}" target="_blank" rel="noopener">Open</a><button type="button" data-a="delete" class="danger">Delete</button>
-        <button type="button" data-a="close" aria-label="Close">✕</button></div>`;
+        <a href="${url(file)}" target="_blank" rel="noopener">Open</a><a href="${url(file)}" download title="Save to disk">Save</a>
+        <button type="button" data-a="clip" title="Copy the picture, to paste it anywhere">Copy</button>
+        <button type="button" data-a="delete" class="danger">Delete</button>
+        <button type="button" data-a="close" aria-label="Close">✕</button></div>
+      ${h.prompt ? `<p class="lb-prompt" title="Click to copy the prompt">${esc(h.prompt)}</p>` : ''}
+      ${at >= 0 && state.history.length > 1 ? `<button type="button" class="lb-nav prev" data-a="prev" aria-label="Previous picture" ${at ? '' : 'disabled'}>‹</button>
+        <button type="button" class="lb-nav next" data-a="next" aria-label="Next picture" ${at < state.history.length - 1 ? '' : 'disabled'}>›</button>
+        <span class="lb-count">${at + 1} / ${state.history.length}</span>` : ''}`;
+    lbAt = at;
+    [state.history[at - 1], state.history[at + 1]].forEach(n => { if (n && at >= 0) new Image().src = url(n.image !== n.raw ? n.image : n.raw); });  // ‹ › show at once
     const on = (a, f) => { const b = $('lb-inner').querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     on('raw', () => lightbox(h, !raw));
     on('reuse', () => variant(h));
@@ -1868,9 +2028,44 @@
     on('edit', () => editInChat({ source: h.image }));
     on('close', () => lb.close());
     on('delete', () => deletePicture(h));
+    seedCopy($('lb-inner').querySelector('.meta'), h);
+    // Before: held down, the picture shows what it was before the edit; let go and it's back
+    const bb = $('lb-inner').querySelector('[data-a="before"]');
+    if (bb) {
+      const pic = $('lb-inner').querySelector('img'), after = pic.src, before = url(h.source);
+      new Image().src = before;  // ready before the first press
+      const show = on => { pic.src = on ? before : after; bb.setAttribute('aria-pressed', String(on)); };
+      bb.onpointerdown = () => show(true);
+      bb.onpointerup = bb.onpointerleave = bb.onpointercancel = () => show(false);
+      lbBefore = show;
+    } else lbBefore = null;
+    const lp = $('lb-inner').querySelector('.lb-prompt');
+    if (lp) lp.onclick = async () => { try { await navigator.clipboard.writeText(h.prompt); toast('Prompt copied'); } catch { toast('Could not copy', true); } };
+    // a swipe sideways on the picture walks the gallery on a phone
+    const im = $('lb-inner').querySelector('img');
+    im.addEventListener('touchstart', e => { im._x = e.touches[0].clientX; }, { passive: true });
+    im.addEventListener('touchend', e => { const dx = e.changedTouches[0].clientX - im._x; if (Math.abs(dx) > 50) lbStep(dx < 0 ? 1 : -1); });
+    on('clip', async () => {
+      try {
+        const blob = await (await fetch(url(file))).blob();
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+        toast('Picture copied');
+      } catch { toast('This browser cannot copy pictures', true); }
+    });
+    on('prev', () => lbStep(-1));
+    on('next', () => lbStep(1));
     if (!lb.open) lb.showModal();
   }
+  let lbAt = -1;
+  const lbStep = d => { const h = state.history[lbAt + d]; if (lbAt >= 0 && h) lightbox(h); };
   lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
+  // ← → walk the gallery, as in any picture viewer
+  lb.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft') lbStep(-1); if (e.key === 'ArrowRight') lbStep(1);
+    if (e.key.toLowerCase() === 'b' && !e.repeat) lbBefore?.(true);
+  });
+  lb.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'b') lbBefore?.(false); });
+  let lbBefore = null;
 
   async function init() {
     options = await (await fetch('/api/options')).json();
@@ -1889,7 +2084,14 @@
   async function hud() {
     if (document.hidden) return;
     let st;
-    try { st = await (await fetch('/api/status')).json(); } catch { st = { comfy: false }; }
+    let down = false;
+    try { st = await (await fetch('/api/status')).json(); } catch { st = { comfy: false }; down = true; }
+    // the page's own server gone (restart, crash): say so plainly, and once more when it's back
+    if (down !== !!$('offline')) {
+      if (down) document.body.append(Object.assign(document.createElement('div'), { id: 'offline', className: 'offline',
+        textContent: 'The Morpheus server is not reachable. Start it again; this page keeps waiting.' }));
+      else { $('offline').remove(); toast('The server is back'); }
+    }
     const c = $('hud-comfy');
     // rendering: ComfyUI has work; thinking: a Morpheus job before or between renders (Claude writing the prompt)
     c.dataset.s = !st.comfy ? 'off' : st.busy ? 'busy' : st.jobs ? 'think' : 'idle';
@@ -1988,6 +2190,12 @@
       ['New chat', '', () => newSession('chat')], ['New Manual session', '', () => { state.optsOpen = true; newSession('manual'); }],
       ['New Guise', '', () => { state.optsOpen = true; newSession('swap'); }],
       ['Ghost mode on/off', '', () => $('ghost').click()], ['Light / dark', '', () => $('theme').click()],
+      [`Her voice: ${voiceOn() ? 'turn off' : 'turn on'}`, 'a soft blip per syllable', () => {
+        try { localStorage.setItem('morpheus.voice', voiceOn() ? '0' : '1'); } catch {}
+        toast(voiceOn() ? 'Her voice is on' : 'Her voice is off');
+      }],
+      ['Focus the input', '/', () => $('input').focus()],
+      ['Keyboard shortcuts', '?', () => setTimeout(shortcuts)],
     ];
     state.sessions.slice(0, 12).forEach(s => list.push([`Session: ${s.title || 'Untitled'}`, '', () => openSession(s.id)]));
     return list;
@@ -2014,6 +2222,10 @@
     if (e.key === 'Enter') { runCmd(sel); e.preventDefault(); }
   };
   document.addEventListener('keydown', e => {
+    // "/" jumps to the input from anywhere that isn't a text field
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.target.closest?.('input, textarea, [contenteditable], dialog')) {
+      e.preventDefault(); $('input').focus(); return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       if (cmd.open) return cmd.close();
@@ -3015,9 +3227,10 @@
     wrap.append(name, box);
     el.append(wrap);
     if (live && !m.job && m.choices?.length) {
-      const menu = Object.assign(document.createElement('div'), { className: 'dlg-choices', role: 'group', ariaLabel: 'Suggestions' });
+      const menu = Object.assign(document.createElement('div'), { className: 'acts dlg-choices', role: 'group', ariaLabel: 'Suggestions' });
       m.choices.forEach(c => {
         const b = Object.assign(document.createElement('button'), { type: 'button', textContent: c, title: `Press ${menu.children.length + 1}` });
+        b.dataset.n = menu.children.length + 1;  // the key that picks it, shown small
         b.onclick = () => { if (state.busy) return; setMode('chat'); $('input').value = c; submit(); };
         menu.append(b);
       });
@@ -3072,7 +3285,7 @@
     if (skipTyping && (e.key === 'Escape' || (e.target.id === 'input' && e.key.length === 1))) skipTyping();
     // 1-3 pick her choices, as in a game menu, while the input is empty
     if (/^[1-3]$/.test(e.key) && !e.altKey && !e.ctrlKey && !e.metaKey && !$('input').value && state.forge !== 'soul') {
-      const b = document.querySelectorAll('.msg.dlg.speaking.done .dlg-choices button')[+e.key - 1];
+      const b = document.querySelectorAll('.hero .msg.dlg .dlg-choices button, .msg.dlg.speaking.done .dlg-choices button')[+e.key - 1];
       if (b) { e.preventDefault(); b.click(); }
     }
   });
