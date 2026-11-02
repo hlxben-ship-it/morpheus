@@ -79,6 +79,7 @@ download the file into `ComfyUI/models/loras`, add its entry, restart Morpheus.
 |---|---|---|---|
 | Lightning 4-step | Qwen-Image-Edit 2511 | on | off = 40 steps at cfg 4, about 10x slower |
 | Anything2Real (lrzjason, 2601 A) | Qwen-Image-Edit 2511 | off | art → photo, strength 0.85; prompt `change the picture 1 to realistic photograph, …` |
+| Multiple Angles (fal) | Qwen-Image-Edit 2511 | off | new camera angle, strength 1.0; prompt `<sks> [azimuth] [elevation] [distance]`, e.g. `<sks> back view high-angle shot wide shot` |
 
 The output keeps the source's aspect ratio at about 1 MP; the time is sampling, not text encoding,
 and halving the size only halves it. CLI: `morpheus.py "instruction" --edit path\to\image.png`.
@@ -122,6 +123,22 @@ prompt with the model loaded.
 | Z-Image-Turbo | **default**: photoreal, good at painting styles | 18 s / 18 s |
 | FLUX.2 [klein] 4B | alternative look, fastest warm; also the edit model | 25 s / 13 s |
 | NoobAI-XL 1.1 (SDXL) | anime / illustration, prompt as Danbooru tags; quality tags are prepended | 22 s / 14 s |
+
+Manual-only checkpoints (`manual_only`: the chat never sees them), not timed yet:
+
+| Model | Family | Use |
+|---|---|---|
+| JANKU v5.0 | SDXL / Illustrious | polished modern anime, `nsfw` in the default negative |
+| Nova Anime XL v19 | SDXL / Illustrious | anime / 2.5D, high contrast, the author's long negative |
+| Pony Diffusion V6 XL | SDXL / Pony | score tags, CLIP skip 2 |
+| Pony Realism v2.2 | SDXL / Pony | photoreal Pony, CLIP skip 2, `female` / `male` |
+| DreamShaper 8 | SD 1.5 | all-rounder, rendered at about 0.4 MP (`pixels`) |
+| CyberRealistic Final | SD 1.5 | photoreal people, about 0.4 MP |
+| Counterfeit V3.0 | SD 1.5 | classic anime, CLIP skip 2, about 0.4 MP |
+
+In Manual the SDXL/SD 1.5 models show their **quality tags** (not sent unless "Attach to prompt" puts them in front
+of the prompt; the chat still prepends them) and an editable **Negative**, prefilled with the model's default.
+Z-Image-Turbo takes LoRAs too (NSFW Master, off unless ticked in Manual).
 
 The chat uses Z-Image, also for lettering: short texts (signs, titles, neon) come out right; long
 multi-line text sometimes repeats a word, then **Again** helps.

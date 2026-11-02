@@ -151,9 +151,11 @@
     letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
   .modes [role="tab"][aria-selected="true"] { background: var(--raised); color: var(--accent); }
   .opts-toggle { margin-left: auto; border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 8px; }
-  .opts { max-height: 44vh; overflow-y: auto; padding: 12px 14px 4px; display: grid; gap: 14px; border-bottom: 1px solid var(--line); }
+  .opts { max-height: 44vh; overflow-y: auto; padding: 18px 20px 12px; display: grid; gap: 22px 28px; border-bottom: 1px solid var(--line); }
   .opts.two { grid-template-columns: 1fr 1fr; }
-  .field > .label { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .field .label { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .field .label.gap { margin-top: 22px; }
+  .field .hint { margin-top: 10px; }
   .hint { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 3px 11px; font-size: 12.5px; }
@@ -172,6 +174,13 @@
   .model.off { opacity: .45; cursor: not-allowed; }
   .model:has(input:checked) { border-color: var(--accent); }
   .seed { display: flex; gap: 6px; }
+  .negative { display: block; width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; resize: vertical; font-size: 13px; line-height: 1.5; }
+  .field .label .reset { float: right; border: 0; background: transparent; box-shadow: none; color: var(--accent); font: inherit;
+    letter-spacing: inherit; text-transform: inherit; padding: 0; cursor: pointer; opacity: .8; }
+  .field .label .reset:hover { opacity: 1; }
+  .prefix { margin: 0; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; line-height: 1.5;
+    color: var(--muted); user-select: all; }
   .seed input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
   .seed button { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; }
   .drop { display: flex; align-items: center; justify-content: center; min-height: 96px; border: 1px dashed var(--line); border-radius: 12px;
@@ -306,7 +315,7 @@
   .input-row textarea { font-size: 15px; }
   .send { border-radius: 14px; background: linear-gradient(135deg, var(--accent), var(--pink)); box-shadow: 0 8px 20px var(--glow); transition: transform .15s; }
   .send:hover:not(:disabled) { transform: translateY(-1px) scale(1.04); }
-  .field > .label { font-weight: 600; letter-spacing: .08em; }
+  .field .label { font-weight: 600; letter-spacing: .08em; }
   .msg.working { background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow);
     background-image: linear-gradient(100deg, transparent 22%, color-mix(in srgb, var(--accent) 3%, transparent) 36%,
       color-mix(in srgb, var(--accent) 7%, transparent) 50%, color-mix(in srgb, var(--accent) 3%, transparent) 64%, transparent 78%);
@@ -330,7 +339,7 @@
       calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
   .box { border-radius: 0; border: 2px solid var(--line); }
   .box:focus-within { border-color: var(--cyan); box-shadow: var(--shadow), 0 0 0 1px var(--cyan), 0 0 24px color-mix(in srgb, var(--cyan) 35%, transparent); }
-  .word, .hero .greet, .side-label, .modes [role="tab"], .new, .recent .label, .field > .label, .acts button, .acts a, .side-foot button, .send {
+  .word, .hero .greet, .side-label, .modes [role="tab"], .new, .recent .label, .field .label, .acts button, .acts a, .side-foot button, .send {
     font-family: var(--px); letter-spacing: .04em; text-transform: none; }
   .word { font-size: 18px; letter-spacing: .12em; text-shadow: 2px 0 var(--pink), -2px 0 var(--cyan); }
   .hero .greet { font-size: 22px; line-height: 1.5; }
@@ -806,7 +815,16 @@
           <!-- right side: the picked model's own settings -->
           <div class="field" id="manual-gen">
             <span class="label">Format</span><div class="ratios" id="ratios"></div>
-            <span class="label" style="margin-top:12px">Seed</span>
+            <div id="prefix-field" hidden>
+              <span class="label gap">Quality tags <button type="button" class="reset" id="prefix-attach">Attach to prompt</button></span>
+              <p class="prefix" id="prefix"></p>
+              <p class="hint">Not sent on their own: “Attach to prompt” puts them at the start of the prompt below.</p>
+            </div>
+            <div id="negative-field" hidden>
+              <span class="label gap">Negative <button type="button" class="reset" id="negative-reset">Default</button></span>
+              <textarea id="negative" class="negative" rows="3" aria-label="Negative prompt"></textarea>
+            </div>
+            <span class="label gap">Seed</span>
             <div class="seed"><input id="seed" inputmode="numeric" placeholder="Random" aria-label="Seed"><button type="button" id="dice">Random</button></div>
             <p class="hint">Same seed and prompt give the same picture. The prompt is used exactly as written.</p>
           </div>
@@ -818,9 +836,9 @@
               <span id="edit-empty">Drop a picture here or click.</span>
             </label>
             <div id="loras-field" hidden>
-              <span class="label" style="margin-top:12px">LoRAs</span><div class="models" id="loras"></div>
+              <span class="label gap">LoRAs</span><div class="models" id="loras"></div>
             </div>
-            <span class="label" style="margin-top:12px">Seed</span>
+            <span class="label gap">Seed</span>
             <div class="seed"><input id="edit-seed" inputmode="numeric" placeholder="Random" aria-label="Seed"><button type="button" id="edit-dice">Random</button></div>
             <p class="hint">The prompt says what to change; whatever you don’t mention stays. Output keeps the source’s format.</p>
           </div>
@@ -927,7 +945,7 @@
   const state = {
     sessions: store.get('sessions', []), currentId: store.get('current', null), ghost: false, ghostSession: null, rerun: new Set(),
     mode: store.get('mode', 'chat'), optsOpen: store.get('optsOpen', true), view: 'thread',
-    style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, loraOn: {}, upscale: 1,
+    style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, loraOn: {}, negative: {}, upscale: 1,
     history: [], ghostHistory: [], busy: false, forge: store.get('forge', 'dream'),
   };
   let options;
@@ -1464,6 +1482,8 @@
     $('manual-gen').hidden = manualEdit;
     $('manual-edit').hidden = !manualEdit;
     renderLoras();
+    renderNegative();
+    renderPrefix();
     $('opts-toggle').hidden = mode === 'chat';
     $('opts-toggle').textContent = state.optsOpen ? 'Settings ▴' : 'Settings ▾';
     const swap = mode === 'swap';
@@ -1584,6 +1604,9 @@
   // a checkbox per installed LoRA of the picked model; ticks live in state.loraOn for the page's life
   function renderLoras() {
     const list = (options?.loras || []).filter(l => l.model === state.model);
+    // one LoRA block, moved into whichever side is showing, above its Seed
+    const side = isEditModel(state.model) ? $('manual-edit') : $('manual-gen');
+    side.insertBefore($('loras-field'), side.querySelector(':scope > .label.gap'));
     $('loras-field').hidden = !list.length;
     $('loras').replaceChildren(...list.map(l => {
       const b = document.createElement('label');
@@ -1593,6 +1616,27 @@
       return b;
     }));
   }
+  // the picked model's negative prompt (SDXL only), prefilled with its default; edits kept per model in state.negative
+  // the picked model's quality tags: shown, never added on their own; the button puts them before the prompt
+  function prefixOf(model) { return options?.models.find(m => m.key === model)?.prefix || ''; }
+  function renderPrefix() {
+    const p = prefixOf(state.model).trim();
+    $('prefix-field').hidden = !p;
+    $('prefix').textContent = p;
+  }
+  $('prefix-attach').onclick = () => {
+    const p = prefixOf(state.model).trim(), text = $('input').value.trim();
+    if (!text.startsWith(p)) $('input').value = text ? `${p} ${text}` : `${p} `;
+    grow(); stashDraft(); $('input').focus();
+  };
+  function negativeDefault(model) { return options?.models.find(m => m.key === model)?.negative ?? null; }
+  function renderNegative() {
+    const def = negativeDefault(state.model);
+    $('negative-field').hidden = def === null;
+    if (def !== null) $('negative').value = state.negative[state.model] ?? def;
+  }
+  $('negative').oninput = () => { state.negative[state.model] = $('negative').value; };
+  $('negative-reset').onclick = () => { delete state.negative[state.model]; renderNegative(); };
   function pickedLoras(model) { return (options?.loras || []).filter(l => l.model === model && (state.loraOn[l.key] ?? l.default)).map(l => l.key); }
   function isEditModel(key) { return !!options?.models.find(m => m.key === key)?.edit; }
   async function generateManual() {
@@ -1606,7 +1650,8 @@
     state.optsOpen = false; setMode(state.mode);  // the settings fold away so the picture has the room; "Settings ▾" brings them back
     try {
       await startJob(s, 'manual', '/api/generate',
-        { prompt, style: 'none', model: state.model, width: res.width, height: res.height, seed: $('seed').value, ghost: state.ghost });
+        { prompt, style: 'none', model: state.model, width: res.width, height: res.height, seed: $('seed').value, ghost: state.ghost,
+          ...(negativeDefault(state.model) !== null && { negative: $('negative').value }), loras: pickedLoras(state.model), prefix: '' });
     } catch (err) {
       addMessage({ role: 'bot', error: true, text: err.message }, s);
     }
@@ -1622,6 +1667,8 @@
     if (r >= 0) { state.res = r; press($('ratios'), r); }
     if (options.models.some(m => m.key === h.model && m.installed)) {
       state.model = h.model;
+      if (h.negative != null) state.negative[h.model] = h.negative;
+      (options.loras || []).filter(l => l.model === h.model).forEach(l => { state.loraOn[l.key] = (h.loras || []).includes(l.key); });
       document.querySelector(`input[name="model"][value="${h.model}"]`).checked = true;
     }
     state.optsOpen = true;

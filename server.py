@@ -125,8 +125,13 @@ def host_system_prompt() -> str:
             "(praise), \"laugh\" (a joke), \"sad\" (something failed or isn't possible); \"angry\" almost never.")
 
 
+def chat_model(key: str) -> bool:
+    """A model the chat may use: installed and not kept for Manual (manual_only)."""
+    return key in morpheus.MODELS and morpheus.installed(key) and not morpheus.MODELS[key].get("manual_only")
+
+
 def chat_system_prompt() -> str:
-    models = "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k))
+    models = "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if chat_model(k))
     styles = "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items())
     sizes = ", ".join(f"{r['width']}x{r['height']} ({r['label']})" for r in RESOLUTIONS)
     return f"""You are the picture assistant in Morpheus, a local image generator on the user's GPU.
@@ -201,7 +206,7 @@ With "good", repeat prompt, model, style, width, height unchanged.
 critique: one or two sentences, always in English, no Markdown.
 
 Models:
-""" + "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if morpheus.installed(k)) + \
+""" + "\n".join(f"- {k}: {m['label']}, {m['note']}" for k, m in morpheus.MODELS.items() if chat_model(k)) + \
         "\n\nStyles:\n" + "\n".join(f"- {k}: {s['label']}" for k, s in morpheus.STYLES.items()) + \
         "\n\nFormats: " + ", ".join(f"{r['width']}x{r['height']}" for r in RESOLUTIONS)
 
@@ -769,7 +774,8 @@ class Handler(BaseHTTPRequestHandler):
         if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json"):
             return self.send_file(WEB / route[1:], WEB)
         if route == "/api/options":
-            models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
+            models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k),
+                       "negative": morpheus.default_negative(k), "prefix": morpheus.default_prefix(k)}
                       for k, m in morpheus.MODELS.items()]
             # Qwen edits in Manual too: picking it there turns the prompt into an edit of a source picture
             q = morpheus.EDIT_MODELS["qwen-image-edit-2511"]
@@ -941,7 +947,7 @@ class Handler(BaseHTTPRequestHandler):
         return result
 
     def render(self, answer: dict, ghost: bool, req: dict) -> dict:
-        model = answer["model"] if answer["model"] in morpheus.MODELS and morpheus.installed(answer["model"]) else "z-image-turbo"
+        model = answer["model"] if chat_model(answer["model"]) else "z-image-turbo"
         style = answer["style"] if answer["style"] in morpheus.STYLES else "none"
         size = next((r for r in RESOLUTIONS if r["width"] == answer["width"] and r["height"] == answer["height"]), RESOLUTIONS[0])
         ensure_comfy()
@@ -1340,7 +1346,10 @@ class Handler(BaseHTTPRequestHandler):
             meta = morpheus.run(
                 prompt, req.get("style", "none"), req.get("model", "z-image-turbo"),
                 int(req.get("width", 1024)), int(req.get("height", 1024)),
-                int(req["seed"]) if str(req.get("seed", "")).strip() else None, ghost=ghost, progress=progress_for(req))
+                int(req["seed"]) if str(req.get("seed", "")).strip() else None, ghost=ghost, progress=progress_for(req),
+                negative=req["negative"] if isinstance(req.get("negative"), str) else None,
+                loras=req["loras"] if isinstance(req.get("loras"), list) else None,
+                prefix=req["prefix"] if isinstance(req.get("prefix"), str) else None)
         return ghost_keep(meta) if ghost else meta
 
     def edit(self, req):
