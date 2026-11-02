@@ -137,7 +137,10 @@ Decide for every message:
   For follow-ups ("brighter", "with a hat") rewrite the previous prompt accordingly.
 - action "edit": the user wants an existing picture changed ("make it night", "give her a hat", "full body"): the
   attached picture if there is one, otherwise the latest picture in this session. prompt is then a short English
-  change instruction ("make it night, keep everything else"). model and style empty; width and height 0.
+  change instruction ("make it night, keep everything else"). style empty; width and height 0. model is the edit model:
+  flux2-klein-4b-edit (about 25 s) for small, local changes (light, an object, a hat, colours);
+  qwen-image-edit-2511 (about 90 s) for a full restyle (e.g. redraw as anime, as a painting, pixel art to clean art),
+  outfit changes, or whenever the person must stay recognisable. If the user names a model, use that one.
   Prefer "edit" over "generate" whenever the user changes something in the picture they just got; "generate" is for
   a different picture or when the change is so big that little of the old one would stay.
 - With an attached picture and a wish for a new picture in its style or with its subject: action "generate", and
@@ -768,10 +771,17 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/options":
             models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
                       for k, m in morpheus.MODELS.items()]
+            # Qwen edits in Manual too: picking it there turns the prompt into an edit of a source picture
+            q = morpheus.EDIT_MODELS["qwen-image-edit-2511"]
+            models.append({"key": "qwen-image-edit-2511", "label": q["label"], "note": "Edits a source picture: restyles, keeps the person",
+                           "installed": morpheus.installed("qwen-image-edit-2511"), "edit": True})
             edit_models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
                            for k, m in morpheus.EDIT_MODELS.items()]
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]
-            return self.send_json({"models": models, "edit_models": edit_models, "styles": styles, "resolutions": RESOLUTIONS})
+            loras = [{"key": k, "label": l["label"], "note": l["note"], "model": l["model"], "default": bool(l.get("default"))}
+                     for k, l in morpheus.LORAS.items() if morpheus.lora_installed(k)]
+            return self.send_json({"models": models, "edit_models": edit_models, "loras": loras, "styles": styles,
+                                   "resolutions": RESOLUTIONS})
         if route == "/api/host":
             h = host()
             return self.send_json({**h, "root": f"/agents/{h['id']}/"} if h else None)
@@ -916,7 +926,8 @@ class Handler(BaseHTTPRequestHandler):
                 attach = {"source": str(last["image"])}  # no picture attached: the edit is of the latest one
             if answer["action"] == "edit" and attach:
                 # the normal edit route, so the result links back to its source like any edit
-                result["image"] = self.edit({**attach, "prompt": answer["prompt"], "ghost": ghost, "_job": req.get("_job")})
+                result["image"] = self.edit({**attach, "prompt": answer["prompt"], "model": answer.get("model") or "flux2-klein-4b-edit",
+                                             "ghost": ghost, "_job": req.get("_job")})
                 result["image"]["edit"] = True
             elif answer["action"] == "generate":
                 result["image"] = self.render(answer, ghost, req)
@@ -1363,7 +1374,8 @@ class Handler(BaseHTTPRequestHandler):
         with gpu:
             meta = morpheus.run_edit(prompt, source, model,
                                     int(req["seed"]) if str(req.get("seed", "")).strip() else None,
-                                    ghost=ghost, source_ref=source_ref, progress=progress_for(req))
+                                    ghost=ghost, source_ref=source_ref, progress=progress_for(req),
+                                    loras=req["loras"] if isinstance(req.get("loras"), list) else None)
         return ghost_keep(meta) if ghost else meta
 
     def upload(self):

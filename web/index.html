@@ -802,30 +802,27 @@
         </div>
 
         <div class="opts two" id="opts-manual" hidden>
-          <div class="field"><span class="label">Style</span><div class="chips" id="styles"></div></div>
-          <div class="field"><span class="label">Format</span><div class="ratios" id="ratios"></div></div>
           <div class="field"><span class="label">Model</span><div class="models" id="models"></div></div>
-          <div class="field">
-            <span class="label">Seed</span>
+          <!-- right side: the picked model's own settings -->
+          <div class="field" id="manual-gen">
+            <span class="label">Format</span><div class="ratios" id="ratios"></div>
+            <span class="label" style="margin-top:12px">Seed</span>
             <div class="seed"><input id="seed" inputmode="numeric" placeholder="Random" aria-label="Seed"><button type="button" id="dice">Random</button></div>
             <p class="hint">Same seed and prompt give the same picture. The prompt is used exactly as written.</p>
           </div>
-        </div>
-
-        <div class="opts two" id="opts-edit" hidden>
-          <div class="field">
+          <div class="field" id="manual-edit" hidden>
             <span class="label">Source picture</span>
             <label class="drop" id="drop">
               <input type="file" id="edit-file" accept="image/*" hidden>
               <img id="edit-preview" alt="" hidden>
-              <span id="edit-empty">Drop a picture here or click.<br>Or pick “Edit” on a result.</span>
+              <span id="edit-empty">Drop a picture here or click.</span>
             </label>
-          </div>
-          <div class="field">
-            <span class="label">Model</span><div class="models" id="edit-models"></div>
+            <div id="loras-field" hidden>
+              <span class="label" style="margin-top:12px">LoRAs</span><div class="models" id="loras"></div>
+            </div>
             <span class="label" style="margin-top:12px">Seed</span>
             <div class="seed"><input id="edit-seed" inputmode="numeric" placeholder="Random" aria-label="Seed"><button type="button" id="edit-dice">Random</button></div>
-            <p class="hint">Whatever you don’t mention stays as it is.</p>
+            <p class="hint">The prompt says what to change; whatever you don’t mention stays. Output keeps the source’s format.</p>
           </div>
         </div>
 
@@ -930,7 +927,7 @@
   const state = {
     sessions: store.get('sessions', []), currentId: store.get('current', null), ghost: false, ghostSession: null, rerun: new Set(),
     mode: store.get('mode', 'chat'), optsOpen: store.get('optsOpen', true), view: 'thread',
-    style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, upscale: 1,
+    style: 'pixel', res: 0, model: 'z-image-turbo', editModel: 'flux2-klein-4b-edit', editSource: null, loraOn: {}, upscale: 1,
     history: [], ghostHistory: [], busy: false, forge: store.get('forge', 'dream'),
   };
   let options;
@@ -1117,7 +1114,7 @@
     const done = kind === 'swap' && s.messages.some(m => m.video) && !state.rerun.has(s.id);
     $('done-bar').hidden = !done;
     document.querySelector('.input-row').hidden = done;
-    if (done) ['manual', 'edit', 'swap'].forEach(k => { $('opts-' + k).hidden = true; });
+    if (done) ['manual', 'swap'].forEach(k => { $('opts-' + k).hidden = true; });
     $('opts-toggle').hidden = done || state.mode === 'chat';
   }
   // start a new, empty session of a kind (also from a result or a drop, which is the user's own crossover)
@@ -1263,7 +1260,7 @@
       if ('source' in h) {
         if (!h.source || h.source.includes(':')) throw new Error('The source picture of this edit is gone.');
         addMessage({ role: 'user', kind: 'Again', text: h.prompt, thumb: url(h.source) }, s);
-        await startJob(s, 'edit', '/api/edit', { prompt: h.prompt, model: h.model, source: h.source, ghost: state.ghost });
+        await startJob(s, 'edit', '/api/edit', { prompt: h.prompt, model: h.model, loras: h.loras, source: h.source, ghost: state.ghost });
       } else {
         addMessage({ role: 'user', kind: 'Again', text: h.prompt }, s);
         await startJob(s, 'manual', '/api/generate', { prompt: h.prompt, style: h.style, model: h.model, width: h.width, height: h.height, ghost: state.ghost });
@@ -1457,10 +1454,16 @@
     edit: 'What should change? e.g. make it night, warm light in the windows … (Ctrl+Enter)',
   };
   function setMode(mode) {
+    if (mode === 'edit') { mode = 'manual'; if (isEditModel(state.editModel)) state.model = state.editModel; }  // the old Edit mode lives in Manual now
     state.mode = mode;
     store.set('mode', mode);
     document.querySelectorAll('.modes [role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
-    ['manual', 'edit', 'swap'].forEach(k => { $('opts-' + k).hidden = !(mode === k && state.optsOpen); });
+    ['manual', 'swap'].forEach(k => { $('opts-' + k).hidden = !(mode === k && state.optsOpen); });
+    // Manual's right side follows the picked model: format for text-to-image, a source picture for an edit model
+    const manualEdit = isEditModel(state.model);
+    $('manual-gen').hidden = manualEdit;
+    $('manual-edit').hidden = !manualEdit;
+    renderLoras();
     $('opts-toggle').hidden = mode === 'chat';
     $('opts-toggle').textContent = state.optsOpen ? 'Settings ▴' : 'Settings ▾';
     const swap = mode === 'swap';
@@ -1557,12 +1560,6 @@
     [...container.children].forEach((b, k) => b.setAttribute('aria-pressed', String(k === active)));
   }
   function buildForms() {
-    options.styles.forEach((st, k) => {
-      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'chip', textContent: st.label });
-      b.onclick = () => { state.style = st.key; press($('styles'), k); };
-      $('styles').append(b);
-    });
-    press($('styles'), options.styles.findIndex(st => st.key === state.style));
     options.resolutions.forEach((r, k) => {
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'ratio', title: `${r.width}×${r.height}` });
       const scale = 22 / Math.max(r.width, r.height);
@@ -1576,16 +1573,30 @@
       l.className = 'model' + (m.installed ? '' : ' off');
       l.innerHTML = `<input type="radio" name="${name}" value="${m.key}" ${m.installed ? '' : 'disabled'} ${m.key === state[key] ? 'checked' : ''}>
         <span><b>${esc(m.label)}</b><small>${m.installed ? esc(m.note) : 'Not installed'}</small></span>`;
-      l.querySelector('input').onchange = () => { state[key] = m.key; };
+      l.querySelector('input').onchange = () => { state[key] = m.key; setMode(state.mode); };
       box.append(l);
     });
     radios(options.models, $('models'), 'model', 'model');
-    radios(options.edit_models, $('edit-models'), 'edit-model', 'editModel');
   }
   $('dice').onclick = () => { $('seed').value = ''; };
   $('edit-dice').onclick = () => { $('edit-seed').value = ''; };
 
+  // a checkbox per installed LoRA of the picked model; ticks live in state.loraOn for the page's life
+  function renderLoras() {
+    const list = (options?.loras || []).filter(l => l.model === state.model);
+    $('loras-field').hidden = !list.length;
+    $('loras').replaceChildren(...list.map(l => {
+      const b = document.createElement('label');
+      b.className = 'model';
+      b.innerHTML = `<input type="checkbox" ${(state.loraOn[l.key] ?? l.default) ? 'checked' : ''}><span><b>${esc(l.label)}</b><small>${esc(l.note)}</small></span>`;
+      b.querySelector('input').onchange = e => { state.loraOn[l.key] = e.target.checked; };
+      return b;
+    }));
+  }
+  function pickedLoras(model) { return (options?.loras || []).filter(l => l.model === model && (state.loraOn[l.key] ?? l.default)).map(l => l.key); }
+  function isEditModel(key) { return !!options?.models.find(m => m.key === key)?.edit; }
   async function generateManual() {
+    if (isEditModel(state.model)) { state.editModel = state.model; return runEdit(); }
     const prompt = $('input').value.trim();
     if (!prompt) return $('input').focus();
     const res = options.resolutions[state.res];
@@ -1595,7 +1606,7 @@
     state.optsOpen = false; setMode(state.mode);  // the settings fold away so the picture has the room; "Settings ▾" brings them back
     try {
       await startJob(s, 'manual', '/api/generate',
-        { prompt, style: state.style, model: state.model, width: res.width, height: res.height, seed: $('seed').value, ghost: state.ghost });
+        { prompt, style: 'none', model: state.model, width: res.width, height: res.height, seed: $('seed').value, ghost: state.ghost });
     } catch (err) {
       addMessage({ role: 'bot', error: true, text: err.message }, s);
     }
@@ -1607,7 +1618,6 @@
     lb.close();
     if (state.view === 'gallery' || kindOf(current()) !== 'manual') newSession('manual');
     $('seed').value = h.seed;
-    state.style = h.style; press($('styles'), options.styles.findIndex(st => st.key === h.style));
     const r = options.resolutions.findIndex(r => r.width === h.width && r.height === h.height);
     if (r >= 0) { state.res = r; press($('ratios'), r); }
     if (options.models.some(m => m.key === h.model && m.installed)) {
@@ -1719,7 +1729,7 @@
   async function runEdit() {
     const prompt = $('input').value.trim();
     if (!state.editSource) {
-      state.optsOpen = true; setMode('edit');
+      state.optsOpen = true; setMode('manual');
       return addMessage({ role: 'bot', error: true, text: 'Pick a source picture first (in the settings, or “Edit” on a result).' });
     }
     if (!prompt) return $('input').focus();
@@ -1727,7 +1737,7 @@
     const s = ensureSession();
     addMessage({ role: 'user', kind: KIND.edit, text: prompt, thumb: state.editSource.file ? url(state.editSource.file) : null }, s);
     try {
-      await startJob(s, 'edit', '/api/edit', { prompt, model: state.editModel, seed: $('edit-seed').value,
+      await startJob(s, 'edit', '/api/edit', { prompt, model: state.editModel, loras: pickedLoras(state.editModel), seed: $('edit-seed').value,
         source: state.editSource.file, upload: state.editSource.upload, ghost: state.ghost });
     } catch (err) {
       addMessage({ role: 'bot', error: true, text: err.message }, s);

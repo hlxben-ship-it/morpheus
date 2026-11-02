@@ -59,6 +59,26 @@ Edit models live in `EDIT_MODELS` in `morpheus.py`:
 | Model | Status | Time |
 |---|---|---|
 | FLUX.2 [klein] 4B | installed (same files as text-to-image), source as reference latent | ~20–30 s once loaded |
+| Qwen-Image-Edit 2511 | installed (Q4 GGUF + 4-step Lightning LoRA); full restyles, keeps the person | ~85 s |
+
+In Chat, Claude picks the edit model per edit: Klein for small local changes, Qwen for restyles ("redraw as anime")
+and anything where the person must stay recognisable. In Manual, Qwen sits in the model list; picking it turns the
+prompt into an edit and shows the source picture drop.
+
+### LoRAs
+
+Manual is split in two: the model list on the left, the picked model's settings on the right (format and seed,
+or for Qwen the source picture, LoRAs and seed). Styles are Chat-only now; Manual sends `none`.
+
+`LORAS` in `morpheus.py` is the LoRA registry: label, file in `ComfyUI/models/loras`, the model it belongs to,
+strength, whether it is on by default (Chat and Soulforge use the defaults) and whether it is a speed LoRA. Manual
+shows a checkbox per installed LoRA of the picked model; only the Qwen workflow loads LoRAs so far. Adding one:
+download the file into `ComfyUI/models/loras`, add its entry, restart Morpheus.
+
+| LoRA | For | Default | Notes |
+|---|---|---|---|
+| Lightning 4-step | Qwen-Image-Edit 2511 | on | off = 40 steps at cfg 4, about 10x slower |
+| Anything2Real (lrzjason, 2601 A) | Qwen-Image-Edit 2511 | off | art → photo, strength 0.85; prompt `change the picture 1 to realistic photograph, …` |
 
 The output keeps the source's aspect ratio at about 1 MP; the time is sampling, not text encoding,
 and halving the size only halves it. CLI: `morpheus.py "instruction" --edit path\to\image.png`.

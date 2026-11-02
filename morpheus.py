@@ -132,16 +132,26 @@ def flux2_klein_edit_workflow(prompt: str, image: str, width: int, height: int, 
     return graph
 
 
-def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int) -> dict:
+def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int, loras: list | None = None) -> dict:
     """Qwen-Image-Edit-2511 (20B, Q4 GGUF) with the 4-step Lightning LoRA, after ComfyUI's image_qwen_image_edit_2511
     template. Its Qwen2.5-VL encoder reads the picture along with the instruction, which keeps who she is through
     an outfit change better than Klein, at the cost of loading 22 GB in turns.
+
+    loras are LORAS keys (None = the defaults), chained after the model. Without a speed LoRA (Lightning) it samples
+    the base model's way: 40 steps at cfg 4, about ten times slower.
     """
-    return {
-        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_K_M.gguf"}},
-        "15": {"class_type": "LoraLoaderModelOnly", "inputs": {
-            "model": ["1", 0], "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", "strength_model": 1.0}},
-        "16": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["15", 0], "shift": 3.1}},
+    loras = lora_keys("qwen-image-edit-2511", loras)
+    graph = {"1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_K_M.gguf"}}}
+    model = ["1", 0]
+    for i, k in enumerate(loras):
+        graph[f"4{i}"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": model, "lora_name": LORAS[k]["file"], "strength_model": LORAS[k]["strength"]}}
+        model = [f"4{i}", 0]
+    fast = any(LORAS[k].get("speed") for k in loras)
+    if not fast:
+        steps = 40
+    return graph | {
+        "16": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": model, "shift": 3.1}},
         "17": {"class_type": "CFGNorm", "inputs": {"model": ["16", 0], "strength": 1.0}},
         "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
@@ -155,7 +165,7 @@ def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: i
         "22": {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["3", 0]}},
         "8": {"class_type": "KSampler", "inputs": {
             "model": ["17", 0], "positive": ["25", 0], "negative": ["26", 0], "latent_image": ["22", 0],
-            "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+            "seed": seed, "steps": steps, "cfg": 1.0 if fast else 4.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
         "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
         "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "morpheus"}},
     }
@@ -190,8 +200,42 @@ MODELS = {
                                   "worst quality, low quality, old, early, " + SDXL_NEGATIVE,
                                   prefix="masterpiece, best quality, newest, absurdres, highres, "),
     },
-    "flux2-dev": {"label": "FLUX.2 [dev]", "note": "Top quality, non-commercial", "files": [], "workflow": None},
 }
+
+
+# LoRAs under ComfyUI/models/loras, each for one model. Manual shows a checkbox per installed LoRA of the picked
+# model; "default" ones are on unless the request says otherwise (chat, Soulforge, CLI). "speed" marks a step
+# distillation: the workflow drops to few steps only while one of those is on.
+LORAS = {
+    "qwen-lightning": {
+        "label": "Lightning 4-step",
+        "note": "About 10x faster; off = 40 full steps",
+        "file": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "model": "qwen-image-edit-2511",
+        "strength": 1.0,
+        "default": True,
+        "speed": True,
+    },
+    # lrzjason/Anything2Real on Hugging Face; prompt as "change the picture 1 to realistic photograph, <description>"
+    "qwen-anything2real": {
+        "label": "Anything2Real",
+        "note": "Anime, art, cartoon → photo; prompt: change the picture 1 to realistic photograph, …",
+        "file": "anything2real_2601_A_final_patched.safetensors",
+        "model": "qwen-image-edit-2511",
+        "strength": 0.85,
+        "default": False,
+    },
+}
+
+
+def lora_installed(key: str) -> bool:
+    return (COMFY_MODELS / "loras" / LORAS[key]["file"]).exists()
+
+
+def lora_keys(model: str, wanted: list | None = None) -> list:
+    """The LoRAs to use for model: the wanted ones (None = its defaults), installed and meant for it, in LORAS order."""
+    return [k for k, l in LORAS.items() if l["model"] == model and lora_installed(k)
+            and (k in wanted if wanted is not None else l.get("default"))]
 
 
 # Edit models take a source image plus an instruction. Same rules as MODELS; the workflow gets the
@@ -207,7 +251,7 @@ EDIT_MODELS = {
     "qwen-image-edit-2511": {
         "label": "Qwen-Image-Edit 2511",
         "note": "Best at outfit and detail changes, keeps the person and style; slower",
-        "files": ["unet/qwen-image-edit-2511-Q4_K_M.gguf", "loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "files": ["unet/qwen-image-edit-2511-Q4_K_M.gguf",
                   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
         "steps": 4,
         "pixel_art": True,  # keeps a pixel-art source's grid and flat colours on its own (Soulforge skips its restyle)
@@ -362,7 +406,7 @@ def edit_size(width: int, height: int, pixels: int = 1024 * 1024) -> tuple[int, 
 
 def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-4b-edit", seed: int | None = None,
              steps: int | None = None, out: Path = OUTPUT, name: str | None = None, ghost: bool = False,
-             source_ref: str | None = None, progress=None) -> dict:
+             source_ref: str | None = None, progress=None, loras: list | None = None) -> dict:
     """Edit an existing image by instruction, save the result and a metadata sidecar, return the metadata.
 
     The source is a file or, for ghost runs, an image held in memory. A ghost run writes nothing that outlives it.
@@ -382,7 +426,10 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
 
     started = time.time()
     try:
-        img = generate(m["workflow"](prompt, f"morpheus/{name}.png", width, height, seed, steps or m["steps"]), ghost, progress)
+        # only a model with LoRAs takes them; loras None = its defaults
+        used = lora_keys(model, loras)
+        args = {"loras": used} if any(l["model"] == model for l in LORAS.values()) else {}
+        img = generate(m["workflow"](prompt, f"morpheus/{name}.png", width, height, seed, steps or m["steps"], **args), ghost, progress)
     finally:
         if ghost:
             staged.unlink(missing_ok=True)
@@ -396,6 +443,8 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
     meta = {"image": f"{name}_raw.png", "raw": f"{name}_raw.png", "prompt": prompt, "style": "none", "model": model,
             "width": width, "height": height, "seed": seed, "seconds": round(time.time() - started, 1),
             "created": time.strftime("%Y-%m-%d %H:%M:%S"), "source": source_ref}
+    if args:
+        meta["loras"] = used
     return keep(meta, img, img, out, name, ghost)
 
 
