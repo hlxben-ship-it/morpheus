@@ -217,6 +217,66 @@ def focus_box(source: Image.Image, focus: str) -> tuple[int, int, int, int] | No
     return (int(x0 * W), max(0, int((top + y0) * H)), int(x1 * W), min(H, int((top + y1) * H)))
 
 
+def behind_mask(agent: dict, source: Image.Image, live=None) -> Image.Image:
+    """Where the background is, from two Klein key edits that agree, pulled in a little from her edge."""
+    from PIL import ImageFilter
+    import numpy as np
+    keys = [klein(agent, KEYS["key_figure"], source, live) for _ in range(2)]
+    stack = np.stack([painted(k, source) for k in keys])
+    mask = Image.fromarray((stack.all(0) * 255).astype(np.uint8))
+    return mask.filter(ImageFilter.MinFilter(7))
+
+
+def extend_sky(source: Image.Image, behind: Image.Image) -> Image.Image:
+    """Flat near-black background (a band the art model left unpainted) filled with the sky above it, tiled with a
+    sideways shift per tile so the stars don't repeat in columns."""
+    import numpy as np
+    a = np.asarray(source.convert("RGB")).copy()
+    H, W, _ = a.shape
+    dark = (a.sum(2) < 45) & (np.asarray(behind) > 128)
+    rows = np.nonzero(dark.mean(1) > 0.12)[0]
+    if not len(rows):
+        return source
+    top = int(rows[0])
+    back = np.asarray(behind) > 128
+    sky = a[:top].copy()
+    bare = np.median(sky[back[:top] & (sky.sum(2) < 200)], axis=0).astype(np.uint8)  # the sky's own colour
+    sky[~back[:top]] = bare  # her hair and face are no sky: never copied out
+    seam = max(0, top - 8 * BLOCK)  # the art model's dotted edge along the old boundary goes too
+    fill = dark.copy()
+    fill[seam:top + 2 * BLOCK] = back[seam:top + 2 * BLOCK]
+    for y in range(seam, H):
+        k, r = divmod(y - seam, seam or 1)
+        row = np.roll(sky[r % top], (k + 1) * 97 % W, axis=0)
+        a[y][fill[y]] = row[fill[y]]
+    return Image.fromarray(a)
+
+
+RETOUCH = {"extend_sky": "the flat black background filled with her starry sky"}
+
+
+def retouch(agent: dict, op: str, live=None) -> dict:
+    """A pixel operation on the base, recorded like an edit (undo works): for what edit models won't do reliably."""
+    before = agent["base"]
+    source = Image.open(morpheus.OUTPUT / before["file"]).convert("RGB")
+    t = time.time()
+    if op == "extend_sky":
+        from PIL import ImageFilter
+        result = extend_sky(source, behind_mask(agent, source, live).filter(ImageFilter.MaxFilter(7)))
+    else:
+        raise ValueError(f"Unknown retouch: {op}")
+    n = len(agent.get("edits", [])) + 1
+    seed = random.randrange(2**31)
+    file = f"retouch_{n}_{seed}.png"
+    result.save(folder(agent["slug"]) / file)
+    edit = {"file": f"soulforge/{agent['slug']}/{file}", "seed": seed, "instruction": RETOUCH[op], "before": before,
+            "seconds": round(time.time() - t, 1), "model": "retouch", "focus": "background"}
+    agent.setdefault("edits", []).append(edit)
+    agent["base"] = {"file": edit["file"], "seed": seed, "look": before.get("look"), "edit": n}
+    save(agent)
+    return edit
+
+
 def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> dict:
     """One edit of the base image by instruction (Qwen-Image-Edit, else FLUX.2 Klein), kept only where the picture
     really changed.
@@ -248,6 +308,11 @@ def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> di
         staged.unlink(missing_ok=True)
     # the finish only touches what clearly changed: the drift around it passes the soft mask but must stay as is
     clear = change_mask(source, edited, 40)
+    if focus == "background":  # only behind her: a sky fix also flattened Glia's eyes (2026-11-01)
+        behind = behind_mask(agent, source, live)
+        from PIL import ImageChops
+        clear = ImageChops.darker(clear, behind)
+        edited = Image.composite(edited, source, behind)
     # on a zoomed face the model also drifts skin tone and redraws eyes and mouth a little (a scar came with a darker
     # face): there only what clearly changed is taken over at all
     mixed = Image.composite(edited, source, clear if box else change_mask(source, edited))
@@ -388,10 +453,25 @@ def keyed(picture: Image.Image) -> Image.Image:
     return ImageChops.darker(ImageChops.darker(h, s), v).filter(ImageFilter.MedianFilter(5))
 
 
-def vote(pictures: list[Image.Image]) -> Image.Image:
+def painted(picture: Image.Image, source: Image.Image | None) -> "np.ndarray":
+    """Where a key edit really painted the key green. Green she wears herself (an apron, a green coat) is green in the
+    key picture too but unchanged from her, so it's not keyed: it punched holes into Fern's apron (2026-11-01)."""
+    import numpy as np
+    mask = np.asarray(keyed(picture)) > 128
+    if source is None:
+        return mask
+    from PIL import ImageFilter
+    a = np.asarray(picture.convert("RGB")).astype(int)
+    b = np.asarray(source.convert("RGB").resize(picture.size)).astype(int)
+    changed = Image.fromarray(((np.abs(a - b).sum(2) > 70) * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(5))
+    own = np.asarray(keyed(source.convert("RGB").resize(picture.size))) > 128
+    return mask & (~own | (np.asarray(changed) > 128))
+
+
+def vote(pictures: list[Image.Image], source: Image.Image | None = None) -> Image.Image:
     """The key mask where most tries agree: a random extra in one try drops out."""
     import numpy as np
-    stack = np.stack([np.asarray(keyed(p)) > 128 for p in pictures])
+    stack = np.stack([painted(p, source) for p in pictures])
     return Image.fromarray(((stack.sum(0) * 2 > len(pictures)) * 255).astype(np.uint8))
 
 
@@ -414,10 +494,15 @@ def rig(raw: dict, source: Image.Image, eyes, mouth) -> Image.Image:
     B how far the cloak sways (more toward the hem). The page warps the pixels by them."""
     import numpy as np
     W, H = source.size
-    figure = 255 - np.asarray(vote(raw["key_figure"]), dtype=np.float32)
-    hair = np.minimum(np.asarray(vote(raw["key_hair"]), dtype=np.float32), figure)
-    cloak = np.minimum(np.asarray(vote(raw["key_cloak"]), dtype=np.float32), figure)
-    hair = np.minimum(hair, 255 - cloak)  # Klein tends to green the cloak along with the hair
+    figure = 255 - np.asarray(vote(raw["key_figure"], source), dtype=np.float32)
+    hair = np.minimum(np.asarray(vote(raw["key_hair"], source), dtype=np.float32), figure)
+    cloak = np.minimum(np.asarray(vote(raw["key_cloak"], source), dtype=np.float32), figure)
+    # Klein greens one along with the other: the hair key took Morpheus's cloak, the cloak key took Glia's hair
+    # (read as a hood). The smaller key is the one that stayed on its part, so it keeps the overlap.
+    if (hair > 128).sum() <= (cloak > 128).sum():
+        cloak = np.minimum(cloak, 255 - hair)
+    else:
+        hair = np.minimum(hair, 255 - cloak)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     # the face never sways with the hair (Klein greens the eyes too)
     ew = eyes[2] - eyes[0]
@@ -454,6 +539,20 @@ def klein(agent: dict, instruction: str, picture: Image.Image, live=None) -> Ima
 def expression(agent: dict, name: str, source: Image.Image, live=None) -> Image.Image:
     """One raw Klein edit of the base (the eye finder, a key or the plate)."""
     return klein(agent, {**EXPRESSIONS, **KEYS}[name], source, live)
+
+
+# the lids drawn on a close-up of the eyes: on the whole picture the edit model gave them eyeshadow and blobby lashes
+LIDS = ("Close both of her eyes gently: each closed eye is one clean thin dark curved lash line on her skin, curving "
+        "slightly downward like a calm sleeping anime girl. No eyeshadow, no makeup, no coloured lids, the skin above "
+        "the lash line is her normal skin colour. Her eyebrows, hair, cheeks and mouth stay exactly the same.")
+
+
+def lids(agent: dict, source: Image.Image, eyes, live=None) -> Image.Image:
+    """Her closed eyes, from an edit of a close-up around them (see LIDS)."""
+    ew = eyes[2] - eyes[0]
+    cx, cy, r = (eyes[0] + eyes[2]) // 2, (eyes[1] + eyes[3]) // 2, int(ew * .75)
+    W, H = source.size
+    return close_up(agent, LIDS, source, (max(0, cx - r), max(0, cy - r), min(W, cx + r), min(H, cy + r)), live)
 
 
 def close_up(agent: dict, instruction: str, source: Image.Image, box: tuple[int, int, int, int], live=None) -> Image.Image:
@@ -555,13 +654,30 @@ def pixel_eyes(source: Image.Image, closed: Image.Image, eyes) -> dict:
     gxs, gys = range(gx0, gx1 + 1), range(gy0, gy1 + 1)
     base = snap(source, gxs, gys)
     shut = Image.alpha_composite(source.convert("RGBA"), closed).convert("RGB")
-    cl = {k: v for k, v in snap(shut, gxs, gys).items() if np.abs(v - base[k]).sum() > 24}
+    # only the eye itself: above its top the edit model repainted hair and brows as forehead (orange patches on Glia)
+    cl = {k: v for k, v in snap(shut, gxs, gys).items() if np.abs(v - base[k]).sum() > 24 and k[1] >= cy[y0] - 1}
     dark = pal[np.argmin(lum(pal))]
     top, bot = cy[y0], cy[min(y1, H - 1)]
-    mid = top + (bot - top) * .5
-    half = {k: v for k, v in cl.items() if k[1] < mid}
-    for gx in {k[0] for k in half}:
-        half[(gx, max(gy for g, gy in half if g == gx) + 1)] = dark
+    # a closed eye shows no iris or white: what the lid edit left of them below the lash line becomes skin
+    skin = pal[np.argmin(((pal - np.array(skin_tone(source, eyes), float)) ** 2).sum(1))]
+    shut_at = lambda k: cl.get(k, base[k])
+    src_a = np.asarray(source.convert("RGB"))
+    for gx in gxs:
+        for gy in range(top, bot + 1):
+            col = shut_at((gx, gy))
+            if lum(col) > 150 and np.abs(col - skin).sum() > 70:
+                cl[(gx, gy)] = skin
+            elif lum(col) > 60:  # not lash: any bright speck of iris or white in the cell (the art is a little off the
+                (x0_, x1_), (y0_, y1_) = span(cx, gx), span(cy, gy)  # grid) is painted over with a whole skin cell
+                px = src_a[y0_:y1_, x0_:x1_].reshape(-1, 3).astype(float)
+                if ((lum(px) > 120) & (np.abs(px - skin).sum(1) > 70)).any() and np.abs(col - skin).sum() <= 70:
+                    cl[(gx, gy)] = skin
+    # half: the closed lid's upper half over the open eye, its edge a dark line where the eye itself is
+    mid = top + round((bot - top) * .6)  # the lashes fill the top third already: lower, or it barely looks closing
+    half = {(gx, gy): shut_at((gx, gy)) for gx in gxs for gy in range(top, mid) if (gx, gy) in cl}
+    for gx in gxs:
+        if np.abs(base[(gx, mid)] - skin).sum() > 70 and lum(base[(gx, mid)]) > 60:
+            half[(gx, mid)] = dark
     glances = {1: {}, -1: {}}  # to her left and to her right
     ex0, ex1, m = cx[x0], cx[min(x1, W - 1)], (cx[x0] + cx[min(x1, W - 1)]) // 2
     for a, b in ((ex0, m), (m + 1, ex1)):
@@ -571,7 +687,7 @@ def pixel_eyes(source: Image.Image, closed: Image.Image, eyes) -> dict:
         lower = [r for r in rows if r > lash + 1]
         lid = min(lower, key=L.get) if lower else bot
         for d, glance in glances.items():
-            for gy in range(lash + 1, lid):
+            for gy in range(lash + 2, lid):  # the lash band stays put: shifted, it broke into specks (Glia)
                 for gx in range(a, b + 1):
                     if a <= gx - d <= b and np.abs(base[(gx - d, gy)] - base[(gx, gy)]).sum() > 24:
                         glance[(gx, gy)] = base[(gx - d, gy)]
@@ -603,7 +719,7 @@ def lips(source: Image.Image, mouth, eyes) -> tuple[int, int, int, int]:
     return (int(mouth[0]) + x, int(mouth[1]) + y, int(mouth[0]) + x + w, int(mouth[1]) + y + h)
 
 
-def smirk_lift(source: Image.Image, mouth) -> Image.Image:
+def smirk_lift(source: Image.Image, mouth, lift_px: int = 1) -> Image.Image:
     """The smirk, drawn: her own lips with one corner lifted by one art pixel, rising from the middle of the mouth
     toward the corner. Only the lips' rows move; with more, the jaw line below got a step."""
     import numpy as np
@@ -612,7 +728,7 @@ def smirk_lift(source: Image.Image, mouth) -> Image.Image:
     x0, y0, x1, y1 = mouth
     mid = (x0 + x1) // 2
     for x in range(mid, min(a.shape[1], x1 + BLOCK)):
-        lift = round(min(1.0, (x - mid) / max(1, (x1 - mid))) * BLOCK)
+        lift = round(min(1.0, (x - mid) / max(1, (x1 - mid))) * BLOCK * lift_px)
         if lift:
             ys = slice(max(0, y0 - BLOCK), min(a.shape[0] - lift, y1 + BLOCK // 2))
             out[ys, x] = a[ys.start + lift:ys.stop + lift, x]
@@ -676,17 +792,27 @@ def mouth_shapes(source: Image.Image, mouth, seam: int | None = None) -> dict:
 # Arm poses: Klein draws her with a raised arm; only the arm's region is kept, on the art's grid. Opaque pixels
 # are her posed arm, half-transparent ones are where the posed picture shows background (where her arm hung before,
 # now empty): the page hides her there, so on a scene the backdrop shows through.
+# each arm comes up in front of her body, its forearm in her own sleeve: raised from out of frame, the hand floated
+# on a cuff (Glia, 2026-11-01). One hand only: asked to wave, the edit model often raised both.
 POSES = {
-    "wave": "She raises her right hand beside her face and waves hello, palm open toward the viewer, a friendly wave.",
-    "chin": "She raises her right hand and rests her curled index finger thoughtfully against her chin, pondering.",
-    "heart": "She lays her right hand flat over her heart on her chest, a tender, touched gesture.",
+    "wave": "She waves hello with her right hand: her elbow is bent sharply at a right angle and points out to the "
+            "side at chest height, the forearm in her own sleeve and cuff goes straight up from the elbow, open hand "
+            "beside her face with all five fingers spread, palm toward the viewer. Only one hand is raised; the "
+            "other arm stays down at her side.",
+    "chin": "She thinks: her right elbow is bent sharply and rests at chest height in front of her body, the forearm "
+            "in her own sleeve and cuff goes up to her chin, her curled index finger rests against her chin, "
+            "pondering. Her other arm stays down at her side.",
+    "heart": "She lays her right hand flat over her heart: her elbow is bent sharply and points out to the side at "
+             "chest height, the forearm in her own sleeve and cuff runs level across her chest, a tender, touched "
+             "gesture. Her other arm stays down at her side.",
 }
-POSE_TRIES = 2
+POSE_TRIES = 4  # the best of four by pose_score: the edit model often raises both hands or swings the elbow out
 IDLE_STEPS += [f"{k} {n + 1}" for k in POSES for n in range(POSE_TRIES)]
 
 
 def pose_score(overlay: Image.Image | None, eyes) -> float:
-    """Lower is better: holes opened in the middle of her torso (where no arm hangs) mean Klein redrew her there."""
+    """Lower is better: holes opened in the middle of her torso (where no arm hangs) mean Klein redrew her there;
+    a second raised hand counts from arm_pose (Glia's wave). An elbow out beside her is the bend, not a fault."""
     import numpy as np
     if overlay is None:
         return float("inf")
@@ -694,16 +820,37 @@ def pose_score(overlay: Image.Image | None, eyes) -> float:
     ew = eyes[2] - eyes[0]
     mid = (eyes[0] + eyes[2]) // 2
     band = a[:, max(0, mid - int(ew * .8)):mid + int(ew * .8)]
-    return float((band == 128).sum()) / max(1, (a == 255).sum())
+    score = float((band == 128).sum()) / max(1, (a == 255).sum())
+    return score + max(0, overlay.info.get("hands", 1) - 1)
 
 
-def arm_pose(source: Image.Image, posed: Image.Image, plate: Image.Image, eyes, mouth) -> Image.Image | None:
+# where each pose's hand belongs, from the face: its top in eye widths below the eyes' bottom. A drawing with the
+# hand elsewhere is another gesture (Glia's thinking came out as arms crossed at her waist)
+POSE_AIM = {"wave": (-.6, .3),  # higher, the fingers left the frame
+            "chin": (.1, .9), "heart": (.7, 1.8)}
+
+
+def pose_aim(overlay: Image.Image | None, piece: str, eyes) -> float:
+    """0 when the hand is where the pose puts it, else 1 (added to pose_score)."""
+    if overlay is None or piece not in POSE_AIM:
+        return 0.0
+    top = overlay.info.get("hand_top")
+    if top is None:
+        return 1.0
+    lo, hi = POSE_AIM[piece]
+    u = (top - eyes[3]) / (eyes[2] - eyes[0])
+    return 0.0 if lo <= u <= hi else 1.0
+
+
+def arm_pose(source: Image.Image, posed: Image.Image, plate: Image.Image, eyes, mouth,
+             figure: Image.Image | None = None) -> Image.Image | None:
     """The posed arm as an overlay (see POSES), or None when Klein's change isn't one clear arm."""
     import cv2
     import numpy as np
     W, H = source.size
     grid = W // BLOCK
     gh = round(grid * H / W)
+    raw = posed
     posed = posed.resize((grid, gh), Image.Resampling.BOX).resize((W, H), Image.Resampling.NEAREST)
     a, b = np.asarray(source).astype(int), np.asarray(posed).astype(int)
     diff = (np.abs(a - b).sum(2) > 90).astype(np.uint8)
@@ -714,6 +861,12 @@ def arm_pose(source: Image.Image, posed: Image.Image, plate: Image.Image, eyes, 
     cv2.ellipse(face, ((eyes[0] + eyes[2]) // 2, (eyes[1] + mouth[3]) // 2),
                 (int(ew * .62), int((mouth[3] - eyes[1]) * .8 + 10)), 0, 0, 360, 1, -1)
     face[mouth[3] + BLOCK:] = 0  # below the lips is the hand's (on the chin), not the face's
+    # the ellipse reaches over hair and earrings, where a waving hand's fingers come (Glia's wave lost them): new
+    # skin where she had none is the hand's
+    cy, cx = (eyes[3] + mouth[1]) // 2, (eyes[0] + eyes[2]) // 2
+    skin0 = np.median(a[cy - 6:cy + 6, cx - 10:cx + 10].reshape(-1, 3), axis=0)
+    finger = (np.abs(b - skin0).sum(2) < 90) & (np.abs(a - skin0).sum(2) >= 90)
+    face[cv2.morphologyEx(finger.astype(np.uint8), cv2.MORPH_OPEN, np.ones((BLOCK, BLOCK), np.uint8)) > 0] = 0
     diff[face > 0] = 0
     n, lab, stats, _ = cv2.connectedComponentsWithStats(diff, connectivity=8)
     if n < 2:
@@ -721,19 +874,138 @@ def arm_pose(source: Image.Image, posed: Image.Image, plate: Image.Image, eyes, 
     k = 1 + int(np.argmax(stats[1:, 4]))
     if not .015 < stats[k, 4] / (W * H) < .25:
         return None
-    region = cv2.dilate((lab == k).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
-    region &= face == 0
-    # the posed picture's background there, decided per art pixel against the plate and smoothed: per screen pixel
-    # Klein's slightly different backdrop came out as speckle
+    main = (lab == k).astype(np.uint8)
+    # the arm: everything of Klein's on its side of a seam. Grown from the change, the sleeve came out ragged or
+    # ended below the cuff (Glia, 2026-11-01): a dark sleeve over a dark coat or a night sky barely differs. The
+    # seam runs down from the hand where Klein's picture and hers agree best, so it shows nowhere.
     cell = lambda im: np.asarray(im.convert("RGB").resize((grid, gh), Image.Resampling.BOX)).astype(int)
-    # and changed from her: dark clothes on a dark backdrop matched the plate too, and holes opened in cloaks
-    near = ((np.abs(cell(posed) - cell(plate)).sum(2) < 75) & (np.abs(cell(posed) - cell(source)).sum(2) > 60)).astype(np.uint8) * 255
-    near = cv2.medianBlur(cv2.medianBlur(near, 3), 3)
-    empty = np.asarray(Image.fromarray(near).resize((W, H), Image.Resampling.NEAREST)) > 128
+    # Klein's outlines are thinner than an art pixel: averaged into a cell they faded into the coat (Glia's
+    # sleeve and fingers). A cell a quarter line-dark is line.
+    fine = np.asarray(raw.convert("RGB").resize((grid * BLOCK, gh * BLOCK), Image.Resampling.LANCZOS)).astype(int)
+    fine = fine.reshape(gh, BLOCK, grid, BLOCK, 3).transpose(0, 2, 1, 3, 4).reshape(gh, grid, BLOCK * BLOCK, 3)
+    lum = fine.sum(3)
+    dark = lum < 110
+    mean = fine.mean(2)
+    line = np.where(dark[..., None], fine, 0).sum(2) / np.maximum(1, dark.sum(2))[..., None]
+    cellc = np.where((dark.mean(2) >= .25)[..., None], line, mean).clip(0, 255).astype(np.uint8)
+    pc, sc = cellc.astype(int), cell(source)
+    d = np.abs(pc - sc).sum(2)
+    facec = np.asarray(Image.fromarray(face * 255).resize((grid, gh), Image.Resampling.NEAREST)) > 0
+    core = cv2.resize(main, (grid, gh), interpolation=cv2.INTER_NEAREST) > 0
+    mid = (eyes[0] + eyes[2]) / 2 * grid / W
+    flip = np.nonzero(core)[1].mean() > mid  # the arm on her left: mirrored, worked out as a right one
+    fl = (lambda m: m[:, ::-1]) if flip else (lambda m: m)
+    d, core, facec = fl(d), fl(core), fl(facec)
+    mid = grid - mid if flip else mid
+    top = int(np.nonzero(core)[0].min())
+    hi = min(grid - 1, int(mid + ew * grid / W * .9))
+    acc = np.full((gh, grid), np.inf)
+    back = np.zeros((gh, grid), int)
+    for r in range(top, gh):
+        xs_ = np.nonzero(core[r])[0]
+        lo = int(xs_.max()) + 1 if len(xs_) else 0
+        row = np.full(grid, np.inf)
+        # the + 4: a straight seam among equal ones; and each cell away from the arm costs, or the seam wandered
+        # over to her hair and took her whole head along (Glia's raised wave)
+        row[lo:hi + 1] = d[r, lo:hi + 1] + 4 + 3 * (np.arange(lo, hi + 1) - lo)
+        if r == top:
+            acc[r] = row
+            continue
+        prev = acc[r - 1]
+        cand = np.stack([np.roll(prev, 1), prev, np.roll(prev, -1)])
+        cand[0, 0] = cand[2, -1] = np.inf
+        k = cand.argmin(0)
+        acc[r] = row + cand[k, np.arange(grid)]
+        back[r] = np.arange(grid) + k - 1
+    regc = np.zeros((gh, grid), bool)
+    c = int(acc[gh - 1].argmin())
+    for r in range(gh - 1, top - 1, -1):
+        regc[r, :c] = True
+        c = back[r, c] if r > top else c
+    regc &= ~facec
+    # no elbow hangs lower than a forearm below the hand and cuff: further down Klein only reshaded her skirt
+    # no seam below: her old arm hung to the frame's bottom, and anything of it left under the new elbow read as an
+    # arm running straight down (Glia, 2026-11-01); Klein's coat replaces all of it
+    regc = fl(regc)
+    # the backdrop: sky-like in Klein's picture and open to the sky at the frame's edge. A sleeve as dark as the
+    # sky is walled off by its own outline and stays arm
+    skyish = np.abs(pc - cell(plate)).sum(2) < 36
+    reach = np.pad(skyish.astype(np.uint8), 1, constant_values=1)
+    cv2.floodFill(reach, None, (0, 0), 2)
+    opened = (reach[1:-1, 1:-1] == 2) & skyish
+    # the cells along the old arm's edge mix sky with its outline: still backdrop, or they stayed as a dotted ghost
+    # of the arm in her scene
+    edge_ = cv2.dilate(opened.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    opened |= edge_ & (np.abs(pc - cell(plate)).sum(2) < 110) & (np.abs(pc - sc).sum(2) > 30)
+    up = lambda m: cv2.resize(m.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST) > 0
+    # where Klein's picture is hers anyway she keeps her own pixels: requantized, her coat came out grainy
+    # all of Klein's pixels on the arm's side: her old forearm hung there, dark like the coat Klein drew over it,
+    # and kept as "unchanged" it ran on below the bent elbow (Glia's wave and chin looked straight)
+    region = up(regc) & (face == 0)
+    empty = up(opened)
     out = np.zeros((H, W, 4), np.uint8)
-    out[..., :3] = b
+    # her own palette: the edit model paints smooth shading, a hand of 30 skin tones on flat pixel art (Glia's wave)
+    pal = source.resize((grid, gh), Image.Resampling.BOX).quantize(colors=48, method=Image.Quantize.FASTOCTREE)
+    q = np.array(Image.fromarray(cellc, "RGB").quantize(palette=pal, dither=Image.Dither.NONE))
+    # Klein's soft shading lands on her flat palette as lone specks (Glia's heart sleeve): a cell matching none of
+    # its four neighbours takes the commonest colour around it
+    pad = np.pad(q, 1, mode="edge")
+    alone = np.ones(q.shape, bool)
+    for dy, dx in ((0, 1), (2, 1), (1, 0), (1, 2)):
+        alone &= pad[dy:dy + gh, dx:dx + grid] != q
+    lut = np.array(pal.getpalette()[:768]).reshape(-1, 3)
+    for y, x in zip(*np.nonzero(alone)):
+        around = pad[y:y + 3, x:x + 3].ravel()
+        m = np.bincount(np.delete(around, 4)).argmax()
+        if np.abs(lut[m] - lut[q[y, x]]).sum() < 70:  # a shade off; a diagonal outline is a line, not a speck
+            q[y, x] = m
+    # and soft shading lands as grain over larger areas (her skirt under the new elbow): a cell a shade off the
+    # commonest colour around it takes that colour, twice over
+    for _ in range(2):
+        pad = np.pad(q, 1, mode="edge")
+        win = np.stack([pad[dy:dy + gh, dx:dx + grid] for dy in range(3) for dx in range(3)], -1)
+        mode = np.array([np.bincount(w).argmax() for w in win.reshape(-1, 9)]).reshape(gh, grid)
+        near_ = np.abs(lut[mode] - lut[q]).sum(2) < 45
+        q = np.where(near_, mode, q).astype(q.dtype)
+    cq = Image.frombytes("P", (grid, gh), np.ascontiguousarray(q).tobytes()); cq.putpalette(pal.getpalette())
+    out[..., :3] = np.asarray(cq.convert("RGB").resize((W, H), Image.Resampling.NEAREST))
+    if figure is not None:
+        # open backdrop beside her was backdrop before too: nothing to draw there. Inside her outline it's where
+        # her arm hung, and the plate shows through
+        body = np.asarray(figure.convert("RGB").split()[0]) > 128
+        region &= ~(empty & ~body)
+        raised = np.nonzero(main)[0].min() < eyes[1] - ew * .5  # a hand above her head; one beside her face lies over her hair
+        # a hand raised beside her head (the wave): the arm is outside her old outline, and inside it she keeps
+        # her own hair and coat, only her old hanging arm opening to the sky. The seam took her whole head along
+        if raised:
+            region &= ~body | empty
+        # beside her Klein's sky is a shade off the plate's: still sky, unless walled in by the arm's outline
+        loose = np.pad((np.abs(pc - cell(plate)).sum(2) < 60).astype(np.uint8), 1, constant_values=1)
+        cv2.floodFill(loose, None, (0, 0), 2)
+        if not raised:  # a raised sleeve against the night sky is within 60 of it, and was lost
+            region &= ~(up(loose[1:-1, 1:-1] == 2) & ~body)
+        empty &= body
     out[..., 3] = np.where(region, np.where(empty, 128, 255), 0)
-    return Image.fromarray(out, "RGBA")
+    # hands: skin-coloured blobs of the arm. Asked to wave, the edit model often raises both (pose_score)
+    cy, cx = (eyes[3] + mouth[1]) // 2, (eyes[0] + eyes[2]) // 2
+    skin = np.median(a[cy - 6:cy + 6, cx - 10:cx + 10].reshape(-1, 3), axis=0)
+    sk = ((np.abs(out[..., :3].astype(int) - skin).sum(2) < 70) & (out[..., 3] == 255)
+          & (np.abs(a - skin).sum(2) >= 70)).astype(np.uint8)  # new skin: her neck was there before
+    sk = cv2.morphologyEx(sk, cv2.MORPH_OPEN, np.ones((BLOCK * 2, BLOCK * 2), np.uint8))
+    sk = cv2.morphologyEx(sk, cv2.MORPH_CLOSE, np.ones((int(ew * .3), int(ew * .3)), np.uint8))  # one hand's fingers
+    ns, _, st, _ = cv2.connectedComponentsWithStats(sk, connectivity=8)
+    im = Image.fromarray(out, "RGBA")
+    im.info["hands"] = int((st[1:, 4] > (ew * .22) ** 2).sum())
+    if ns > 1:  # the biggest new skin: the hand, its top for pose_aim
+        im.info["hand_top"] = int(st[1 + int(np.argmax(st[1:, 4])), 1])
+    # touching hands merge into one blob (Glia's chin, the other hand on her forearm); each brings its own cuff
+    o3 = out[..., :3].astype(int)
+    cuff = ((o3.min(2) > 190) & (o3.max(2) - o3.min(2) < 28) & (out[..., 3] == 255) & (a.min(2) <= 190)).astype(np.uint8)
+    cuff = cv2.morphologyEx(cuff, cv2.MORPH_OPEN, np.ones((BLOCK * 2, BLOCK * 2), np.uint8))
+    nc, _, stc, _ = cv2.connectedComponentsWithStats(cuff, connectivity=8)
+    im.info["cuffs"] = int((stc[1:, 4] > (ew * .14) ** 2).sum())
+    im.info["hands"] = max(im.info["hands"], im.info["cuffs"])
+    return im
 
 
 def blob(source: Image.Image, edited: Image.Image, window: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -752,6 +1024,49 @@ def blob(source: Image.Image, edited: Image.Image, window: tuple[int, int, int, 
     return (window[0] + near[0] + x0, window[1] + near[1] + y0, window[0] + near[0] + x1, window[1] + near[1] + y1)
 
 
+def find_eyes(source: Image.Image, shut: Image.Image, window: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    """Both eyes from the closed-eyes edit: the strongest change, then a second one of eye size level with it. blob()
+    alone took the stronger eye plus an earring on Glia, whose eyes sit far apart (2026-11-01): one eye blinked, the
+    blush landed on her nose."""
+    import numpy as np
+    from PIL import ImageChops, ImageFilter
+    heat = np.asarray(ImageChops.difference(source, shut).convert("L").crop(window).filter(ImageFilter.GaussianBlur(8)),
+                      dtype=np.float32)
+    boxes = []
+    for _ in range(6):
+        if len(boxes) == 2:
+            break
+        peak = heat.max()
+        if peak < 4 or (boxes and peak < boxes[0][4] * 0.3):
+            break
+        py, px = np.unravel_index(int(heat.argmax()), heat.shape)
+        y0, y1, x0, x1 = max(0, py - 45), py + 45, max(0, px - 75), px + 75
+        hot = np.argwhere(heat[y0:y1, x0:x1] > peak * 0.4)
+        bx0, bx1 = x0 + hot[:, 1].min(), x0 + hot[:, 1].max()
+        # the closed lid only changes the upper eye: its height comes from the picture, the rows that aren't skin
+        rgb = np.asarray(source.crop(window).convert("RGB"), dtype=np.int32)
+        skin = np.median(rgb[min(rgb.shape[0] - 1, py + 70), bx0:bx1 + 1], axis=0)
+        span = rgb[max(0, py - 60):py + 70, bx0:bx1 + 1]
+        eye = (np.abs(span - skin).sum(2) > 90).mean(1) > 0.3  # per row from py - 60: not skin, so still the eye
+        by0, by1 = y0 + int(hot[:, 0].min()), y0 + int(hot[:, 0].max())  # the lid's top is right: above it, hair
+        k = py - max(0, py - 60)
+        while k < len(eye) and eye[k]:  # downward from the lid until the cheek
+            k += 1
+        by1 = max(by1, max(0, py - 60) + k)
+        box = (bx0, by0, bx1, by1, peak)
+        heat[max(0, py - 60):py + 60, max(0, px - 85):px + 85] = 0
+        if boxes:  # the other eye: level with the first and a face's width at most away, else it's drift
+            if abs((box[1] + box[3]) / 2 - (boxes[0][1] + boxes[0][3]) / 2) > 40 or not 50 < abs(px - (boxes[0][0] + boxes[0][2]) / 2) < 300:
+                heat[max(0, py - 60):py + 60, max(0, px - 85):px + 85] = 0
+                continue
+        boxes.append(box)
+    if len(boxes) < 2:
+        return blob(source, shut, window)
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    return (window[0] + int(x0), window[1] + int(y0), window[0] + int(x1), window[1] + int(y1))
+
+
 def soft_box(size: tuple[int, int], box: tuple[int, int, int, int], pad: int = 8) -> Image.Image:
     from PIL import ImageFilter
     mask = Image.new("L", size, 0)
@@ -759,7 +1074,7 @@ def soft_box(size: tuple[int, int], box: tuple[int, int, int, int], pad: int = 8
     return mask.filter(ImageFilter.GaussianBlur(3))
 
 
-def blush(source: Image.Image, eyes: tuple[int, int, int, int]) -> Image.Image:
+def blush(source: Image.Image, eyes: tuple[int, int, int, int], strength: float = 1.0) -> Image.Image:
     """A blush painted in, not asked of Klein (which barely showed one), drawn on the art's pixel grid: a soft pink
     oval on each cheek. Hatch strokes at this size came out as a checkerboard."""
     x0, y0, x1, y1 = eyes
@@ -770,7 +1085,7 @@ def blush(source: Image.Image, eyes: tuple[int, int, int, int]) -> Image.Image:
         cx, cy = ex / BLOCK, (y1 + w * 0.13) / BLOCK
         for rx, ry, fill in ((w * 0.17, w * 0.075, 80), (w * 0.1, w * 0.04, 135)):
             rx, ry = rx / BLOCK, ry / BLOCK
-            d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=fill)
+            d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=min(255, round(fill * strength)))
     layer = small.resize(source.size, Image.NEAREST)
     # on skin only (the ovals reach the hair at the face's edge): near her skin colour, which works for dark skin
     # too, where a brightness test found none
@@ -886,6 +1201,76 @@ def world(agent: dict, live=None) -> dict:
     return out
 
 
+def changed_overlay(source: Image.Image, picture: Image.Image) -> Image.Image:
+    """Only what the drawing changed, as an overlay."""
+    from PIL import ImageChops
+    out = picture.convert("RGBA")
+    out.putalpha(ImageChops.difference(source, picture).convert("L").point(lambda v: 255 if v else 0))
+    return out
+
+
+# the pieces of the idle set that can be drawn again alone; the rig and plate can't (everything is placed on them)
+PIECES = [*POSES, "blink", "blush", "smirk", "motion"]
+LEVELS = {"blush": {"less": 0.6, "same": 1.0, "more": 1.45}, "smirk": {"less": 1, "same": 1, "more": 2}}
+
+
+def redo_piece(agent: dict, piece: str, hint: str = "", level: str = "same", live=None) -> list[str]:
+    """One piece of the idle set drawn again (an arm pose, the blink) or set anew (blush strength, smirk lift); the
+    rest stays as it is. Returns the frame names that changed."""
+    idle = agent.get("idle") or {}
+    if piece not in PIECES:
+        raise ValueError(f"Unknown piece: {piece}")
+    if not idle.get("frames") or idle.get("base") != agent["base"]["file"]:
+        raise ValueError("Her frames belong to an older picture: wake up the new look first.")
+    source = Image.open(morpheus.OUTPUT / agent["base"]["file"]).convert("RGB")
+    eyes, mouth = tuple(idle["eyes"]), tuple(idle["mouth"])
+    if piece in POSES:
+        plate = Image.open(morpheus.OUTPUT / idle["plate"])
+        instruction = POSES[piece] + (f" {hint.strip()}" if hint.strip() else "") + KEEP
+        figure = Image.open(morpheus.OUTPUT / idle["rig"])
+        tries = [arm_pose(source, klein(agent, instruction, source, live), plate, eyes, mouth, figure) for _ in range(POSE_TRIES)]
+        best = min(tries, key=lambda o: pose_score(o, eyes) + pose_aim(o, piece, eyes))
+        if best is None:
+            raise ValueError(f"The {piece} pose didn't come out as one clear arm; try again.")
+        pictures = {piece: best}
+    elif piece == "motion":  # breathing, hair and cloak: the rig and her cut-out, from new keys; the plate stays
+        raw = {k: [expression(agent, k, source, live) for _ in range(TRIES)] for k in ("key_figure", "key_hair", "key_cloak")}
+        stamp = int(time.time())
+        figure = rig(raw, source, eyes, mouth)
+        figure.save(folder(agent["slug"]) / f"idle_rig_{stamp}.png")
+        cut = source.convert("RGBA")
+        cut.putalpha(figure.split()[0].point(lambda v: 255 if v > 128 else 0))
+        cut.save(folder(agent["slug"]) / f"scene_cut_{stamp}.png")
+        scene = agent.get("scene") or {}
+        for old in (idle.get("rig"), scene.get("cut")):
+            if old:
+                (morpheus.OUTPUT / old).unlink(missing_ok=True)
+        idle["rig"] = f"soulforge/{agent['slug']}/idle_rig_{stamp}.png"
+        if scene:
+            scene["cut"] = f"soulforge/{agent['slug']}/scene_cut_{stamp}.png"
+        save(agent)
+        return ["rig"]
+    elif piece == "blink":
+        shut = expression(agent, "closed", source, live)
+        pictures = pixel_eyes(source, changed_overlay(source, eye_frame(source, lids(agent, source, eyes, live), eye_pair(source, shut, eyes), True)), eyes)
+    elif piece == "blush":
+        idle["blush"] = min(3.0, max(0.3, LEVELS["blush"].get(level, 1.0) * idle.get("blush", 1.0)))
+        pictures = {"blush": blush(source, eyes, idle["blush"])}
+    else:
+        idle["smirk"] = LEVELS["smirk"].get(level, 1)
+        pictures = {"smirk": changed_overlay(source, smirk_lift(source, mouth, idle["smirk"]))}
+    stamp = int(time.time())
+    for name, picture in pictures.items():
+        file = f"idle_{name}_{stamp}.png"
+        picture.save(folder(agent["slug"]) / file)
+        old = idle["frames"].get(name)
+        idle["frames"][name] = f"soulforge/{agent['slug']}/{file}"
+        if old and old != idle["frames"][name]:
+            (morpheus.OUTPUT / old).unlink(missing_ok=True)
+    save(agent)
+    return list(pictures)
+
+
 def idle(agent: dict, progress=None, live=None) -> dict:
     """The idle set of the base image: blink frames (half and closed), a smirk and a blush as overlays, and the
     body rig with its clean background plate."""
@@ -895,7 +1280,7 @@ def idle(agent: dict, progress=None, live=None) -> dict:
     if progress:
         progress(0, "find the eyes")
     shut = expression(agent, "closed", source, live)
-    eyes = blob(source, shut, (0, 0, W, H // 2))  # the head is in the upper third
+    eyes = find_eyes(source, shut, (0, 0, W, H // 2))  # the head is in the upper third
     pair = eye_pair(source, shut, eyes)
     ew = eyes[2] - eyes[0]
     mouth_window = (max(0, eyes[0] - ew // 4), eyes[3], min(W, eyes[2] + ew // 4), min(H, eyes[3] + ew))
@@ -913,11 +1298,8 @@ def idle(agent: dict, progress=None, live=None) -> dict:
             raw[name].append(expression(agent, name, source, live))
             i += 1
 
-    def overlay(picture):  # only what the drawing changed
-        out = picture.convert("RGBA")
-        out.putalpha(ImageChops.difference(source, picture).convert("L").point(lambda v: 255 if v else 0))
-        return out
-    pictures = {**pixel_eyes(source, overlay(eye_frame(source, shut, pair, True)), eyes),
+    overlay = lambda picture: changed_overlay(source, picture)
+    pictures = {**pixel_eyes(source, overlay(eye_frame(source, lids(agent, source, eyes, live), pair, True)), eyes),
                 "smirk": overlay(smirk_lift(source, mouth)), "blush": blush(source, eyes),
                 **{k: overlay(v) for k, v in mouth_shapes(source, mouth, (agent.get("idle") or {}).get("seam")).items()}}
     stamp = int(time.time())
@@ -946,7 +1328,7 @@ def idle(agent: dict, progress=None, live=None) -> dict:
     if scene.get("cut"):
         (morpheus.OUTPUT / scene["cut"]).unlink(missing_ok=True)
     agent["scene"] = {**scene, "base": agent["base"]["file"], "cut": f"soulforge/{agent['slug']}/scene_cut_{stamp}.png"}
-    best_plate(raw["plate"], vote(raw["key_figure"]).point(lambda v: 255 - v)).save(
+    best_plate(raw["plate"], vote(raw["key_figure"], source).point(lambda v: 255 - v)).save(
         folder(agent["slug"]) / f"idle_plate_{stamp}.png")
     plate = Image.open(folder(agent["slug"]) / f"idle_plate_{stamp}.png")
     for name, instruction in POSES.items():
@@ -954,8 +1336,8 @@ def idle(agent: dict, progress=None, live=None) -> dict:
         for n in range(POSE_TRIES):
             if progress:
                 progress(IDLE_STEPS.index(f"{name} {n + 1}"), f"{name} {n + 1}")
-            tries.append(arm_pose(source, klein(agent, instruction + KEEP, source, live), plate, eyes, mouth))
-        best = min(tries, key=lambda o: pose_score(o, eyes))
+            tries.append(arm_pose(source, klein(agent, instruction + KEEP, source, live), plate, eyes, mouth, figure))
+        best = min(tries, key=lambda o: pose_score(o, eyes) + pose_aim(o, name, eyes))
         if best is not None:
             best.save(folder(agent["slug"]) / f"idle_{name}_{stamp}.png")
             frames[name] = f"soulforge/{agent['slug']}/idle_{name}_{stamp}.png"

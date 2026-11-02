@@ -575,6 +575,12 @@
     font-style: normal; padding: 3px 6px; border-radius: 6px; }
   .cand[aria-pressed="true"] { border: 2px solid var(--pink); box-shadow: 0 0 18px var(--pink); }
   .soul-card .portrait { position: relative; }
+  .redo-row { margin-top: 10px; }
+  .soul-tools hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0 12px; }
+  .soul-tools .tune-hint { font-size: 13px; margin-top: 8px; }
+  .soul-tools > .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }  /* one width, edges in line */
+  .soul-tools > .acts button { margin: 0; text-align: center; }
+  .soul-tools .acts button[data-t="restart"], .soul-tools .acts button[data-t="reroll"] { border-style: dashed; }
   /* the idle animation: transparent overlays of eyes, mouth and cheeks on the base; the loop toggles them */
   /* integer scale: 832 art px at 416 css px is exactly 3 screen px per art pixel; at 340 the blocks alternated 2 and 3
      px wide and crawled while she breathed */
@@ -2264,7 +2270,7 @@
       const grids = a.grids?.length || 0;
       b.innerHTML = `${face ? `<img class="av" src="${url(face)}" alt="">` : '<span class="av"></span>'}
         <span><b>${esc(a.name)}</b><small>${a.base && a.idle?.base === a.base.file ? 'Alive' : a.base ? 'Base image set' : a.pick ? 'Fine-tuning' : grids + ' grid' + (grids === 1 ? '' : 's')}</small></span>${soul.job?.agent === a.slug ? '<i class="live"></i>' : ''}`;
-      b.onclick = () => { soul.current = a.slug; store.set('soul.current', a.slug); renderAgents(); setForge('soul'); };
+      b.onclick = () => { soul.current = a.slug; soul.shownFor = null; store.set('soul.current', a.slug); renderAgents(); setForge('soul'); };
       return b;
     }));
   }
@@ -2272,7 +2278,9 @@
   function renderSoul() {
     const col = $('col');
     const a = soul.agents.find(x => x.slug === soul.current);
-    $('input').placeholder = !a ? 'Describe your agent in a few words …' : a.base ? 'Polish a detail: "fix the cloak", "add a scar" …' : 'Pick a number or ask for changes …';
+    if (soul.tuneFor !== soul.current) { soul.tune = 'base'; soul.tuneFor = soul.current; }  // each agent opens on tuning her picture
+    if (a && !a.base) soul.tune = 'base';
+    $('input').placeholder = !a ? 'Describe your agent in a few words …' : a.base ? TUNE_PLACEHOLDER[soul.tune] : 'Pick a number or ask for changes …';
     const job = soul.job && soul.job.agent === (a?.slug ?? null) ? soul.job : null;
     idleTimers.forEach(clearTimeout);
     idleTimers = [];
@@ -2287,7 +2295,7 @@
       col.querySelectorAll('.ideas button').forEach(b => b.onclick = () => { $('input').value = b.textContent; grow(); $('input').focus(); });
       wireScenes(col);
       col.querySelectorAll('.agent-card').forEach(c => {
-        c.onclick = () => { soul.current = c.dataset.slug; store.set('soul.current', c.dataset.slug); renderAgents(); setForge('soul'); };
+        c.onclick = () => { soul.current = c.dataset.slug; soul.shownFor = null; store.set('soul.current', c.dataset.slug); renderAgents(); setForge('soul'); };
         idleLoop(c.querySelector('.portrait'));
       });
       if (job) col.append(soulWorking(job));
@@ -2303,15 +2311,42 @@
     wireScenes(col);
     if (sc) col.querySelector('.portrait').style.setProperty('--scene-glow', lightOf(a, sceneOf(a).theme).glow);
     if (a.base && !job) {
-      const wake = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in' + (alive ? ' ghosty' : ''),
-        textContent: alive ? 'Draw new idle frames' : a.idle ? 'Wake up the new look' : `Bring ${a.name} to life` });
-      wake.onclick = () => { $('input').value = `Bring ${a.name} to life`; soulSend({ idle: true }); };
-      col.querySelector('.soul-card > div:last-child').append(wake);
+      const side = col.querySelector('.soul-card > div:last-child');
       if (alive && a.scene) {  // her world can be dreamt again on its own, without drawing the frames anew
         const world = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: '🌍 New world' });
         world.onclick = () => { $('input').value = `Dream up a new world for ${a.name}`; soulSend({ world: true }); };
-        wake.after(world);
+        side.append(world);
       }
+      // what to do with her: two flows that tune (the input follows the pressed one), two that start over
+      if (!alive && soul.tune === 'anim') soul.tune = 'base';
+      const tools = Object.assign(document.createElement('div'), { className: 'soul-tools' });
+      tools.innerHTML = `<hr><div class="acts" role="group" aria-label="What to do">
+        <button type="button" data-t="base" aria-pressed="${soul.tune === 'base'}" title="Say what to change on the picture">Tune base image</button>
+        ${alive ? `<button type="button" data-t="anim" aria-pressed="${soul.tune === 'anim'}" title="Say which animation looks wrong">Tune single animation</button>` : ''}
+        <button type="button" data-t="restart" aria-pressed="${soul.tune === 'restart'}" title="New candidates around this picture">Restart base image generation</button>
+        <button type="button" data-t="reroll" title="Draw every animation again">${alive ? 'Reroll animations' : a.idle ? 'Wake up the new look' : `Bring ${esc(a.name)} to life`}</button></div>
+        <p class="tune-hint">${TUNE_HINT[soul.tune]}</p>`;
+      if (soul.tune === 'anim') {  // the obvious cases in one click
+        const row = Object.assign(document.createElement('div'), { className: 'acts redo-row', role: 'group', ariaLabel: 'Redo one piece' });
+        for (const [label, piece, level, say] of REDO_PIECES) {
+          const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label, title: say });
+          b.onclick = () => { $('input').value = say; soulSend({ piece, level }); };
+          row.append(b);
+        }
+        tools.append(row);
+      }
+      tools.querySelectorAll('[data-t]').forEach(b => b.onclick = async () => {
+        const t = b.dataset.t;
+        if (t === 'reroll') {
+          if (alive && !await ask({ title: 'Reroll all animations?', danger: true, ok: 'Reroll',
+            text: `This throws away all of ${a.name}'s current animations (blink, arm poses, smirk, blush, breathing) and draws them new, about 6 minutes. Single pieces can be redone under "Tune single animation" instead.` })) return;
+          $('input').value = `Bring ${a.name} to life`; return soulSend({ idle: true });
+        }
+        if (t === 'restart' && soul.tune !== 'restart' && !await ask({ title: 'Restart the base image?', danger: true, ok: 'Restart',
+          text: `Tell me what the new versions should try. Her current picture goes into the middle of a new grid (number 5) with 8 variations around it. If you then lock in another one, the current base image${a.edits?.length ? ', its edits' : ''}${alive ? ' and all her animations' : ''} are replaced.` })) return;
+        soul.tune = t; renderSoul(); $('input').focus();
+      });
+      side.append(tools);
     }
     if (alive && a.idle.rig) {
       const pt = col.querySelector('.portrait.alive');
@@ -2355,8 +2390,17 @@
       history.innerHTML = `<summary>Creation history <small>${cut + 1} messages</small></summary>`;
       col.append(history);
     }
+    // the talk since: all but the last exchange folds away too (Glia's polish ran to dozens of turns)
+    const keep = a.messages.length - 2, more = keep - (cut + 1);
+    let further = null;
+    if (alive && more > 0) {
+      further = Object.assign(document.createElement('details'), { className: 'history', open: !!soul.furtherOpen });
+      further.innerHTML = `<summary>Further chat history <small>${more} messages</small></summary>`;
+      further.ontoggle = () => { soul.furtherOpen = further.open; };
+      col.append(further);
+    }
     a.messages.forEach((m, i) => {
-      const dest = history && i <= cut ? history : col;
+      const dest = history && i <= cut ? history : further && i < keep ? further : col;
       const el = document.createElement('div');
       el.className = 'msg ' + (m.role === 'user' ? 'user' : 'bot');
       if (m.role === 'user') { el.textContent = m.text; dest.append(el); return; }
@@ -2392,7 +2436,11 @@
       dest.append(el);
     });
     if (job) col.append(soulWorking(job));
-    scrollDown();
+    // an agent opens at her portrait; once open, a new message or a running job follows the chat down
+    const seen = `${a?.messages.length}|${!!job}`;
+    if (soul.shownFor !== soul.current) { $('thread').scrollTop = 0; soul.shownFor = soul.current; }
+    else if (soul.seen !== seen) scrollDown();  // the same render again (a status poll) leaves the scroll alone
+    soul.seen = seen;
   }
   // Scenes: a shared backdrop of three parallax layers (sky, far, near) that the viewer can swap, and in front of
   // it the agent's own motif (Morpheus's moon). The figure is cut out of its picture and stands on top.
@@ -2653,7 +2701,7 @@
     wave: { mouth: 'smile', arm: 'wave', gesture: 'tilt', hold: 2800 },
     laugh: { mouth: 'open3', eyes: 'closed', blush: 1, gesture: 'laugh', hold: 2200, chuckle: true, icon: 'note' },
     surprised: { mouth: 'open2', gesture: 'jolt', hold: 1800, icon: 'bang', brow: 1 },
-    sad: { mouth: 'frown', eyes: 'half', gesture: 'droop', hold: 3800, icon: 'drop', arm: 'heart', gloom: 1 },
+    sad: { mouth: 'frown', eyes: 'half', gesture: 'droop', hold: 3800, icon: 'drop', gloom: 1 },  // no arm: the hand on the heart read as touched, not sad
     angry: { mouth: 'frown', eyes: 'half', gesture: 'shake', hold: 2600, icon: 'vein', brow: -1 },
     thinking: { mouth: 'smirk', eyes: 'glance', gesture: 'ponder', hold: 3400, icon: 'ask', arm: 'chin' },
     yes: { mouth: 'smile', gesture: 'nod', hold: 1500 },
@@ -2694,6 +2742,16 @@
       breathW[i] = ease(Math.min(1, Math.max(0, (idle.waist - y) / (idle.waist - idle.chest))))
         * (y > idle.chest ? 1 : y < chin ? .25 : .25 + .75 * ease((y - chin) / (idle.chest - chin)));
     }
+    // her rim: figure pixels within two art pixels of its edge along the row. On a scene, what a moving head uncovers
+    // there must be the world behind her, not her own unmoved pixel: that drew a second hair outline when she shook
+    // her head (Glia, 2026-11-01). Inside her the unmoved pixel stays, it hides the seams between moving blocks.
+    const rim = new Uint8Array(N);
+    for (let y = 0; y < H; y++) {
+      let last = -1e9;
+      for (let x = 0; x < W; x++) { const i = y * W + x; if (!fig[i]) last = x; else if (x - last <= 2 * B) rim[i] = 1; }
+      last = 1e9;
+      for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (!fig[i]) last = x; else if (last - x <= 2 * B) rim[i] = 1; }
+    }
     // the margin around the figure, with the sway of the nearest figure pixel in its row: a strand swinging out
     // lands on background pixels, and those need to know they're swinging too
     const pad = B * 3, inZone = new Uint8Array(N);
@@ -2716,13 +2774,12 @@
       const a = pixels(ov[name]);
       let top = H, bot = 0;
       for (let i = 0; i < N; i++) if (a[i * 4 + 3] === 255) { const y = (i / W) | 0; top = Math.min(top, y); bot = Math.max(bot, y); }
-      const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
       for (let i = 0; i < N; i++) {
         const al = a[i * 4 + 3];
         if (al !== 255 && al !== 128) continue;
-        const y = (i / W) | 0, x = i - y * W, d = bayer[((y / B) & 3) * 4 + ((x / B) & 3)] / 16;
+        const y = (i / W) | 0, x = i - y * W;
         arm.idx.push(i); arm.rgb.push(0xff000000 | a[i * 4 + 2] << 16 | a[i * 4 + 1] << 8 | a[i * 4]); arm.on.push(al === 255);
-        arm.thr.push(al === 255 ? .6 * (bot - y) / Math.max(1, bot - top) + .38 * d : .15 + .5 * d);
+        arm.thr.push(al === 255 ? .97 * (bot - y) / Math.max(1, bot - top) : .3);  // a clean wipe up from the elbow: a dithered fade-in speckled her coat (Glia)
         for (let dy = -2 * B; dy <= 2 * B; dy += B) for (let dx = -2 * B; dx <= 2 * B; dx += B) {
           const yy = y + dy, xx = x + dx;
           if (yy >= 0 && yy < H && xx >= 0 && xx < W) inZone[yy * W + xx] = 1;
@@ -2877,7 +2934,7 @@
       for (const a of Object.values(arms)) for (let k = 0; k < a.idx.length; k++) if (a.thr[k] >= a.q) { fig[a.idx[k]] = figBase[a.idx[k]]; posed[a.idx[k]] = 0; }
       for (const a of Object.values(arms)) if (a.q) for (let k = 0; k < a.idx.length; k++) {  // the posed arm over her
         const i = a.idx[k];
-        if (a.thr[k] < a.q) { fig[i] = a.on[k] ? 1 : 0; posed[i] = 1; armLit[i] = a.lit?.[k] || 0; if (a.on[k] || !cut) src32[i] = a.rgb[k]; }
+        if (a.thr[k] < a.q) { fig[i] = a.on[k] ? 1 : 0; posed[i] = a.on[k] ? 2 : 1; armLit[i] = a.lit?.[k] || 0; if (a.on[k] || !cut) src32[i] = a.rgb[k]; }
       }
       if (cut) for (let y = ry0; y < ry1; y++) for (let i = y * W + rx0, e = y * W + rx1; i < e; i++) {  // on a scene only she is drawn, lit by it
         if (!fig[i]) { src32[i] = 0; continue; }
@@ -3142,8 +3199,11 @@
         const sx = x - bdx[b], sy = y - bdy[b];
         const q = sy * W + sx;
         // figure that lands here wins; where the figure moved away the clean plate shows, elsewhere the background
-        if (sx >= 0 && sx < W && sy >= 0 && sy < H && fig[q]) out32[i] = src32[q];
-        else out32[i] = fig[i] && !cut ? plate32[i] : src32[i];
+        // a raised arm is in front: hair or head swaying onto it slides behind it (Glia's strand over her thinking
+        // hand); only the arm itself (the waving hand) moves over it
+        if (posed[i] === 2 && !(arm.q && bArm[b]) && !(sx >= 0 && sx < W && sy >= 0 && sy < H && posed[q] === 2)) out32[i] = src32[i];  // not the swinging hand: it'd leave itself behind as stripes
+        else if (sx >= 0 && sx < W && sy >= 0 && sy < H && fig[q]) out32[i] = src32[q];
+        else out32[i] = fig[i] && !cut ? plate32[i] : cut && rim[i] ? 0 : src32[i];
       }
       ctx.putImageData(out, 0, 0);
       ctx.fillStyle = cut ? `rgb(${look.key.map(c => c + (255 - c) * .55 | 0)})` : '#e9e2ff';  // on a scene, its light
@@ -3413,6 +3473,16 @@
       setTimeout(() => { if (bubble) bubble.textContent = m.text; typeOut(pt._soul.say(m.text, 'happy')); }, 900);
     } else typeOut(pt._soul.say(m.text, m.mood));
   }
+  const REDO_PIECES = [['Wave', 'wave', 'same', 'Draw the wave again'], ['Chin', 'chin', 'same', 'Draw the finger on the chin again'],
+    ['Heart', 'heart', 'same', 'Draw the hand on the heart again'], ['Blink', 'blink', 'same', 'Draw the blink again'],
+    ['Blush −', 'blush', 'less', 'A softer blush'], ['Blush +', 'blush', 'more', 'A stronger blush'],
+    ['Smirk −', 'smirk', 'less', 'A smaller smirk'], ['Smirk +', 'smirk', 'more', 'A bigger smirk'], ['Motion', 'motion', 'same', 'Draw her breathing and hair motion again']];
+  const TUNE_PLACEHOLDER = { base: 'What should change on her? "I don\'t like her clothing", "add a scar" …',
+    anim: 'Which animation is off? "the thinking looks broken", "less blush" …',
+    restart: 'What should the new versions try? "other outfits", "shorter hair" …' };
+  const TUNE_HINT = { base: 'Tuning her picture: say what to change, one thing at a time. Every edit can be undone.',
+    anim: 'Tuning one animation: say which one looks wrong and what is off, or pick it here. The rest stays.',
+    restart: 'Starting over from this picture: say what the 8 new versions should try. Nothing changes until you send.' };
   async function soulSend(extra = {}) {
     const text = $('input').value.trim();
     if (!text) return $('input').focus();
@@ -3420,6 +3490,8 @@
     $('input').value = ''; grow();
     const a = soul.agents.find(x => x.slug === soul.current);
     if (a) a.messages.push({ role: 'user', text });
+    if (a?.base && !Object.keys(extra).length) extra = soul.tune === 'anim' ? { tune: 'anim' } : soul.tune === 'restart' ? { restart: true } : {};
+    if (extra.restart) soul.tune = 'base';  // after the grid she's in picking mode; the flow is done
     try {
       const r = await (await fetch(a ? '/api/soul/chat' : '/api/soul/new', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...(a ? { agent: a.slug, message: text, ...extra } : { description: text }), background: true }) })).json();

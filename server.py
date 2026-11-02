@@ -295,14 +295,16 @@ POLISH_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
-        "action": {"type": "string", "enum": ["edit", "undo", "restore", "wake", "none"]},
+        "action": {"type": "string", "enum": ["edit", "undo", "restore", "wake", "redo_frame", "none"]},
+        "piece": {"type": "string", "enum": [*soulforge.PIECES, "none"]},
+        "level": {"type": "string", "enum": ["less", "same", "more"]},
         "instruction": {"type": "string"},
         "from_locked": {"type": "boolean"},
         "redo": {"type": "boolean"},
-        "focus": {"type": "string", "enum": ["whole", "head", "neck"]},
+        "focus": {"type": "string", "enum": ["whole", "head", "neck", "background"]},
         "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
-    "required": ["reply", "action", "instruction", "from_locked", "redo", "focus", "mood"],
+    "required": ["reply", "action", "instruction", "from_locked", "redo", "focus", "mood", "piece", "level"],
 }
 
 POLISH_SYSTEM = """You polish an agent's avatar in Soulforge. The base image is settled; the user asks for detail
@@ -327,7 +329,8 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
   - End with "Keep everything else exactly the same, same pixel art style."
   focus: where the change happens, so a small one is drawn on a zoomed crop: "head" for things on the head or face
   only (glasses, earrings, hairpins, a hat, a scar, make-up, eye colour), "neck" for the neck and collar (necklace,
-  choker, scarf, tie, collar, headphones around the neck), "whole" for everything else (outfits, colours of big
+  choker, scarf, tie, collar, headphones around the neck), "background" for changes only behind her (the sky,
+  the backdrop, stars, a seam or flat area in the background: she herself stays pixel for pixel), "whole" for everything else (outfits, colours of big
   parts, anything reaching below the chest or spanning the body). When in doubt, "whole".
   - When unsure what they mean, ask with "none" instead of guessing.
   redo true when the message is feedback on the newest edit rather than a new change ("no, more red", "too big",
@@ -341,8 +344,14 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
   "start over from the original").
 - action "wake": the user wants her brought to life (animated) with the current picture ("bring her to life",
   "wake her up", "animate her", "send it to the wake-up"). The newest picture is used as it is.
+- action "redo_frame": she is alive and one piece of her animation looks wrong; only that piece is drawn again, the
+  picture and the other pieces stay. piece: "wave", "chin" or "heart" (her arm poses: waving, finger on the chin,
+  hand on the heart), "blink" (closed and half-closed eyes, the glance aside), "blush", "smirk". instruction: for an
+  arm pose, a short addition saying what to get right ("her hand stays beside her face, five fingers"), else empty.
+  level: for blush and smirk, "less" or "more" when they ask for a softer or stronger one, else "same".
 - action "none": only answer or ask. instruction empty.
-For every action other than "edit", instruction is empty, from_locked and redo false, focus "whole".
+For every action other than "edit", from_locked and redo are false and focus is "whole"; instruction is empty except
+for redo_frame. piece is "none" and level "same" unless the action is redo_frame.
 
 reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit.
 
@@ -352,6 +361,47 @@ voice and character, in one to three short spoken sentences, with action "none";
 greeting, laugh at a joke, shy at a compliment, wink when teasing, excited at good news, yes/no, thinking, surprised,
 sad, angry, happy). For an edit, mood is
 "yes" or "happy"."""
+
+
+ANIM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "action": {"type": "string", "enum": ["redo_frame", "none"]},
+        "piece": {"type": "string", "enum": [*soulforge.PIECES, "none"]},
+        "instruction": {"type": "string"},
+        "level": {"type": "string", "enum": ["less", "same", "more"]},
+        "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
+    },
+    "required": ["reply", "action", "piece", "instruction", "level", "mood"],
+}
+
+ANIM_SYSTEM = """You tune one piece of a living pixel-art avatar's animation in Soulforge. Her picture stays as it is;
+only the piece the user names is drawn again, the others stay. The pieces, and the moods and gestures that show them:
+- "wave": her raised hand waving hello (the wave greeting).
+- "chin": her finger on the chin (the thinking / pondering mood).
+- "heart": her hand flat over her heart (the shy and the sad mood, a touched gesture).
+- "blink": her closed and half-closed eyes and the glance aside (blinking, the wink, laughing with closed eyes,
+  the glance in thinking and shy).
+- "blush": the pink on her cheeks (happy, laugh, shy, excited). Drawn, not painted by AI: only softer or stronger.
+- "smirk": one mouth corner lifted (thinking, shy, wink, now and then while idle). Drawn: only smaller or bigger.
+- "motion": her breathing and how her hair and cloak or coat sway (hair that doesn't move, a stiff cloak, the wrong
+  part swaying, a cut-out edge around her that flickers).
+Not tunable alone: the talking mouth shapes, her background and world. For those
+say plainly that only "Reroll animations" (all pieces drawn new) or "New world" can change them, action "none".
+
+Each turn:
+- action "redo_frame" with the piece the user means. Map what they say to it: "thinking looks broken" is "chin",
+  "the wave is weird", "her greeting" is "wave", "her eyes look strange when she blinks" is "blink".
+  instruction: for wave, chin and heart, one short English sentence of what to get right this time, taken from what
+  the user says is wrong ("Her hand stays beside her face, open palm, five fingers." / "Her finger touches her chin,
+  the arm bent in front of her chest."); empty when they give no detail. Empty for the other pieces.
+  level: for blush and smirk "less" or "more" by what they ask ("too much blush" is less, "a stronger smirk" is
+  more); "same" for every other piece.
+- action "none" when it is unclear which piece they mean (ask, naming the pieces in plain words) or when they talk
+  about something not tunable. piece "none", instruction empty, level "same".
+reply: one or two short sentences, English, no Markdown, in her own voice, saying what she redraws. mood: "yes" or
+"happy" for a redo, "thinking" when asking."""
 
 
 VERIFY_SCHEMA = {"type": "object", "properties": {"done": {"type": "boolean"}, "problem": {"type": "string"}},
@@ -922,6 +972,64 @@ class Handler(BaseHTTPRequestHandler):
                                              "Not happy with a frame? Ask for new frames again."}]
         return soulforge.save(agent)
 
+    def soul_redo(self, agent: dict, piece: str, said: dict, job: dict, hint: str = "", level: str = "same",
+                  text: str = "", mood: str | None = None) -> dict:
+        """One piece of her animation drawn again; the rest of the idle set stays."""
+        job["status"] = f"Drawing the {piece} again …"
+        if piece in soulforge.POSES or piece in ("blink", "motion"):
+            ensure_comfy()
+            with gpu:
+                soulforge.redo_piece(agent, piece, hint, level, live=self.soul_live(job))
+        else:
+            soulforge.redo_piece(agent, piece, hint, level)
+        try:
+            agents.export(agent)
+        except Exception:
+            traceback.print_exc()
+        agent["messages"] += [said, {"role": "bot", "redo": piece, "mood": mood or "happy",
+                                     "text": text or f"New {piece}: the rest of her stays as it was. Not right yet? Ask again."}]
+        return soulforge.save(agent)
+
+    def soul_anim(self, agent: dict, message: str, said: dict, job: dict) -> dict:
+        """A wish about her animation in words: Claude names the piece (and what to get right), only that is redrawn."""
+        recent = "\n".join(f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}" for m in agent["messages"][-6:])
+        job["status"] = "Thinking …"
+        answer, _ = ask_claude(f"[Reply in English.]\n[Agent: {agent['name']}. {agent['soul']}]\n[Conversation so far:\n{recent}]"
+                               f"\n\nNew message about her animation:\n{message}", None, ghost=True,
+                               system=ANIM_SYSTEM, schema=ANIM_SCHEMA)
+        if answer["action"] == "redo_frame" and answer["piece"] in soulforge.PIECES:
+            return self.soul_redo(agent, answer["piece"], said, job, answer["instruction"], answer["level"] or "same",
+                                  answer["reply"], answer.get("mood"))
+        agent["messages"] += [said, {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "thinking"}]
+        return soulforge.save(agent)
+
+    def soul_restart(self, agent: dict, message: str, said: dict, job: dict) -> dict:
+        """Base image generation again, from the current base: it sits in the middle of a new grid (number 5) with 8
+        variations of the user's wish around it. The base is let go only now; locking in 5 takes it back as it was."""
+        base = agent["base"]
+        center = {"file": base["file"], "seed": base.get("seed", 0), "look": base.get("look") or agent["look"]}
+        recent = "\n".join(f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}" for m in agent["messages"][-4:])
+        context = (f"[Agent: {agent['name']}. Soul: {agent['soul']}. Look: {center['look']}. "
+                   f"First description: {agent['description']}]\n[Conversation so far:\n{recent}]\n"
+                   f"[The user restarts the base image generation from her current base image. It goes into the middle "
+                   f"of a new grid (pick 0) with 8 variations around it. Answer with action \"refine\", pick 0, and 8 "
+                   f"variations that each carry out the user's wish below in their own way, keeping everything they "
+                   f"don't mention. Only when the wish is truly unclear, action \"none\" and ask.]")
+        job["status"] = "Thinking …"
+        answer, _ = ask_claude(f"[Reply in English.]\n{context}\n\nNew message:\n{message}", None, ghost=True,
+                               system=SOUL_SYSTEM, schema=SOUL_SCHEMA)
+        reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
+        if answer["action"] not in ("refine", "grid"):
+            agent["messages"] += [said, reply]  # a question first: her base stays until there is a wish to render
+            return soulforge.save(agent)
+        agent["messages"].append(said)
+        agent["before_restart"] = base  # the old base is number 5 of the new grid; this is only the record
+        agent["base"], agent["edits"] = None, []
+        agent["look"] = answer["look"] or agent["look"]
+        self.soul_refine(agent, center, agent["look"], soulforge.STRENGTH.get(answer["strength"], 0.75), reply, job,
+                         answer["variations"] or None)
+        return soulforge.save(agent)
+
     def soul_world(self, agent: dict, said: dict, job: dict) -> dict:
         """A new world for her: Claude imagines another one (not the last), Klein paints it, the old one goes."""
         old = (agent.get("scene") or {}).get("world") or {}
@@ -952,6 +1060,12 @@ class Handler(BaseHTTPRequestHandler):
         said = {"role": "user", "text": message}
         if agent.get("base") and req.get("idle"):
             return self.soul_idle(agent, said, job)
+        if agent.get("base") and req.get("tune") == "anim" and not req.get("piece"):
+            return self.soul_anim(agent, message, said, job)
+        if agent.get("base") and req.get("restart"):
+            return self.soul_restart(agent, message, said, job)
+        if agent.get("base") and req.get("piece"):
+            return self.soul_redo(agent, str(req["piece"]), said, job, level=str(req.get("level") or "same"))
         if agent.get("scene") and req.get("world"):
             return self.soul_world(agent, said, job)
         if agent.get("base") and req.get("base") is None:
@@ -1050,6 +1164,9 @@ class Handler(BaseHTTPRequestHandler):
                     f.unlink(missing_ok=True)
         if answer["action"] == "wake":
             return self.soul_idle(agent, said, job)
+        if answer["action"] == "redo_frame" and answer.get("piece") in soulforge.PIECES:
+            return self.soul_redo(agent, answer["piece"], said, job, answer["instruction"], answer.get("level") or "same",
+                                  answer["reply"], answer.get("mood"))
         reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
         agent["messages"] += [said, reply]
         if answer["action"] == "undo" or (answer["action"] == "edit" and answer.get("redo") and not answer["from_locked"]):
