@@ -134,7 +134,8 @@ def export(agent: dict) -> Path:
         "loops": LOOPS,
         "scene": scene,
         "colors": dialogue_colors((scene["worlds"].get("home") or {}).get("light")),
-        "models": {"picture": "NoobAI XL (pixel-art LoRA)", "edits": "FLUX.2 Klein"},
+        "models": {"picture": "NoobAI-XL 1.1 (pixel art from prompt tags)", "edits": "Qwen-Image-Edit 2511",
+                   "animation": "FLUX.2 [klein] 4B"},
         "voice_seed": sum(map(ord, agent["base"]["file"])) % 997,
         "created_by": "morpheus/soulforge",
         "updated": time.strftime("%Y-%m-%d"),
@@ -162,7 +163,7 @@ def readme(m: dict) -> str:
     return f"""# {m['name']}{f", {m['title']}" if m.get('title') else ''}
 
 An avatar for your product: a pixel-art character with a persona, made in Morpheus' Soulforge.
-Format `{m['format']}`, player `glia-avatar.js` {player_version()}. Picture: NoobAI XL pixel art; edits: FLUX.2 Klein.
+Format `{m['format']}`, player `glia-avatar.js` {player_version()}. Picture: {m['models']['picture']}; edits: {m['models']['edits']}; animation: {m['models'].get('animation', '')}.
 
 > {m['persona']['soul']}
 
