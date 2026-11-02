@@ -347,10 +347,10 @@ LORAS = {
         "strength": 1.0,
         "default": False,
     },
-    # fal/Qwen-Image-Edit-2511-SFW"
+    # fal/Qwen-Image-Edit-2511-SFW
     "qwen-sfw": {
         "label": "SFW",
-        "note": "Generate SWF Images",
+        "note": "Generate SFW images",
         "file": "qwen-image-edit-2511-sfw-lora.safetensors",
         "model": "qwen-image-edit-2511",
         "strength": 1.0,
