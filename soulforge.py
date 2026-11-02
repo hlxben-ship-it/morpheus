@@ -147,10 +147,12 @@ def variation_workflow(prompt_text: str, image: str, seed: int, denoise: float) 
 
 
 def render_variations(agent: dict, center: dict, look: str, denoise: float, progress=None,
-                      looks: list[str] | None = None, live=None) -> dict:
+                      looks: list[str] | None = None, live=None, edits: bool = False) -> dict:
     """A grid around one candidate: it stays in the middle (slot 5), eight variations of it fill the rest.
 
     looks, if given, holds one look per variation, so each tries its own idea instead of only differing by noise.
+    edits: looks are edit instructions instead, and each variation is the candidate edited, not redrawn. A redraw
+    keeps the picture's colours and loses its face (violet hair stayed violet under "emerald green", 2026-11-02).
     """
     looks = [l for l in (looks or []) if l.strip()][:GRID - 1]
     grid = {"look": look, "prompt": prompt(look), "center": center["file"], "denoise": denoise,
@@ -172,11 +174,15 @@ def render_variations(agent: dict, center: dict, look: str, denoise: float, prog
             seed = random.randrange(2**31)
             own = looks[k % len(looks)] if looks else look
             t = time.time()
-            picture = morpheus.generate(variation_workflow(prompt(own), f"morpheus/{staged.name}", seed, denoise), ghost=True,
-                                        progress=live)
+            if edits and looks:
+                picture, seed = edit_variant(agent, Image.open(staged).convert("RGB"), own, live)
+            else:
+                picture = morpheus.generate(variation_workflow(prompt(own), f"morpheus/{staged.name}", seed, denoise),
+                                            ghost=True, progress=live)
             file = f"g{number}_{i + 1}.png"
             picture.save(folder(agent["slug"]) / file)
-            grid["candidates"][i] = {"file": f"soulforge/{agent['slug']}/{file}", "seed": seed, "look": own,
+            grid["candidates"][i] = {"file": f"soulforge/{agent['slug']}/{file}", "seed": seed,
+                                     **({"edit": own, "look": center.get("look", look)} if edits and looks else {"look": own}),
                                      "seconds": round(time.time() - t, 1)}
             save(agent)
     finally:
@@ -277,6 +283,56 @@ def retouch(agent: dict, op: str, live=None) -> dict:
     return edit
 
 
+def edit_raw(source: Image.Image, instruction: str, staged: Path, live=None) -> tuple[Image.Image, int, str, float]:
+    """One edit of source by instruction with the best installed edit model, back at its size: (picture, seed, model,
+    share of the picture that clearly changed)."""
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    source.save(staged)
+    w, h = morpheus.edit_size(*source.size)
+    model = edit_model()
+    m = morpheus.EDIT_MODELS[model]
+    try:
+        # an edit model now and then hands the picture back all but unchanged; a second seed usually does it
+        for _ in range(2):
+            seed = random.randrange(2**31)
+            edited = morpheus.generate(m["workflow"](instruction, f"morpheus/{staged.name}", w, h, seed, m["steps"]),
+                                       ghost=True, progress=live).convert("RGB").resize(source.size, Image.LANCZOS)
+            changed = changed_share(change_mask(source, edited, 40))
+            if changed >= UNCHANGED:
+                break
+    finally:
+        staged.unlink(missing_ok=True)
+    return edited, seed, model, changed
+
+
+def finish(agent: dict, mixed: Image.Image, source: Image.Image, clear: Image.Image, m: dict, staged: Path,
+           live=None) -> Image.Image:
+    """An edit back into her pixel art: only the clearly changed area, in the picture's palette."""
+    if m.get("pixel_art"):  # its own pixels are clean art already: a restyle pass only mottled flat colours
+        return Image.composite(mixed.quantize(palette=edit_palette(source, mixed, clear), dither=Image.Dither.NONE)
+                               .convert("RGB"), mixed, clear)
+    return restyle(agent, mixed, source, clear, staged, live)
+
+
+def edit_variant(agent: dict, source: Image.Image, instruction: str, live=None) -> tuple[Image.Image, int]:
+    """source with one change by instruction and everything else pixel-identical: a grid variation that keeps her."""
+    staged = morpheus.COMFY_INPUT / "morpheus" / f"soul_{agent['slug']}_variant.png"
+    edited, seed, model, _ = edit_raw(source, instruction, staged, live)
+    clear = change_mask(source, edited, 40)
+    return finish(agent, Image.composite(edited, source, change_mask(source, edited)), source, clear,
+                  morpheus.EDIT_MODELS[model], staged, live), seed
+
+
+def take_variant(agent: dict, chosen: dict) -> dict:
+    """A candidate of an edit grid made from the base becomes the base, as one more edit (so undo takes it back)."""
+    before = agent["base"]
+    edit = {"file": chosen["file"], "seed": chosen["seed"], "instruction": chosen.get("edit", ""), "before": before,
+            "model": edit_model(), "focus": "whole", "variant": chosen["number"]}
+    agent.setdefault("edits", []).append(edit)
+    agent["base"] = {"file": chosen["file"], "seed": chosen["seed"], "look": before.get("look"), "edit": len(agent["edits"])}
+    return edit
+
+
 def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> dict:
     """One edit of the base image by instruction (Qwen-Image-Edit, else FLUX.2 Klein), kept only where the picture
     really changed.
@@ -289,23 +345,9 @@ def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> di
     box = focus_box(whole, focus)
     source = whole.crop(box) if box else whole
     staged = morpheus.COMFY_INPUT / "morpheus" / f"soul_{agent['slug']}_polish.png"
-    staged.parent.mkdir(parents=True, exist_ok=True)
-    source.save(staged)
-    w, h = morpheus.edit_size(*source.size)
-    model = edit_model()
-    m = morpheus.EDIT_MODELS[model]
     t = time.time()
-    try:
-        # an edit model now and then hands the picture back all but unchanged; a second seed usually does it
-        for _ in range(2):
-            seed = random.randrange(2**31)
-            edited = morpheus.generate(m["workflow"](instruction, f"morpheus/{staged.name}", w, h, seed, m["steps"]),
-                                       ghost=True, progress=live).convert("RGB").resize(source.size, Image.LANCZOS)
-            changed = changed_share(change_mask(source, edited, 40))
-            if changed >= UNCHANGED:
-                break
-    finally:
-        staged.unlink(missing_ok=True)
+    edited, seed, model, changed = edit_raw(source, instruction, staged, live)
+    m = morpheus.EDIT_MODELS[model]
     # the finish only touches what clearly changed: the drift around it passes the soft mask but must stay as is
     clear = change_mask(source, edited, 40)
     if focus == "background":  # only behind her: a sky fix also flattened Glia's eyes (2026-11-01)
@@ -316,11 +358,7 @@ def polish(agent: dict, instruction: str, live=None, focus: str = "whole") -> di
     # on a zoomed face the model also drifts skin tone and redraws eyes and mouth a little (a scar came with a darker
     # face): there only what clearly changed is taken over at all
     mixed = Image.composite(edited, source, clear if box else change_mask(source, edited))
-    if m.get("pixel_art"):  # its own pixels are clean art already: a restyle pass only mottled flat colours
-        result = Image.composite(mixed.quantize(palette=edit_palette(source, mixed, clear), dither=Image.Dither.NONE)
-                                 .convert("RGB"), mixed, clear)
-    else:
-        result = restyle(agent, mixed, source, clear, staged, live)
+    result = finish(agent, mixed, source, clear, m, staged, live)
     if box:
         whole.paste(result, box[:2])
         result = whole

@@ -212,7 +212,7 @@ SOUL_SCHEMA = {
         "soul": {"type": "string"},
         "look": {"type": "string"},
         "pick": {"type": "integer"},
-        "strength": {"type": "string", "enum": ["slight", "strong", "bold"]},
+        "strength": {"type": "string", "enum": ["slight", "strong", "bold", "keep"]},
         "variations": {"type": "array", "items": {"type": "string"}},
         "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
@@ -278,6 +278,13 @@ Each turn picks one action:
   clearly different idea for what they want changed: with "play with hair and outfit" that is 8 different hairstyles
   and 8 different outfits (colours, cuts, materials), not 8 rewordings of one idea. Be brave, the user picks. For
   "slight" tweaks you may repeat the revised look 8 times. look is the revised look the variations start from.
+  strength "keep": the user likes the picture and wants only some things changed, everything else exactly as it is
+  ("face is perfect, other hair colours", "same but with a hat", "try her in other jackets"). Then variations are 8
+  edit instructions for an image edit model instead of looks, one clear change each, each ending with what stays:
+  "Change her hair colour to emerald green. Keep her face, glasses, hairstyle, outfit, pose and background exactly
+  the same." The picture is then edited, not redrawn, so the rest stays pixel for pixel; it takes about a minute per
+  variation instead of 15 s, so say in reply that this round takes about 9 minutes. A redraw ("strong", "bold") can't
+  hold a face or turn dark hair bright: it keeps the picture's colours, so a colour change on a kept picture is "keep".
   Look at the grid picture with the Read tool when they describe a candidate instead of naming its number.
 - "base": the user is happy and takes a candidate as the agent's base image ("take it", "that's her", "use 7").
   pick is its number, 0 for the one in the middle.
@@ -295,7 +302,9 @@ POLISH_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
-        "action": {"type": "string", "enum": ["edit", "undo", "restore", "wake", "redo_frame", "none"]},
+        "action": {"type": "string", "enum": ["edit", "variants", "undo", "restore", "wake", "redo_frame", "none"]},
+        "variations": {"type": "array", "items": {"type": "string"}},
+        "look": {"type": "string"},
         "piece": {"type": "string", "enum": [*soulforge.PIECES, "none"]},
         "level": {"type": "string", "enum": ["less", "same", "more"]},
         "instruction": {"type": "string"},
@@ -304,7 +313,7 @@ POLISH_SCHEMA = {
         "focus": {"type": "string", "enum": ["whole", "head", "neck", "background"]},
         "mood": {"type": "string", "enum": ["happy", "laugh", "surprised", "shy", "thinking", "sad", "angry", "yes", "no", "wave", "wink", "excited"]},
     },
-    "required": ["reply", "action", "instruction", "from_locked", "redo", "focus", "mood", "piece", "level"],
+    "required": ["reply", "action", "instruction", "from_locked", "redo", "focus", "mood", "piece", "level", "variations", "look"],
 }
 
 POLISH_SYSTEM = """You polish an agent's avatar in Soulforge. The base image is settled; the user asks for detail
@@ -339,6 +348,15 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
   got wrong, so this one avoids it. Otherwise redo is false.
   from_locked true when the user wants this change made on the locked-in image instead of on top of the edits
   so far ("work from the original", "start from our baseline but ..."); otherwise false.
+- action "variants": the user wants options to choose from instead of one change ("a 3x3 grid with different
+  outfits", "show me some hair colours", "a few hats to pick from"). variations: 8 edit instructions, each written by
+  the rules for "edit" above and each trying a clearly different idea (8 outfits of different colours, cuts and
+  materials, not 8 rewordings of one). The current picture goes into the middle of a 3x3 grid with the 8 edits around
+  it; the user picks one by its number and it becomes the picture (undoable like any edit). It takes about a minute
+  per variation: say in reply that the grid takes about 9 minutes.
+- look: the written description of her look, for when a change makes it wrong (the hair went green but the look
+  still says "dark purple hair"): the whole look from the [Look: ...] line with that part rewritten. Rewrite it also
+  when the user asks you to update the description. Empty when nothing it describes changes.
 - action "undo": the user wants the newest edit taken back.
 - action "restore": the user wants to go back to the locked-in image, dropping all edits ("back to the baseline",
   "start over from the original").
@@ -351,7 +369,7 @@ Look at the base image with the Read tool (and the locked-in image when it is gi
   level: for blush and smirk, "less" or "more" when they ask for a softer or stronger one, else "same".
 - action "none": only answer or ask. instruction empty.
 For every action other than "edit", from_locked and redo are false and focus is "whole"; instruction is empty except
-for redo_frame. piece is "none" and level "same" unless the action is redo_frame.
+for redo_frame. variations is [] unless the action is "variants". piece is "none" and level "same" unless the action is redo_frame.
 
 reply: one or two sentences, English, no Markdown, saying what you are changing. The user can undo any edit.
 
@@ -719,22 +737,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_bytes(self, data: bytes, kind: str):
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def send_file(self, path: Path, base: Path):
         path = path.resolve()
         if base.resolve() not in path.parents or not path.is_file():
             return self.send_error(404)
         data = path.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+        # Windows' registry can map .js to text/plain, and a browser refuses a module served so
+        kind = {".js": "text/javascript", ".json": "application/json"}.get(path.suffix) or mimetypes.guess_type(path.name)[0]
+        self.send_header("Content-Type", kind or "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
     def do_GET(self):
         route = self.path.split("?")[0]
-        if route == "/":
-            return self.send_file(WEB / "index.html", WEB)
-        if route in ("/logo.png", "/favicon.png", "/city.jpg"):
+        if route == "/":  # the moods and worlds go in inline, so the page's first render already has them
+            page = (WEB / "index.html").read_text(encoding="utf-8")
+            data = (WEB / "glia-data.json").read_text(encoding="utf-8")
+            return self.send_bytes(page.replace("/*GLIA-DATA*/null", data, 1).encode("utf-8"), "text/html; charset=utf-8")
+        if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json"):
             return self.send_file(WEB / route[1:], WEB)
         if route == "/api/options":
             models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
@@ -793,7 +822,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
-        handlers = {"/api/generate": self.generate, "/api/chat": self.chat, "/api/edit": self.edit,
+        if self.path == "/api/agent/export":  # answers with the zip itself
+            return self.agent_export()
+        handlers ={"/api/generate": self.generate, "/api/chat": self.chat, "/api/edit": self.edit,
                     "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap, "/api/delete": self.delete,
                     "/api/soul/new": self.soul_new, "/api/soul/chat": self.soul_chat}
         if self.path not in handlers:
@@ -813,6 +844,23 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # report anything else to the page instead of dropping the connection
             traceback.print_exc()
             self.send_json({"error": str(e)}, 500)
+
+    def agent_export(self):
+        """The shareable zip of a living agent; the page sends one rendered frame per mood as PNG data URLs."""
+        try:
+            req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            agent = soulforge.load(str(req.get("agent", "")))
+            stills = {k: base64.b64decode(v.split(",", 1)[1]) for k, v in (req.get("stills") or {}).items()
+                      if isinstance(v, str) and v.startswith("data:image/png;base64,")}
+            name, data = agents.bundle(agent, stills)
+        except (ValueError, FileNotFoundError) as e:
+            return self.send_json({"error": str(e)}, 400)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def chat(self, req):
         message = str(req.get("message", "")).strip()
@@ -1123,7 +1171,7 @@ class Handler(BaseHTTPRequestHandler):
         if answer["action"] == "refine" and chosen:
             agent["look"] = answer["look"] or agent["look"]
             self.soul_refine(agent, chosen, agent["look"], soulforge.STRENGTH.get(answer["strength"], 0.4), reply, job,
-                             answer["variations"])
+                             answer["variations"], edits=answer["strength"] == "keep")
         elif answer["action"] in ("grid", "refine"):  # refine with nothing chosen yet: start fresh
             agent["look"] = answer["look"] or agent["look"]
             self.soul_grid(agent, agent["look"], job, answer["variations"] if answer["action"] == "grid" else None)
@@ -1142,6 +1190,15 @@ class Handler(BaseHTTPRequestHandler):
             agent["messages"] += [said, {"role": "bot", "text": f"Undone: {gone['instruction']}" if gone
                                          else "There is no edit to undo."}]
             return soulforge.save(agent)
+        number = re.fullmatch(r"(?:number|nr\.?|no\.?|#)?\s*([1-9])\.?", message.strip(), re.I)
+        if number and agent.get("grids") and agent["grids"][-1].get("polish"):
+            chosen = self.soul_candidate(agent, int(number[1]))
+            if chosen and not chosen.get("original"):
+                edit = soulforge.take_variant(agent, chosen)
+                agent["messages"] += [said, {"role": "bot", "mood": "happy",
+                                             "edit": {"before": edit["before"]["file"], "after": edit["file"], "instruction": edit["instruction"]},
+                                             "text": f"Number {chosen['number']} it is. Tell me what to change next, or undo to go back."}]
+                return soulforge.save(agent)
         CHAT_DIR.mkdir(exist_ok=True)
         tag = uuid.uuid4().hex[:8]
         seen, locked = CHAT_DIR / f"base-{tag}.png", None
@@ -1155,7 +1212,7 @@ class Handler(BaseHTTPRequestHandler):
         recent = "\n".join(f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}" for m in agent["messages"][-6:])
         job["status"] = "Thinking …"
         try:
-            answer, _ = ask_claude(f"[Reply in English.]\n[Agent: {agent['name']}. {note}]\n"
+            answer, _ = ask_claude(f"[Reply in English.]\n[Agent: {agent['name']}. {note}]\n[Look: {agent['look']}]\n"
                                    f"[Conversation so far:\n{recent}]\n\nNew message:\n{message}", None, ghost=True,
                                    see=True, system=POLISH_SYSTEM, schema=POLISH_SCHEMA)
         finally:
@@ -1168,7 +1225,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.soul_redo(agent, answer["piece"], said, job, answer["instruction"], answer.get("level") or "same",
                                   answer["reply"], answer.get("mood"))
         reply = {"role": "bot", "text": answer["reply"], "mood": answer.get("mood") or "happy"}
+        if answer.get("look", "").strip():  # the description follows the picture, so a later redraw keeps the change
+            agent["look"] = answer["look"].strip()
+            agent["base"]["look"] = agent["look"]
         agent["messages"] += [said, reply]
+        if answer["action"] == "variants" and answer.get("variations"):
+            soulforge.save(agent)
+            self.soul_refine(agent, agent["base"], agent["look"], 0, reply, job, answer["variations"], edits=True)
+            agent["grids"][-1]["polish"] = True  # a pick from here is an edit of the base, not a new candidate
+            return soulforge.save(agent)
         if answer["action"] == "undo" or (answer["action"] == "edit" and answer.get("redo") and not answer["from_locked"]):
             soulforge.undo(agent)
         elif answer["action"] == "restore" or (answer["action"] == "edit" and answer["from_locked"]):
@@ -1219,7 +1284,7 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def soul_refine(self, agent: dict, chosen: dict, look: str, denoise: float, reply: dict, job: dict,
-                    looks: list[str] | None = None) -> None:
+                    looks: list[str] | None = None, edits: bool = False) -> None:
         """The chosen candidate into the middle, eight variations around; the reply shows the new grid."""
         agent["pick"] = chosen
         if reply not in agent["messages"]:
@@ -1231,7 +1296,7 @@ class Handler(BaseHTTPRequestHandler):
             job["candidates"], job["slot"] = list(grid["candidates"]), grid["slot"]
         ensure_comfy()
         with gpu:
-            soulforge.render_variations(agent, chosen, look, denoise, progress, looks, live=self.soul_live(job))
+            soulforge.render_variations(agent, chosen, look, denoise, progress, looks, live=self.soul_live(job), edits=edits)
         reply["grid"] = len(agent["grids"]) - 1
 
     def soul_grid(self, agent: dict, look: str, job: dict, looks: list[str] | None = None) -> None:

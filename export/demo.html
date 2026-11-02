@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avatar demo</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0d0a1f; color: #eee; font: 15px system-ui, sans-serif; }
+  main { display: flex; flex-wrap: wrap; gap: 24px; padding: 16px; max-width: 900px; }
+  #avatar { width: min(340px, 90vw); border-radius: 12px; overflow: hidden; }
+  aside { flex: 1; min-width: 240px; }
+  h1 { margin: 0 0 6px; } p { opacity: .8; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  button { background: #241c48; color: inherit; border: 1px solid #4a3d8a; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:hover { background: #33296a; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 8px; border: 1px solid #4a3d8a; background: #160f33; color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div id="avatar"></div>
+  <aside>
+    <h1 id="name">…</h1>
+    <p id="soul"></p>
+    <div class="row" id="moods"></div>
+    <div class="row" id="worlds"></div>
+    <form id="talk"><input name="t" placeholder="Type something for the avatar to say, Enter"></form>
+  </aside>
+</main>
+<!-- Self-contained: the player and every file of the package are inlined below, so this opens with a double-click.
+     In your own product, load glia-avatar.js and the package folder instead (see README.md). -->
+<script type="module">
+/*PLAYER*/
+const PACKAGE = /*PACKAGE*/null;  // { manifest, files: { path: data URL } }
+const $ = id => document.getElementById(id);
+const btn = (label, fn) => Object.assign(document.createElement('button'), { type: 'button', textContent: label, onclick: fn });
+const me = await GliaAvatar.mount($('avatar'), PACKAGE.manifest, { resolve: p => PACKAGE.files[p] });
+const m = me.manifest;
+document.title = `${m.name}, avatar demo`;
+$('name').textContent = m.name; $('soul').textContent = m.persona.soul;
+me.moods.forEach(k => $('moods').append(btn(k, () => me.mood(k))));
+me.worlds.forEach(k => $('worlds').append(btn(m.scene.worlds[k].name, () => me.scene(k))));
+$('worlds').append(btn('no world', () => me.scene(false)));
+$('talk').onsubmit = e => { e.preventDefault(); me.say(e.target.t.value); e.target.t.value = ''; };
+</script>
+</body>
+</html>

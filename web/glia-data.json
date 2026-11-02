@@ -1,0 +1,516 @@
+{
+ "_doc": "One source for the mood recipes and the shared worlds: read by web/index.html, web/glia-avatar.js and agents.py. Edit here only.",
+ "moods": {
+  "happy": {
+   "mouth": "smile",
+   "blush": 0.7,
+   "gesture": "tilt",
+   "hold": 3200,
+   "icon": "note"
+  },
+  "wave": {
+   "mouth": "smile",
+   "arm": "wave",
+   "gesture": "tilt",
+   "hold": 2800
+  },
+  "laugh": {
+   "mouth": "open3",
+   "eyes": "closed",
+   "blush": 1,
+   "gesture": "laugh",
+   "hold": 2200,
+   "chuckle": true,
+   "icon": "note"
+  },
+  "surprised": {
+   "mouth": "open2",
+   "gesture": "jolt",
+   "hold": 1800,
+   "icon": "bang",
+   "brow": 1
+  },
+  "sad": {
+   "mouth": "frown",
+   "eyes": "half",
+   "gesture": "droop",
+   "hold": 3800,
+   "icon": "drop",
+   "gloom": 1
+  },
+  "angry": {
+   "mouth": "frown",
+   "eyes": "half",
+   "gesture": "shake",
+   "hold": 2600,
+   "icon": "vein",
+   "brow": -1
+  },
+  "thinking": {
+   "mouth": "smirk",
+   "eyes": "glance",
+   "gesture": "ponder",
+   "hold": 3400,
+   "icon": "ask",
+   "arm": "chin"
+  },
+  "yes": {
+   "mouth": "smile",
+   "gesture": "nod",
+   "hold": 1500
+  },
+  "no": {
+   "mouth": "frown",
+   "gesture": "shake",
+   "hold": 1600
+  },
+  "shy": {
+   "mouth": "smirk",
+   "eyes": "glance_l",
+   "blush": 1,
+   "gesture": "duck",
+   "hold": 3000,
+   "icon": "heart",
+   "arm": "heart"
+  },
+  "wink": {
+   "mouth": "smirk",
+   "eyes": "wink",
+   "gesture": "cock",
+   "hold": 1300,
+   "icon": "star"
+  },
+  "excited": {
+   "mouth": "open3",
+   "blush": 0.5,
+   "gesture": "hop",
+   "hold": 2200,
+   "icon": "star",
+   "brow": 1
+  }
+ },
+ "worlds": {
+  "dream": {
+   "name": "Dream",
+   "light": {
+    "shimmer": 12,
+    "key": [
+     225,
+     200,
+     255
+    ],
+    "fill": [
+     120,
+     150,
+     255
+    ],
+    "side": 1,
+    "rim": 0.72,
+    "amb": [
+     200,
+     185,
+     255,
+     0.14
+    ],
+    "fog": "rgba(70, 40, 140, .55)",
+    "glow": "#b48cff",
+    "motes": {
+     "n": 26,
+     "col": [
+      "#e9dcff",
+      "#b9a0ff",
+      "#8fd0ff"
+     ],
+     "vy": -2.2,
+     "vx": 0.6,
+     "size": 1,
+     "twinkle": 1
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "city": {
+   "name": "Neon city",
+   "light": {
+    "own": "rain",
+    "key": [
+     255,
+     90,
+     220
+    ],
+    "fill": [
+     70,
+     230,
+     255
+    ],
+    "side": -1,
+    "rim": 0.78,
+    "amb": [
+     215,
+     190,
+     255,
+     0.16
+    ],
+    "fog": "rgba(120, 20, 110, .5)",
+    "glow": "#ff4fd8",
+    "motes": {
+     "n": 46,
+     "col": [
+      "#8fe9ff",
+      "#c9f6ff"
+     ],
+     "vy": 34,
+     "vx": -6,
+     "size": 1,
+     "streak": 3
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "forest": {
+   "name": "Twilight forest",
+   "light": {
+    "key": [
+     175,
+     240,
+     255
+    ],
+    "fill": [
+     90,
+     200,
+     190
+    ],
+    "side": 1,
+    "rim": 0.7,
+    "amb": [
+     180,
+     215,
+     225,
+     0.14
+    ],
+    "fog": "rgba(30, 80, 95, .55)",
+    "glow": "#9fe8ff",
+    "motes": {
+     "n": 18,
+     "col": [
+      "#e6ff8a",
+      "#b8ff6a",
+      "#fff3a0"
+     ],
+     "vy": -0.8,
+     "vx": 1.2,
+     "size": 1,
+     "twinkle": 1,
+     "wander": 1
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "sakura": {
+   "name": "Sakura",
+   "light": {
+    "day": 1,
+    "own": "petals",
+    "key": [
+     255,
+     214,
+     170
+    ],
+    "fill": [
+     255,
+     160,
+     205
+    ],
+    "side": -1,
+    "rim": 0.55,
+    "amb": [
+     255,
+     228,
+     225,
+     0.1
+    ],
+    "fog": "rgba(255, 160, 200, .32)",
+    "vig": "rgba(110, 40, 80, .3)",
+    "glow": "#ffb7d5",
+    "motes": {
+     "n": 26,
+     "col": [
+      "#ffb7d5",
+      "#ff9ec4",
+      "#ffe0ee"
+     ],
+     "vy": 6,
+     "vx": 4,
+     "sway": 3,
+     "petal": 1
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "desert": {
+   "name": "Desert dusk",
+   "light": {
+    "own": "dust",
+    "key": [
+     255,
+     190,
+     120
+    ],
+    "fill": [
+     120,
+     120,
+     255
+    ],
+    "side": 1,
+    "rim": 0.62,
+    "amb": [
+     255,
+     215,
+     190,
+     0.12
+    ],
+    "fog": "rgba(150, 80, 60, .45)",
+    "glow": "#ffc36b",
+    "motes": {
+     "n": 34,
+     "col": [
+      "#ffe3a8",
+      "#f2c48a"
+     ],
+     "vy": 0.6,
+     "vx": 9,
+     "sway": 1.5
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "ocean": {
+   "name": "Moonlit sea",
+   "light": {
+    "key": [
+     200,
+     230,
+     255
+    ],
+    "fill": [
+     60,
+     200,
+     210
+    ],
+    "side": -1,
+    "rim": 0.68,
+    "amb": [
+     185,
+     210,
+     240,
+     0.14
+    ],
+    "fog": "rgba(20, 70, 120, .5)",
+    "glow": "#8fd8ff",
+    "motes": {
+     "n": 20,
+     "col": [
+      "#e6fbff",
+      "#9fe3ff",
+      "#ffffff"
+     ],
+     "vy": -5,
+     "vx": 0.3,
+     "sway": 1.4,
+     "bubble": 1
+    }
+   },
+   "variants": [
+    "sky"
+   ]
+  },
+  "snow": {
+   "name": "Aurora peaks",
+   "light": {
+    "shimmer": 22,
+    "own": "snow",
+    "key": [
+     150,
+     255,
+     200
+    ],
+    "fill": [
+     190,
+     150,
+     255
+    ],
+    "side": 1,
+    "rim": 0.7,
+    "amb": [
+     200,
+     225,
+     255,
+     0.14
+    ],
+    "fog": "rgba(120, 160, 220, .42)",
+    "glow": "#9fffd0",
+    "motes": {
+     "n": 46,
+     "col": [
+      "#ffffff",
+      "#dfefff"
+     ],
+     "vy": 9,
+     "vx": -1.5,
+     "sway": 2.2,
+     "big": 0.35
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  },
+  "volcano": {
+   "name": "Volcano",
+   "light": {
+    "lava": 1,
+    "own": "embers",
+    "key": [
+     255,
+     226,
+     160
+    ],
+    "fill": [
+     110,
+     140,
+     255
+    ],
+    "side": 1,
+    "rim": 0.8,
+    "amb": [
+     255,
+     210,
+     190,
+     0.1
+    ],
+    "fog": "rgba(120, 25, 10, .55)",
+    "glow": "#ff7a2f",
+    "motes": {
+     "n": 34,
+     "col": [
+      "#ffb347",
+      "#ff7a2f",
+      "#ffe08a"
+     ],
+     "vy": -7,
+     "vx": 1.5,
+     "sway": 1.8,
+     "twinkle": 1,
+     "glow": 1
+    }
+   },
+   "variants": [
+    "sky",
+    "far"
+   ]
+  },
+  "space": {
+   "name": "Deep space",
+   "light": {
+    "nonear": 1,
+    "shimmer": 14,
+    "key": [
+     150,
+     200,
+     255
+    ],
+    "fill": [
+     255,
+     120,
+     220
+    ],
+    "side": -1,
+    "rim": 0.7,
+    "amb": [
+     200,
+     200,
+     255,
+     0.14
+    ],
+    "fog": "rgba(30, 20, 80, .5)",
+    "glow": "#a8c8ff",
+    "motes": {
+     "n": 30,
+     "col": [
+      "#ffffff",
+      "#cfe0ff",
+      "#ffd0f0"
+     ],
+     "vy": 0.4,
+     "vx": -0.8,
+     "twinkle": 1
+    }
+   },
+   "variants": []
+  },
+  "castle": {
+   "name": "Gothic castle",
+   "light": {
+    "storm": 1,
+    "key": [
+     235,
+     225,
+     255
+    ],
+    "fill": [
+     200,
+     40,
+     70
+    ],
+    "side": 1,
+    "rim": 0.66,
+    "amb": [
+     215,
+     190,
+     220,
+     0.15
+    ],
+    "fog": "rgba(60, 10, 40, .55)",
+    "glow": "#e0d0ff",
+    "motes": {
+     "n": 14,
+     "col": [
+      "#2a1630",
+      "#3b1d40"
+     ],
+     "vy": -1,
+     "vx": 6,
+     "sway": 3,
+     "petal": 1
+    }
+   },
+   "variants": [
+    "sky",
+    "far",
+    "near"
+   ]
+  }
+ }
+}

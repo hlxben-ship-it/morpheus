@@ -595,51 +595,8 @@
   .history > summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 13px; }
   .history > summary small { margin-left: 6px; font: 11px var(--term, monospace); }
   .history[open] { padding-bottom: 10px; }
-  .soul-card .portrait canvas.live { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-  .soul-card .portrait img.ov { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
-  .soul-card .portrait img.ov.on { opacity: 1; }
-  .portrait img.ov { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; image-rendering: pixelated; }
-  .portrait img.ov.on { opacity: 1; }
-  .portrait img.ov.blush { transition: opacity 1.6s ease-in-out; }
-  .portrait img.ov.smirk { transition: opacity .45s ease-in-out; }
   /* the gallery of living agents on Soulforge's home */
-  /* scenes: shared parallax layers behind every agent, the agent's own motif last, the cut-out figure on top */
-  .scene { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: #07060f; }
-  .scene > *, .front { animation: scene-in .6s ease-out both; }
-  .scene > .far { animation-delay: .12s; } .scene > .near { animation-delay: .3s; } .front { animation-delay: .4s; }
-  .scene > .near, .scene > .far { animation-name: scene-in-up; }
-  @keyframes scene-in-up { from { opacity: 0; translate: 0 3%; } }
-  @keyframes scene-in { from { opacity: 0; } }
-  .scene i { position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated; will-change: background-position, transform; }
-  .scene .sky, .scene .far, .scene .near { background-size: auto 100%; background-position: 50% 100%; }
-  /* the layers are wide landscapes: on a tall portrait their horizon sat behind her legs and the fog. Raised, it
-     sits at her chest, the far one higher; the near one and the dark ground cover what that opens below */
-  .scene .far { inset: -17% 0 17%; } .scene .near { inset: -7% 0 7%; }
-  .scene::after { content: ''; position: absolute; inset: auto 0 0; height: 8%; background: #05040c; }
-  .scene .motif { inset: 2% 4% auto; height: 58%; background-size: contain; background-position: 50% 50%; animation: motif-glow 4.6s ease-in-out infinite; }
-  @keyframes motif-glow { 0%, 100% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--glow) 35%, transparent)) brightness(.96); }
-    50% { filter: drop-shadow(0 0 16px color-mix(in srgb, var(--glow) 70%, transparent)) brightness(1.08); } }
-  /* in front of her: the air (motes, rain, fireflies on the art's own pixel grid), ground fog and a vignette */
-  /* an aurora breathes: its sky shifts hue and glow, slowly, on top of the per-agent nudge */
-  .scene.aurora .sky { animation: aurora 11s ease-in-out infinite; }
-  @keyframes aurora { 50% { filter: brightness(.95) saturate(1.25) hue-rotate(var(--shim)); } }
-  /* lava breathes: the near rocks' cracks and the far eruption glow up and down, out of step */
-  .scene.lava .near { animation: lava 3.2s ease-in-out infinite; } .scene.lava .far { animation: lava 4.7s ease-in-out infinite reverse; }
-  @keyframes lava { 50% { filter: brightness(1.28) saturate(1.2); } }
-  /* a day sky's light comes down in slow rays, from the sun's side */
-  .scene .rays { inset: -20%; background: repeating-conic-gradient(from 180deg at calc(50% - var(--side) * 38%) 0%, rgba(255, 244, 214, .16) 0 4deg, transparent 4deg 11deg);
-    mix-blend-mode: screen; animation: rays 14s ease-in-out infinite alternate; transform-origin: 50% 0; }
-  @keyframes rays { from { opacity: .55; rotate: -2deg; } to { opacity: 1; rotate: 2deg; } }
-  .scene canvas.back { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-  .front { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-  .front canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-  .front::before { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 38%, transparent 55%, var(--vig, rgba(4, 3, 12, .55))); }
-  .front::after { content: ''; position: absolute; inset: auto -30% 0; height: 34%; animation: fog 9s ease-in-out infinite, bank 23s ease-in-out infinite alternate;
-    background: radial-gradient(40% 55% at 30% 70%, var(--fog), transparent 70%), radial-gradient(35% 50% at 75% 80%, var(--fog), transparent 70%), linear-gradient(transparent, var(--fog)); }
-  @keyframes bank { to { translate: 12% 0; } }
-  @keyframes fog { 50% { opacity: .75; transform: translateY(3%); } }
-  .portrait.scened > img:not(.ov), .portrait.scened > canvas.live { position: relative; z-index: 1; }
-  .portrait.scened img.ov { z-index: 2; }
+  /* scenes, the figure, its overlays: glia-avatar.js brings its own styles (ga-*) */
   .scenes { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
   .scenes button { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 4px 11px; font: 11.5px var(--term, monospace); cursor: pointer; }
   .scenes button:hover { color: var(--text); border-color: var(--accent); }
@@ -704,7 +661,7 @@
     background: #0b0820; box-shadow: 0 0 0 2px rgba(233, 228, 255, .5), 0 0 0 4px #0b0820; }
   .dlg-face > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
   .dlg-face .portrait { position: absolute; aspect-ratio: var(--ar); }
-  .dlg-face .portrait canvas.live, .dlg-face .portrait > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  .dlg-face .portrait > img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
   .dlg-text { flex: 1; min-width: 0; margin: 0; font: 400 24px/1.22 var(--term); letter-spacing: .02em; white-space: pre-wrap;
     text-shadow: 2px 2px 0 #0b0820; min-height: 3.66em; }
   .msg.dlg.err .dlg-text { color: #ffc2cc; }
@@ -954,6 +911,7 @@
     set(k, v) { try { localStorage.setItem('morpheus.' + k, JSON.stringify(v)); } catch {} },
   };
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const GLIA = /*GLIA-DATA*/null;  // web/glia-data.json, put in by the server: the moods and the worlds
   const url = file => file.startsWith('/') ? file : '/output/' + file.split('/').map(encodeURIComponent).join('/');
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const ICON = {
@@ -2258,9 +2216,12 @@
   $('gallery-link').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); };
 
   async function loadAgents() {
+    const shown = () => JSON.stringify(soul.current ? soul.agents.find(a => a.slug === soul.current) ?? null : soul.agents);
+    const was = soul.agents?.length ? shown() : null;
     try { soul.agents = await (await fetch('/api/soul/agents')).json(); } catch { return; }
     renderAgents();
-    if (state.forge === 'soul') renderSoul();
+    // the page already shows her from the list it had; a second render would start her figure over
+    if (state.forge === 'soul' && shown() !== was) renderSoul();
   }
   function renderAgents() {
     $('agents').replaceChildren(...soul.agents.map(a => {
@@ -2282,13 +2243,11 @@
     if (a && !a.base) soul.tune = 'base';
     $('input').placeholder = !a ? 'Describe your agent in a few words …' : a.base ? TUNE_PLACEHOLDER[soul.tune] : 'Pick a number or ask for changes …';
     const job = soul.job && soul.job.agent === (a?.slug ?? null) ? soul.job : null;
-    idleTimers.forEach(clearTimeout);
-    idleTimers = [];
     if (!a) {
       // the gallery: every agent that's alive, each card with its own light loop (blink, smirk, blush)
       const alive = soul.agents.filter(x => x.base && x.idle?.base === x.base.file && x.idle.frames);
       const gallery = alive.length ? `<div class="gallery-head"><h3 class="gallery-title">Your agents <small>${alive.length} alive</small></h3>${scenePicker()}</div><div class="gallery">${alive.map((x, i) => `<button type="button" class="agent-card" data-slug="${esc(x.slug)}"${scened(x) ? ` title="${esc(sceneOf(x).theme === 'home' ? `${x.name}'s world` : SCENES[sceneOf(x).theme])}"` : ''}${scened(x) ? ` style="--i:${i};--glow:${lightOf(x, sceneOf(x).theme).glow}aa;--accent:${lightOf(x, sceneOf(x).theme).glow}"` : ''}>
-          <div class="portrait${scened(x) ? ' scened' : ''}">${scened(x) ? sceneLayers(x) : ''}${`<img src="${url(scened(x) ? x.scene.cut : x.base.file)}" alt="${esc(x.name)}">`}${['blush', 'smirk', 'half', 'closed'].map(n => `<img class="ov ${n}" src="${url(x.idle.frames[n])}" alt="">`).join('')}</div>
+          <div class="portrait${scened(x) ? ' scened' : ''}"></div>
           <b>${esc(x.name)}</b><small>${esc((x.soul || '').split(/(?<=[.!?])\s/)[0])}</small></button>`).join('')}</div>` : '';
       col.innerHTML = `${gallery}<div class="soul-hero${alive.length ? ' compact' : ''}"><h2>SOULFORGE</h2><p>Describe an agent in a few words. Glia gives it a soul, Morpheus renders nine candidates, you pick one.</p>
         <div class="ideas">${['A grumpy old librarian who guards the docs', 'Cyborg girl, calm security agent', 'Cheerful intern who writes tests'].map(t => `<button type="button">${t}</button>`).join('')}</div></div>`;
@@ -2296,7 +2255,8 @@
       wireScenes(col);
       col.querySelectorAll('.agent-card').forEach(c => {
         c.onclick = () => { soul.current = c.dataset.slug; soul.shownFor = null; store.set('soul.current', c.dataset.slug); renderAgents(); setForge('soul'); };
-        idleLoop(c.querySelector('.portrait'));
+        const x = alive.find(y => y.slug === c.dataset.slug);
+        mountSoul(c.querySelector('.portrait'), x, false, scened(x));
       });
       if (job) col.append(soulWorking(job));
       return;
@@ -2304,9 +2264,8 @@
     const face = a.base || a.pick;
     // the idle frames belong to one base image; after a new edit they're stale until drawn again
     const alive = a.base && a.idle?.base === a.base.file;
-    const layers = alive ? ['blush', 'smirk', 'half', 'closed'].map(n => `<img class="ov ${n}" src="${url(a.idle.frames[n])}" alt="">`).join('') : '';
     const sc = alive && scened(a);
-    col.innerHTML = `<div class="soul-card"><div class="portrait${alive ? ' alive' : ''}${sc ? ' scened' : ''}">${sc ? sceneLayers(a) : ''}${face ? `<img src="${url(face.file)}" alt="${esc(a.name)}">${layers}${alive ? '' : `<span class="tag">${a.base ? 'Base image' : 'Fine-tuning'}</span>`}` : 'No pick yet'}</div>
+    col.innerHTML = `<div class="soul-card"><div class="portrait${alive ? ' alive' : ''}${sc ? ' scened' : ''}">${face ? `<img src="${url(face.file)}" alt="${esc(a.name)}">${alive ? '' : `<span class="tag">${a.base ? 'Base image' : 'Fine-tuning'}</span>`}` : 'No pick yet'}</div>
       <div><h2>${esc(a.name)}</h2><p>${esc(a.soul)}</p><details><summary>Look</summary><p>${esc(a.look)}</p></details>${alive && a.scene ? scenePicker() : ''}</div></div>`;
     wireScenes(col);
     if (sc) col.querySelector('.portrait').style.setProperty('--scene-glow', lightOf(a, sceneOf(a).theme).glow);
@@ -2316,6 +2275,12 @@
         const world = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: '🌍 New world' });
         world.onclick = () => { $('input').value = `Dream up a new world for ${a.name}`; soulSend({ world: true }); };
         side.append(world);
+      }
+      if (alive && a.idle.rig) {  // the shareable package: player, docs, demo, every world, a still per mood
+        const exp = Object.assign(document.createElement('button'), { type: 'button', className: 'lock-in ghosty', textContent: '📦 Export avatar',
+          title: `A zip another product can use as its avatar: ${a.name}'s package, the player, a README, a demo` });
+        exp.onclick = () => exportAgent(a, exp);
+        side.append(exp);
       }
       // what to do with her: two flows that tune (the input follows the pressed one), two that start over
       if (!alive && soul.tune === 'anim') soul.tune = 'base';
@@ -2350,7 +2315,7 @@
     }
     if (alive && a.idle.rig) {
       const pt = col.querySelector('.portrait.alive');
-      livePortrait(pt, a.idle, sc);
+      mountSoul(pt, a, true, sc);
       // the first visit in a session: she greets you with a wave
       let met = []; try { met = JSON.parse(sessionStorage.getItem('morpheus.met') || '[]'); } catch {}
       if (!met.includes(a.slug) && !job) {
@@ -2380,7 +2345,7 @@
         col.querySelector('.soul-card > div:last-child h2').after(row);
       }
     }
-    else idleLoop(alive && col.querySelector('.portrait.alive'));
+    else if (alive) mountSoul(col.querySelector('.portrait.alive'), a, false, sc);
     const last = a.grids.length - 1;
     // an agent that's alive opens as a profile: how it was made folds away, newer polish talk stays in view
     const cut = alive ? a.messages.findLastIndex(m => m.idle) : -1;
@@ -2447,34 +2412,12 @@
   const SCENES = { shuffle: '🎲 Shuffle', home: 'Her world', dream: 'Dream', city: 'Neon city', forest: 'Twilight forest', sakura: 'Sakura', desert: 'Desert dusk', ocean: 'Moonlit sea', snow: 'Aurora peaks', volcano: 'Volcano', space: 'Deep space', castle: 'Gothic castle', original: 'Original' };
   // each backdrop's light: key and fill rim colours, the side the key comes from (1 = left), how strong the rim is,
   // the ambient her colours are graded toward (rgb, amount), and what drifts in the air in front of her
-  const LIGHT = {
-    dream: { shimmer: 12, key: [225, 200, 255], fill: [120, 150, 255], side: 1, rim: .72, amb: [200, 185, 255, .14], fog: 'rgba(70, 40, 140, .55)', glow: '#b48cff',
-      motes: { n: 26, col: ['#e9dcff', '#b9a0ff', '#8fd0ff'], vy: -2.2, vx: .6, size: 1, twinkle: 1 } },
-    city: { own: 'rain', key: [255, 90, 220], fill: [70, 230, 255], side: -1, rim: .78, amb: [215, 190, 255, .16], fog: 'rgba(120, 20, 110, .5)', glow: '#ff4fd8',
-      motes: { n: 46, col: ['#8fe9ff', '#c9f6ff'], vy: 34, vx: -6, size: 1, streak: 3 } },
-    forest: { key: [175, 240, 255], fill: [90, 200, 190], side: 1, rim: .7, amb: [180, 215, 225, .14], fog: 'rgba(30, 80, 95, .55)', glow: '#9fe8ff',
-      motes: { n: 18, col: ['#e6ff8a', '#b8ff6a', '#fff3a0'], vy: -.8, vx: 1.2, size: 1, twinkle: 1, wander: 1 } },
-    sakura: { day: 1, own: 'petals', key: [255, 214, 170], fill: [255, 160, 205], side: -1, rim: .55, amb: [255, 228, 225, .1], fog: 'rgba(255, 160, 200, .32)', vig: 'rgba(110, 40, 80, .3)', glow: '#ffb7d5',
-      motes: { n: 26, col: ['#ffb7d5', '#ff9ec4', '#ffe0ee'], vy: 6, vx: 4, sway: 3, petal: 1 } },
-    desert: { own: 'dust', key: [255, 190, 120], fill: [120, 120, 255], side: 1, rim: .62, amb: [255, 215, 190, .12], fog: 'rgba(150, 80, 60, .45)', glow: '#ffc36b',
-      motes: { n: 34, col: ['#ffe3a8', '#f2c48a'], vy: .6, vx: 9, sway: 1.5 } },
-    ocean: { key: [200, 230, 255], fill: [60, 200, 210], side: -1, rim: .68, amb: [185, 210, 240, .14], fog: 'rgba(20, 70, 120, .5)', glow: '#8fd8ff',
-      motes: { n: 20, col: ['#e6fbff', '#9fe3ff', '#ffffff'], vy: -5, vx: .3, sway: 1.4, bubble: 1 } },
-    snow: { shimmer: 22, own: 'snow', key: [150, 255, 200], fill: [190, 150, 255], side: 1, rim: .7, amb: [200, 225, 255, .14], fog: 'rgba(120, 160, 220, .42)', glow: '#9fffd0',
-      motes: { n: 46, col: ['#ffffff', '#dfefff'], vy: 9, vx: -1.5, sway: 2.2, big: .35 } },
-    volcano: { lava: 1, own: 'embers', key: [255, 226, 160], fill: [110, 140, 255], side: 1, rim: .8, amb: [255, 210, 190, .1], fog: 'rgba(120, 25, 10, .55)', glow: '#ff7a2f',
-      motes: { n: 34, col: ['#ffb347', '#ff7a2f', '#ffe08a'], vy: -7, vx: 1.5, sway: 1.8, twinkle: 1, glow: 1 } },
-    space: { nonear: 1, shimmer: 14, key: [150, 200, 255], fill: [255, 120, 220], side: -1, rim: .7, amb: [200, 200, 255, .14], fog: 'rgba(30, 20, 80, .5)', glow: '#a8c8ff',
-      motes: { n: 30, col: ['#ffffff', '#cfe0ff', '#ffd0f0'], vy: .4, vx: -.8, twinkle: 1 } },
-    castle: { storm: 1, key: [235, 225, 255], fill: [200, 40, 70], side: 1, rim: .66, amb: [215, 190, 220, .15], fog: 'rgba(60, 10, 40, .55)', glow: '#e0d0ff',
-      motes: { n: 14, col: ['#2a1630', '#3b1d40'], vy: -1, vx: 6, sway: 3, petal: 1 } },
-  };
+  const LIGHT = Object.fromEntries(Object.entries(GLIA.worlds).map(([k, w]) => [k, w.light]));  // web/glia-data.json
   const sceneNow = () => SCENES[store.get('soul.scene')] ? store.get('soul.scene') : 'shuffle';
   const scened = a => sceneNow() !== 'original' && !!a.scene?.cut && a.scene.base === a.base?.file;
   // a small seeded random: the same agent and roll always give the same backdrop, a new roll a new one
   const seeded = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => ((h = Math.imul(h ^ h >>> 15, 2246822507) ^ Math.imul(h ^ h >>> 13, 3266489909)) >>> 0) / 4294967296; };
-  const VARIANTS = { dream: 'sky far near', city: 'sky far near', forest: 'sky far near', sakura: 'sky far near',
-    desert: 'sky far near', ocean: 'sky', snow: 'sky far near', volcano: 'sky far', castle: 'sky far near' };
+  const VARIANTS = Object.fromEntries(Object.entries(GLIA.worlds).map(([k, w]) => [k, w.variants.join(' ')]));
   const THEMES = () => Object.keys(SCENES).filter(k => LIGHT[k]);
   // her world is a theme of one: its layers and its light are hers
   const lightOf = (a, theme) => theme === 'home' ? a.scene.world.light : LIGHT[theme];
@@ -2491,7 +2434,7 @@
     // most layers come in two drawings: which one is drawn too
     const v = l => ({ flip: r() < .5, x: 20 + r() * 60 | 0, hue: l === 'near' ? 0 : (r() - .5) * 26 | 0, alt: VARIANTS[pick]?.includes(l) && r() < .5 ? '2' : '' });
     // a weather of her own, now and then, only on Shuffle and never one her theme already has
-    const w = Object.keys(WEATHER).filter(k => k !== lightOf(a, pick).own);
+    const w = WEATHERS.filter(k => k !== lightOf(a, pick).own);
     const weather = sceneNow() === 'shuffle' && r() < .45 ? w[r() * w.length | 0] : '';
     // and now and then a remix: another night's sky over this ground (an aurora over the castle, a nebula over
     // the forest); her rim light follows the sky, the air and fog stay the ground's
@@ -2501,11 +2444,6 @@
     const motif = { scale: shuffled ? .9 + r() * .18 : 1, dx: shuffled ? (r() - .5) * 8 : 0 };
     return { theme: pick, skyTheme: skyOf, weather, motif, sky: v('sky'), far: v('far'), near: v('near') };
   }
-  const sceneLayers = a => {
-    const s = sceneOf(a), L = lightOf(a, s.theme), S = lightOf(a, s.skyTheme);
-    const lay = l =>  `<i class="${l}" data-x="${s[l].x}" style="background-image:url('${url(s.theme === 'home' ? a.scene.world[l] : `soulforge/_scenes/${l === 'sky' ? s.skyTheme : s.theme}_${l}${l === 'sky' && s.skyTheme !== s.theme ? '' : s[l].alt}.png`)}');${s[l].flip ? 'transform:scaleX(-1);' : ''}filter:${{ sky: 'brightness(.82) saturate(.9) ', far: 'brightness(.9) saturate(.82) ', near: 'brightness(.78) ' }[l]}${s[l].hue ? `hue-rotate(${s[l].hue}deg)` : ''};"></i>`;
-    return `<div class="scene${S.shimmer ? ' aurora' : ''}${L.lava ? ' lava' : ''}" style="--shim:${S.shimmer || 0}deg">${lay('sky')}<canvas class="back" width="139" height="203" data-day="${S.day ? 1 : ''}" data-often="${S.nonear ? 1 : ''}" data-storm="${S.storm || s.weather === 'rain' ? 1 : ''}"></canvas>${S.day ? `<i class="rays" style="--side:${s.sky.flip ? -1 : 1}"></i>` : ''}${lay('far')}${L.nonear ? '' : lay('near')}${a.scene.motif ? `<i class="motif" style="background-image:url('${url(a.scene.motif)}');--glow:${L.glow};scale:${s.motif.scale.toFixed(3)};translate:${s.motif.dx.toFixed(1)}% 0"></i>` : ''}</div><div class="front ${s.theme}" style="--fog:${L.fog}${L.vig ? `;--vig:${L.vig}` : ''}"><canvas width="139" height="203" data-theme="${s.theme}"${s.theme === 'home' ? ` data-light='${JSON.stringify(L)}'` : ''} data-sky="${s.skyTheme}" data-side="${s.sky.flip ? -1 : 1}" data-weather="${s.weather}"></canvas></div>`;
-  };
   const scenePicker = () => `<div class="scenes" role="group" aria-label="Backdrop">${Object.entries(SCENES).map(([k, v]) => `<button type="button" data-scene="${k}" aria-pressed="${k === sceneNow()}"${k === 'shuffle' ? ' title="Every agent gets her own random backdrop; click again for new ones (R)"' : k === 'home' ? ' title="A world painted for her alone; agents without one stand in Dream"' : ''}>${k === 'shuffle' && sceneNow() === 'shuffle' ? '🎲 Reroll' : v}</button>`).join('')}</div>`;
   addEventListener('keydown', e => {
     if (e.key.toLowerCase() !== 'r' || e.ctrlKey || e.metaKey || e.altKey || /input|textarea/i.test(e.target.tagName)) return;
@@ -2518,158 +2456,10 @@
       renderSoul();
     });
   }
-  // one loop for every scene on the page: each layer drifts on its own slow swing, nearer layers further, and
-  // leans a little toward the pointer; whole pixels only, so the art stays crisp
-  let lean = 0, leanTo = 0, gust = 0, gustAt = performance.now() + 9000;
-  // reduced motion: the scene and the figure hold still; blinks and expressions stay
-  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const ptr = { x: -1e4, y: -1e4, t: 0 };
-  addEventListener('pointermove', e => { leanTo = (e.clientX / innerWidth - .5) * 2; Object.assign(ptr, { x: e.clientX, y: e.clientY, t: performance.now() }); }, { passive: true });
+  // the weathers glia-avatar.js can lay over a backdrop
+  const WEATHERS = ['snow', 'petals', 'embers', 'rain', 'leaves', 'fireflies', 'dust'];
   // typing to her: she listens (a tilt, a small smile) while the keys go
   addEventListener('input', e => { if (e.target.id === 'input') document.querySelectorAll('.portrait.alive').forEach(p => p._soul?.listen()); });
-  const DRIFT = { sky: [6, .05, 0], far: [16, .07, 1.3], near: [30, .09, 2.1] };
-  (function drift(now) {
-    requestAnimationFrame(drift);
-    const t = now / 1000;
-    lean += (leanTo - lean) * .04;
-    // a gust now and then: it swells and fades over three seconds, and everything in the air feels it at once
-    const g = (now - gustAt) / 3000;
-    gust = g < 0 ? 0 : g < 1 ? Math.sin(Math.PI * g) ** 2 : 0;
-    if (g >= 1) gustAt = now + 12000 + Math.random() * 14000;
-    if (calm) return;
-    for (const sc of document.querySelectorAll('.scene')) {
-      const w = sc.clientWidth / 340;  // the same swing at every card size
-      for (const [l, [amp, sp, ph]] of Object.entries(DRIFT)) {
-        const el = sc.querySelector('.' + l);
-        // a mirrored layer slides mirrored too: its lean is turned back so every layer leans the same way
-        if (el) el.style.backgroundPosition = `calc(${el.dataset.x || 50}% + ${Math.round(w * (amp * Math.sin(t * sp * 2 * Math.PI + ph) - (el.style.transform ? -1 : 1) * lean * amp * .6))}px) 100%`;
-      }
-      const fig = sc.parentElement.querySelector('canvas.live');
-      if (fig) fig.style.translate = `${Math.round(-lean * 7 * w)}px 0`;
-      const m = sc.querySelector('.motif');
-      if (m) m.style.transform = `translate(${Math.round(-lean * 4 * w)}px, ${Math.round(w * 5 * Math.sin(t * .9))}px)`;
-    }
-    const dt = Math.min(.1, t - (drift.last || t)); drift.last = t;
-    for (const cv of document.querySelectorAll('canvas.back')) sky(cv, now, dt);  // first: it clears the back canvas
-    for (const cv of document.querySelectorAll('.front canvas')) air(cv, t, dt);
-  })(0);
-  // the air in front of her, one canvas pixel per art pixel so every mote is as crisp as the art: the theme's own
-  // and, now and then on a shuffled backdrop, a weather of its own on top
-  const WEATHER = {
-    snow: { n: 40, col: ['#ffffff', '#dfefff'], vy: 9, vx: -1.5, sway: 2.2, big: .35 },
-    petals: { n: 22, col: ['#ffb7d5', '#ff9ec4', '#ffe0ee'], vy: 6, vx: 4, sway: 3, petal: 1 },
-    embers: { n: 26, col: ['#ffb347', '#ff7a2f', '#ffe08a'], vy: -7, vx: 1.5, sway: 1.8, twinkle: 1, glow: 1 },
-    rain: { n: 50, col: ['#a9c8ff', '#d6e6ff'], vy: 40, vx: -5, streak: 4 },
-    leaves: { n: 16, col: ['#e0782f', '#c9542a', '#f0b040'], vy: 7, vx: 5, sway: 3.5, petal: 1 },
-    fireflies: { n: 14, col: ['#e6ff8a', '#fff3a0'], vy: -.6, vx: .8, twinkle: 1, wander: 1 },
-    dust: { n: 30, col: ['#fff6d8', '#ffe3a8'], vy: -.6, vx: 2.2, sway: 1, twinkle: 1 },
-  };
-  // now and then a shooting star crosses a night sky, behind the far layer: something to catch, not a loop
-  const skies = new WeakMap();
-  function sky(cv, now, dt) {
-    if (cv.dataset.day) { cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); if (cv.dataset.storm) storm(cv, now); return; }
-    let st = skies.get(cv);
-    if (!st) skies.set(cv, st = { next: now + 2000 + Math.random() * 9000, s: null });
-    const g = cv.getContext('2d');
-    if (!st.s && now > st.next) {
-      const dir = Math.random() < .5 ? 1 : -1;
-      st.s = { x: dir > 0 ? Math.random() * 60 : 79 + Math.random() * 60, y: 4 + Math.random() * 40, vx: dir * (55 + Math.random() * 30), vy: 16 + Math.random() * 12, life: 0, max: .7 + Math.random() * .5 };
-    }
-    g.clearRect(0, 0, cv.width, cv.height);
-    if (cv.dataset.storm) storm(cv, now);
-    const s = st.s;
-    if (!s) return;
-    s.life += dt; s.x += s.vx * dt; s.y += s.vy * dt;
-    const a = Math.sin(Math.PI * Math.min(1, s.life / s.max));
-    g.globalAlpha = a * .35; g.fillStyle = '#dff0ff'; g.fillRect(Math.round(s.x) - 1, Math.round(s.y) - 1, 3, 3);  // its glow
-    for (let k = 0; k < 15; k++) {  // the tail, one art pixel per step, fading
-      g.globalAlpha = a * (1 - k / 15) ** 1.4;
-      g.fillStyle = k ? '#bfe3ff' : '#ffffff';
-      g.fillRect(Math.round(s.x - s.vx / 90 * k), Math.round(s.y - s.vy / 90 * k), 1, 1);
-    }
-    g.globalAlpha = 1;
-    if (s.life > s.max) { st.s = null; st.next = now + (cv.dataset.often ? 2500 : 7000) + Math.random() * (cv.dataset.often ? 5000 : 14000); }
-  }
-  const lights = new WeakMap();
-  const canvasLight = cv => cv.dataset.light ? lights.get(cv) || (lights.set(cv, JSON.parse(cv.dataset.light)), lights.get(cv)) : LIGHT[cv.dataset.theme];
-  // a storm: now and then the sky behind the far layers flashes twice, so the silhouettes stand out against it
-  const storms = new WeakMap();
-  function storm(cv, now) {
-    let st = storms.get(cv);
-    if (!st) storms.set(cv, st = { next: now + 3000 + Math.random() * 8000 });
-    const t = now - st.next, flash = t < 0 ? 0 : t < 70 ? .55 : t < 160 ? 0 : t < 260 ? .35 * (1 - (t - 160) / 100) : -1;
-    if (flash < 0) { st.next = now + 6000 + Math.random() * 12000; return; }
-    const g = cv.getContext('2d');
-    if (flash) { g.globalAlpha = flash; g.fillStyle = '#e8e6ff'; g.fillRect(0, 0, cv.width, cv.height * .75); g.globalAlpha = 1; }
-    const her = cv.closest('.portrait')?.querySelector('canvas.live, img:not(.ov)');  // the flash lights her too
-    if (her) her.style.filter = flash > 0 ? `brightness(${1 + flash * .7}) saturate(${1 - flash * .4})` : '';
-  }
-  const airs = new WeakMap();
-  function air(cv, t, dt) {
-    const kinds = [canvasLight(cv)?.motes, WEATHER[cv.dataset.weather]].filter(Boolean);
-    const W = cv.width, H = cv.height, g = cv.getContext('2d'), front = g;
-    const spawn = (p, L, any) => Object.assign(p, { L, x: Math.random() * W, y: any ? Math.random() * H : (L.vy > 0 ? -4 : H + 2),
-      c: L.col[Math.random() * L.col.length | 0], ph: Math.random() * 7, sp: .6 + Math.random() * .8, z: Math.random() });
-    let ps = airs.get(cv);
-    if (!ps) { ps = kinds.flatMap(L => Array.from({ length: L.n }, () => spawn({}, L, true))); airs.set(cv, ps); }
-    g.clearRect(0, 0, W, H);
-    const back = cv.parentElement.previousElementSibling?.querySelector?.('canvas.back')?.getContext('2d');
-    for (const p of ps) {
-      const g = back && p.z < .33 ? back : front;  // the farthest third behind her
-      const L = p.L, sway = L.sway || (L.wander ? 1.6 : 0);
-      p.x += (L.vx * p.sp + sway * Math.sin(t * .7 + p.ph) + gust * (L.streak ? 10 : 16) * p.sp) * dt - lean * .05 * p.z;
-      p.y += (L.vy * p.sp + (L.wander ? 1.2 * Math.cos(t * .5 + p.ph * 1.3) : 0)) * dt;
-      if (p.y < -6 || p.y > H + 6 || p.x < -6 || p.x > W + 6) spawn(p, L);
-      const a = L.twinkle ? Math.max(0, Math.sin(t * (1.1 + p.sp) + p.ph)) ** 2 * .95 : .4 + .45 * p.z;
-      if (a < .03) continue;
-      const x = Math.round(p.x), y = Math.round(p.y);
-      g.fillStyle = p.c;
-      g.globalAlpha = a;
-      if (L.streak) { g.fillRect(x, y, 1, L.streak + (p.z * 2 | 0)); continue; }
-      if (L.petal) { const f = Math.sin(t * 3 + p.ph) > 0; g.fillRect(x, y, f ? 2 : 1, f ? 1 : 2); continue; }  // a petal tumbling
-      if (L.bubble) { g.globalAlpha = a * .8; g.fillRect(x, y, 1, 1); if (p.z > .6) { g.globalAlpha = a * .35; g.fillRect(x + 1, y, 1, 1); g.fillRect(x, y - 1, 1, 1); } continue; }  // a bubble with its glint
-      if (L.big && p.z > 1 - L.big) { g.fillRect(x, y, 2, 2); continue; }  // the nearest flakes are bigger
-      if (L.wander || L.glow) { g.globalAlpha = a * .22; g.fillRect(x - 1, y - 1, 3, 3); g.globalAlpha = a; }  // a glow
-      g.fillRect(x, y, 1, 1);
-    }
-    g.globalAlpha = 1;
-    if (back) back.globalAlpha = 1;
-  }
-  // The idle loop: blinks every few seconds (half, closed, half: a 16-bit blink is three frames), a smirk now and
-  // then, a blush that fades in and out. Each renderSoul starts it afresh on the new portrait.
-  let idleTimers = [];
-  // several run at once (the gallery); renderSoul clears them all before it draws
-  function idleLoop(p) {
-    if (!p) return;  // no reduced-motion opt-out: the animation is the feature, and Windows sets it system-wide
-    const ov = n => p.querySelector(`img.ov.${n}`);
-    const later = (f, ms) => idleTimers.push(setTimeout(() => p.isConnected && f(), ms));
-    const rand = (a, b) => a + Math.random() * (b - a);
-    const show = (n, on) => ov(n).classList.toggle('on', on);
-    function blink(again) {
-      show('half', true);
-      later(() => { show('half', false); show('closed', true); }, 50);
-      later(() => { show('closed', false); show('half', true); }, 150);
-      later(() => { show('half', false); }, 210);
-      later(() => blink(Math.random() < .12), again ? 420 : rand(5000, 9000));  // now and then a double blink
-    }
-    function smirk() {
-      show('smirk', true);
-      later(() => show('smirk', false), rand(2500, 4000));
-      later(smirk, rand(25000, 45000));
-    }
-    function blush() {
-      show('blush', true);
-      later(() => show('blush', false), rand(3000, 5000));
-      later(blush, rand(35000, 60000));
-    }
-    later(blink, rand(1000, 5000));  // cards out of step with each other
-    later(smirk, rand(6000, 30000));
-    later(blush, rand(12000, 40000));
-  }
-  // The living portrait: the base with its expression overlays, warped every frame by the rig. Breathing lifts the
-  // upper body one art pixel, hair and cloak sway with a lag toward their tips, and a pixel that the figure moves
-  // off of shows the clean background plate. Every shift is a whole art pixel, so it stays crisp pixel art.
-  const MOUTHS = ['smile', 'frown', 'open1', 'open2', 'open3'], ARMS = ['wave', 'chin', 'heart'];
   let audio = null;
   const voiceOn = () => { try { return localStorage.getItem('morpheus.voice') === '1'; } catch { return false; } };
   function blip(seed, big) {
@@ -2684,573 +2474,73 @@
     o.connect(f).connect(g).connect(audio.destination);
     o.start(t); o.stop(t + .08);
   }
-  // emote icons over her head, as in a game: one character per art pixel (# outline, o fill, w shine)
-  const ICONS = {
-    heart: ['#ec5b9b', ['.##.##.', '#ow#oo#', '#ooooo#', '#ooooo#', '.#ooo#.', '..#o#..', '...#...']],
-    bang: ['#ffd54a', ['###', '#w#', '#o#', '#o#', '#o#', '###', '...', '###', '#o#', '###']],
-    ask: ['#f4f1ff', ['.####.', '#wooo#', '####o#', '..#oo#', '..#o#.', '..###.', '......', '..###.', '..#o#.', '..###.']],
-    vein: ['#ff4a4a', ['.##.##.', '#o#.#o#', '##...##', '.......', '##...##', '#o#.#o#', '.##.##.']],
-    drop: ['#6cc4ff', ['..#..', '.#o#.', '.#o#.', '#owo#', '#ooo#', '#ooo#', '.###.']],
-    note: ['#ffe066', ['..####', '..#oo#', '..#..#', '..#..#', '###.##', '#o#.#o', '###.##']],
-    star: ['#ffd84a', ['...#...', '..#w#..', '###o###', '#ooooo#', '.#ooo#.', '#oo#oo#', '##...##']],
-  };
   const EMOTE_ICON = { talk: '💬', wave: '👋', happy: '😊', wink: '😉', excited: '🤩', laugh: '😂', surprised: '😮', shy: '😳', thinking: '🤔', sad: '😢', angry: '😠', yes: '👍', no: '👎' };
-  // emotions: a mouth, eyes held, a blush and a gesture of the head, all at once, for as long as the mood lasts
-  const EMOTES = {
-    happy: { mouth: 'smile', blush: .7, gesture: 'tilt', hold: 3200, icon: 'note' },
-    wave: { mouth: 'smile', arm: 'wave', gesture: 'tilt', hold: 2800 },
-    laugh: { mouth: 'open3', eyes: 'closed', blush: 1, gesture: 'laugh', hold: 2200, chuckle: true, icon: 'note' },
-    surprised: { mouth: 'open2', gesture: 'jolt', hold: 1800, icon: 'bang', brow: 1 },
-    sad: { mouth: 'frown', eyes: 'half', gesture: 'droop', hold: 3800, icon: 'drop', gloom: 1 },  // no arm: the hand on the heart read as touched, not sad
-    angry: { mouth: 'frown', eyes: 'half', gesture: 'shake', hold: 2600, icon: 'vein', brow: -1 },
-    thinking: { mouth: 'smirk', eyes: 'glance', gesture: 'ponder', hold: 3400, icon: 'ask', arm: 'chin' },
-    yes: { mouth: 'smile', gesture: 'nod', hold: 1500 },
-    no: { mouth: 'frown', gesture: 'shake', hold: 1600 },
-    shy: { mouth: 'smirk', eyes: 'glance_l', blush: 1, gesture: 'duck', hold: 3000, icon: 'heart', arm: 'heart' },
-    wink: { mouth: 'smirk', eyes: 'wink', gesture: 'cock', hold: 1300, icon: 'star' },
-    excited: { mouth: 'open3', blush: .5, gesture: 'hop', hold: 2200, icon: 'star', brow: 1 },
-  };
-  async function livePortrait(p, idle, cut) {
-    const load = f => new Promise((ok, no) => Object.assign(new Image(), { onload() { ok(this); }, onerror: no, src: url(f) }));
-    let pics;
+  // what each mood plays: one table, web/glia-data.json, shared with the agent packages and the player
+  const EMOTES = GLIA.moods;
+  // ---------- Her figure: glia-avatar.js draws it, the same player an exported agent ships with ----------
+  const player = import('/glia-avatar.js').then(m => m.GliaAvatar);
+  const seedOf = f => [...f].reduce((n, c) => n + c.charCodeAt(0), 0) % 997;  // each agent her own voice pitch
+  // a Soulforge agent as a glia-agent manifest: her working files, her own world and every shared theme
+  function manifestOf(a) {
+    const i = a.idle, w = a.scene?.world, worlds = {};
+    if (w) worlds.home = { name: `${a.name}'s world`, light: w.light, layers: { sky: w.sky, far: w.far, near: w.near } };
+    for (const [k, t] of Object.entries(GLIA.worlds)) worlds[k] = { name: t.name, light: t.light,
+      layers: Object.fromEntries(['sky', 'far', 'near'].flatMap(l => [[l, `soulforge/_scenes/${k}_${l}.png`], ...(t.variants.includes(l) ? [[l + '2', `soulforge/_scenes/${k}_${l}2.png`]] : [])])) };
+    return { format: 'glia-agent/2', id: a.slug, name: a.name, moods: GLIA.moods,
+      art: { pixel: i.block || 6, portrait: i.base, anchors: { eyes: i.eyes, mouth: i.mouth, chest: i.chest, waist: i.waist } },
+      idle: { overlays: i.frames, rig: i.rig, plate: i.plate },
+      scene: { default: w ? 'home' : 'dream', cut: a.scene?.base === a.base?.file ? a.scene.cut : null, emblem: a.scene?.motif || null, worlds } };
+  }
+  // mounted into p; p._soul is what the page talks to: her moods, her speech, her thinking
+  async function mountAgent(p, m, opts) {
+    const GA = await player;
+    if (!p.isConnected && !opts.keep) return;
+    const seed = opts.seed || 0;
+    const av = await GA.mount(p, m, { onSyllable: big => blip(seed, big), ...opts });
+    p._soul = { emote: k => av.mood(k), say: (t, after) => av.say(t, { mood: after }), listen: av.listen, think: av.think, hush: av.hush, avatar: av };
+    return av;
+  }
+  const mountSoul = (p, a, live, sc) => mountAgent(p, manifestOf(a), { resolve: url, live, scene: sc ? sceneOf(a) : false, seed: seedOf(a.base.file) });
+  // one frame per mood, drawn by the player off screen at its peak, then the server zips them in with her package
+  async function exportAgent(a, btn) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    const box = Object.assign(document.createElement('div'), { style: 'position:fixed;left:-2000px;top:0;width:340px' });
+    document.body.append(box);
     try {
-      pics = await Promise.all([idle.base, idle.plate, idle.rig, ...['blush', 'smirk', 'half', 'closed'].map(n => idle.frames[n])].map(load));
-    } catch { return idleLoop(p); }  // frames from before the rig existed: the plain overlay loop
-    if (!p.isConnected && !p._keep) return;
-    const [base, plate, rig, ...ovs] = pics;
-    const ov = Object.fromEntries(['blush', 'smirk', 'half', 'closed'].map((n, i) => [n, ovs[i]]));
-    // the glance came later: sets drawn before it simply don't glance
-    ov.glance = idle.frames.glance ? await load(idle.frames.glance).catch(() => null) : null;
-    ov.glance_l = idle.frames.glance_l ? await load(idle.frames.glance_l).catch(() => null) : null;  // and the other way
-    for (const n of [...MOUTHS, ...ARMS]) ov[n] = idle.frames[n] ? await load(idle.frames[n]).catch(() => null) : null;
-    if (!p.isConnected && !p._keep) return;
-    const W = base.naturalWidth, H = base.naturalHeight, B = idle.block || 6, N = W * H;
-    const ease = x => x * x * (3 - 2 * x);
-    const pixels = img => { const c = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true }); c.drawImage(img, 0, 0); return c.getImageData(0, 0, W, H).data; };
-    const plate32 = new Uint32Array(pixels(plate).buffer), r = pixels(rig);
-    const fig = new Uint8Array(N), hairW = new Float32Array(N), cloakW = new Float32Array(N), breathW = new Float32Array(N);
-    const zone = [];  // the pixels that can change: the figure and a margin around it for what it moves into
-    for (let i = 0; i < N; i++) {
-      fig[i] = r[i * 4] > 128;
-      hairW[i] = r[i * 4 + 1] / 255;
-      cloakW[i] = r[i * 4 + 2] / 255;
-      const y = (i / W) | 0;
-      // by row, not only on the figure: the background above her shoulders takes them in when she breathes in.
-      // The chest and shoulders rise; the head barely does (a head riding along as one block, or a chest swelling
-      // sideways, looked like the picture being pushed around)
-      const chin = idle.mouth[3];
-      breathW[i] = ease(Math.min(1, Math.max(0, (idle.waist - y) / (idle.waist - idle.chest))))
-        * (y > idle.chest ? 1 : y < chin ? .25 : .25 + .75 * ease((y - chin) / (idle.chest - chin)));
+      const av = await (await player).mount(box, manifestOf(a), { resolve: url, scene: false, pointer: false, poke: false, alt: '' });
+      await new Promise(r => setTimeout(r, 800));  // settled: no breath in mid-gesture from the mount
+      const stills = {};
+      for (const [n, k] of Object.keys(GLIA.moods).entries()) {
+        btn.textContent = `📦 Drawing ${k} (${n + 1}/${Object.keys(GLIA.moods).length})`;
+        const hold = av.mood(k);
+        await new Promise(r => setTimeout(r, Math.min(900, hold * .4)));
+        stills[k] = av.snapshot();
+        await new Promise(r => setTimeout(r, hold - Math.min(900, hold * .4) + 500));  // back to idle before the next
+      }
+      av.destroy();
+      btn.textContent = '📦 Packing…';
+      const res = await fetch('/api/agent/export', { method: 'POST', body: JSON.stringify({ agent: a.slug, stills }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+      const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || `${a.slug}.zip`;
+      const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: name });
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    } catch (e) {
+      toast(`Export failed: ${e.message}`, true);
+    } finally {
+      box.remove(); btn.disabled = false; btn.textContent = label;
     }
-    // her rim: figure pixels within two art pixels of its edge along the row. On a scene, what a moving head uncovers
-    // there must be the world behind her, not her own unmoved pixel: that drew a second hair outline when she shook
-    // her head (Glia, 2026-11-01). Inside her the unmoved pixel stays, it hides the seams between moving blocks.
-    const rim = new Uint8Array(N);
-    for (let y = 0; y < H; y++) {
-      let last = -1e9;
-      for (let x = 0; x < W; x++) { const i = y * W + x; if (!fig[i]) last = x; else if (x - last <= 2 * B) rim[i] = 1; }
-      last = 1e9;
-      for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (!fig[i]) last = x; else if (last - x <= 2 * B) rim[i] = 1; }
-    }
-    // the margin around the figure, with the sway of the nearest figure pixel in its row: a strand swinging out
-    // lands on background pixels, and those need to know they're swinging too
-    const pad = B * 3, inZone = new Uint8Array(N);
-    for (let y = 0; y < H; y++) {
-      for (const dir of [1, -1]) {
-        let near = -1e9, h = 0, c = 0;
-        for (let k = 0; k < W; k++) {
-          const x = dir > 0 ? k : W - 1 - k, i = y * W + x;
-          if (fig[i]) { near = k; h = hairW[i]; c = cloakW[i]; inZone[i] = 1; }
-          else if (k - near <= pad) { inZone[i] = 1; hairW[i] = Math.max(hairW[i], h); cloakW[i] = Math.max(cloakW[i], c); }
-        }
-      }
-      // a breath lifts the head into the rows above it
-      for (let x = 0; x < W; x++) for (let k = 1; k <= 4 * B && y + k < H; k++) if (fig[(y + k) * W + x]) inZone[y * W + x] = 1;
-    }
-    const arms = {};
-    for (const name of ARMS) {
-      if (!ov[name]) continue;
-      const arm = arms[name] = { idx: [], rgb: [], on: [], thr: [], q: 0, to: 0 };
-      const a = pixels(ov[name]);
-      let top = H, bot = 0;
-      for (let i = 0; i < N; i++) if (a[i * 4 + 3] === 255) { const y = (i / W) | 0; top = Math.min(top, y); bot = Math.max(bot, y); }
-      for (let i = 0; i < N; i++) {
-        const al = a[i * 4 + 3];
-        if (al !== 255 && al !== 128) continue;
-        const y = (i / W) | 0, x = i - y * W;
-        arm.idx.push(i); arm.rgb.push(0xff000000 | a[i * 4 + 2] << 16 | a[i * 4 + 1] << 8 | a[i * 4]); arm.on.push(al === 255);
-        arm.thr.push(al === 255 ? .97 * (bot - y) / Math.max(1, bot - top) : .3);  // a clean wipe up from the elbow: a dithered fade-in speckled her coat (Glia)
-        for (let dy = -2 * B; dy <= 2 * B; dy += B) for (let dx = -2 * B; dx <= 2 * B; dx += B) {
-          const yy = y + dy, xx = x + dx;
-          if (yy >= 0 && yy < H && xx >= 0 && xx < W) inZone[yy * W + xx] = 1;
-        }
-      }
-      arm.top = top; arm.bot = bot;
-    }
-    const arm = arms.wave || { idx: [], on: [] };  // the waving one: its hand swings
-    for (let i = 0; i < N; i++) if (inZone[i]) zone.push(i);
-    const figBase = fig.slice(), posed = new Uint8Array(N), armLit = new Float32Array(N);  // posed: an arm's pixel just now (the rim light was drawn for her old outline)
-    // the motion is worked out per art pixel (a B×B block) and every screen pixel in it moves alike: moved one by
-    // one, neighbours with different weights tore the blocks into slivers and combed the edges of hair and sleeves
-    const BW = Math.ceil(W / B), BH = Math.ceil(H / B), NB = BW * BH;
-    const bHair = new Float32Array(NB), bCloak = new Float32Array(NB), bBreath = new Float32Array(NB), bRow = new Float32Array(NB);
-    const blockOf = new Int32Array(N);
-    for (let i = 0; i < N; i++) {
-      const y = (i / W) | 0, b = ((y / B) | 0) * BW + (((i - y * W) / B) | 0);
-      blockOf[i] = b;
-      bHair[b] += hairW[i]; bCloak[b] += cloakW[i]; bBreath[b] += breathW[i];
-    }
-    for (let b = 0; b < NB; b++) { bHair[b] /= B * B; bCloak[b] /= B * B; bBreath[b] /= B * B; bRow[b] = ((b / BW) | 0) * B + B / 2; }
-    const bdx = new Int16Array(NB), bdy = new Int16Array(NB);
-    const ew = idle.eyes[2] - idle.eyes[0], hx = (idle.eyes[0] + idle.eyes[2]) / 2, chin = idle.mouth[3];
-    const neck = chin + ew * .32, piv = [hx, chin + ew * .5];
-    const bHead = new Float32Array(NB), bHang = new Float32Array(NB), bX = new Float32Array(NB), bArm = new Float32Array(NB), bFace = new Float32Array(NB), bBrow = new Float32Array(NB);
-    for (let b = 0; b < NB; b++) {
-      const x = (b % BW) * B + B / 2, y = bRow[b], top = idle.eyes[1];
-      const across = 1 - Math.min(1, Math.abs(Math.abs(x - hx) - ew * .27) / (ew * .26));  // over each eye
-      const up = y < top && y > top - ew * .42 ? 1 - Math.abs(y - (top - ew * .17)) / (ew * .25) : 0;
-      bBrow[b] = Math.max(0, across) * Math.max(0, Math.min(1, up * 1.6));
-    }
-    {
-      const fy = (idle.eyes[1] + chin) / 2, rx = ew * .78, ry = (chin - idle.eyes[1]) * .9 + ew * .35;
-      for (let b = 0; b < NB; b++) {
-        const d = (((b % BW) * B + B / 2 - hx) / rx) ** 2 + ((bRow[b] - fy) / ry) ** 2;
-        bFace[b] = d < 1 ? (1 - d) ** .6 : 0;
-      }
-    }
-    for (let k = 0; k < arm.idx.length; k++) if (arm.on[k]) {
-      const i = arm.idx[k], y = (i / W) | 0;
-      bArm[blockOf[i]] = Math.max(0, Math.min(1, (arm.top + (arm.bot - arm.top) * .55 - y) / ((arm.bot - arm.top) * .55))) ** 1.4;
-    }
-    for (let b = 0; b < NB; b++) {
-      const x = (b % BW) * B + B / 2, y = bRow[b];
-      bX[b] = x;
-      // the head: above the chin across the face and the hair at its sides, fading out down the neck
-      const across = Math.abs(x - hx) < ew * 1.3 ? 1 : Math.max(0, 1 - (Math.abs(x - hx) - ew * 1.3) / (ew * .4));
-      bHead[b] = across * (y < chin ? 1 : Math.max(0, 1 - (y - chin) / (neck - chin)));
-      // the hair hanging below: it rides the head's motion, later and less toward the tips
-      bHang[b] = bHair[b] > .02 || hairW[Math.min(N - 1, (y | 0) * W + (x | 0))] > .02 ? Math.max(0, 1 - Math.max(0, y - neck) / (ew * 3.2)) : 0;
-    }
-    // on a scene its light falls on her: a rim of the key light along her edges on its side (the fill on the
-    // other), whole art pixels deep so it reads as painted, and her colours graded toward the scene's ambient
-    const fx = p.querySelector('.front canvas');  // the light comes from where her sky puts it: a mirrored sky, a mirrored key
-    const look = { ...((fx && canvasLight(fx)) || LIGHT.dream), ...(fx?.dataset.sky && LIGHT[fx.dataset.sky] ? (({ key, fill, side }) => ({ key, fill, side }))(LIGHT[fx.dataset.sky]) : {}) }, lit = new Float32Array(N);
-    look.side *= +(fx?.dataset.side || 1);
-    {
-      const hue = ([r, g, b]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn || 1;
-        return (mx === r ? (g - b) / d + 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60 % 360; };
-      const px = pixels(base);
-      let r = 0, g = 0, b = 0, n = 0;
-      for (let i = 0; i < N; i += 7) if (fig[i]) { r += px[i * 4]; g += px[i * 4 + 1]; b += px[i * 4 + 2]; n++; }
-      const d = Math.abs(hue([r / n, g / n, b / n]) - hue(look.key));
-      if (n && Math.min(d, 360 - d) < 35) [look.key, look.fill] = [look.fill, look.key];  // red on red: the cool light wins
-    }
-    if (cut) {
-      const bFig = new Uint8Array(NB), cnt = new Uint16Array(NB);
-      for (let i = 0; i < N; i++) if (fig[i]) cnt[blockOf[i]]++;
-      for (let b = 0; b < NB; b++) bFig[b] = cnt[b] > B * B / 2;
-      const depth = [0, 1, .38, .12], rim = new Float32Array(NB);
-      for (let b = 0; b < NB; b++) {
-        if (!bFig[b]) continue;
-        const bx = b % BW;
-        let w = 0;
-        for (let d = 1; d <= 3; d++) {  // open space d art pixels away: toward the key side, the fill side, above
-          if (bx - d * look.side >= 0 && bx - d * look.side < BW && !bFig[b - d * look.side]) { w = Math.max(w, depth[d]); }
-          else if (bx + d * look.side >= 0 && bx + d * look.side < BW && !bFig[b + d * look.side]) { w = -depth[d] * .7; }
-          else if (b - d * BW >= 0 && !bFig[b - d * BW]) w = Math.max(w, depth[d] * .8);
-          if (w) break;
-        }
-        rim[b] = w;
-      }
-      for (let i = 0; i < N; i++) lit[i] = rim[blockOf[i]] * look.rim;
-      // a raised arm gets its own rim: the light along its edge, tested against her posed outline
-      for (const a of Object.values(arms)) {
-        const on = new Uint8Array(N);
-        for (let i = 0; i < N; i++) on[i] = figBase[i];
-        a.idx.forEach((i, k) => { on[i] = a.on[k] ? 1 : 0; });
-        a.lit = a.idx.map((i, k) => {
-          if (!a.on[k]) return 0;
-          const y = (i / W) | 0, x = i - y * W, open = (dx, dy) => { const xx = x + dx, yy = y + dy; return xx >= 0 && xx < W && yy >= 0 && yy < H && !on[yy * W + xx]; };
-          for (let d = 1; d <= 3; d++) {
-            if (open(-d * B * look.side, 0)) return depth[d] * look.rim;
-            if (open(d * B * look.side, 0)) return -depth[d] * .7 * look.rim;
-            if (open(0, -d * B)) return depth[d] * .8 * look.rim;
-          }
-          return 0;
-        });
-      }
-    }
-    const faceRect = [Math.max(0, Math.floor((hx - ew * 1.3) / B) * B), Math.max(0, Math.floor((idle.eyes[1] - ew * .7) / B) * B),
-      Math.min(W, Math.ceil((hx + ew * 1.3) / B) * B), Math.min(H, Math.ceil((chin + 6 * B) / B) * B)];
-    for (const a of Object.values(arms)) {
-      let x0 = W, y0 = H, x1 = 0, y1 = 0;
-      for (const i of a.idx) { const y = (i / W) | 0, x = i - y * W; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1); }
-      a.box = [x0, y0, x1, y1]; a.was = 0;
-      a.blocks = [...new Set(a.idx.filter((i, k) => a.on[k]).map(i => blockOf[i]))];
-    }
-    const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H, className: 'live' });
-    p.querySelectorAll('img').forEach(i => i.remove());
-    p.prepend(canvas);
-    const ctx = canvas.getContext('2d');
-    const out = ctx.createImageData(W, H), out32 = new Uint32Array(out.data.buffer);
-    const comp = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true });
-    let src32, dirty = true, mouthNow = null, eyesNow = null, mood = {}, gaze = 0, lookSide = null, frameNo = 0, box = p.getBoundingClientRect();
-    const acts = [];  // gestures of the head: [start, kind, length]
-    const icons = [];  // emote icons showing: { k, t0, life }
-    const state = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 };
-    p.addEventListener('click', () => {
-      const now = performance.now();
-      timeline.push([now, 'smirk', 1], [now + 1800, 'smirk', 0], [now, 'blush', 1], [now + 2600, 'blush', 0]);
-      nextSmirk = Math.max(nextSmirk, now + 15000); nextBlush = Math.max(nextBlush, now + 20000);
-    });
-    function compose() {  // the base with the expression overlays that are on right now
-      comp.clearRect(0, 0, W, H);
-      comp.drawImage(base, 0, 0);
-      const draw = (n, a) => { if (a && ov[n]) { comp.globalAlpha = Math.min(1, a); comp.drawImage(ov[n], 0, 0); comp.globalAlpha = 1; } };
-      draw('blush', Math.max(state.blush, mood.blush || 0));
-      if (mouthNow && mouthNow !== 'smirk' && ov[mouthNow]) draw(mouthNow, 1); else draw('smirk', mouthNow === 'smirk' ? 1 : state.smirk);
-      for (const n of ['glance', 'glance_l']) draw(n, Math.max(state[n], eyesNow === n || (!eyesNow && lookSide === n) ? 1 : 0));
-      if (eyesNow === 'half' || eyesNow === 'closed') draw(eyesNow, 1);
-      if (eyesNow === 'wink' && ov.closed) { comp.save(); comp.beginPath(); comp.rect(hx, 0, W - hx, H); comp.clip(); draw('closed', 1); comp.restore(); }
-      draw('half', state.half); draw('closed', state.closed);
-      if (mood.gloom) {  // every other art-pixel column, from the hairline down to the eyes, deepening downward
-        const x0 = Math.round((hx - ew * .55) / B) * B, x1 = hx + ew * .55, y0 = idle.eyes[1] - ew * .3, y1 = idle.eyes[1] + ew * .14;
-        for (let x = x0; x < x1; x += 2 * B) for (let y = Math.round(y0 / B) * B; y < y1; y += B) {
-          comp.globalAlpha = .2 + .55 * (y - y0) / (y1 - y0);
-          comp.fillStyle = '#28306a'; comp.fillRect(x, y, B, B);
-        }
-        comp.globalAlpha = 1;
-      }
-      // only what can change is read back and relit: the face, and an arm while it moves; the rest stays as the
-      // first full pass left it. Reading and lighting the whole picture on every mouth shape cost frames in speech
-      let rx0 = 0, ry0 = 0, rx1 = W, ry1 = H;
-      if (src32) {
-        [rx0, ry0, rx1, ry1] = faceRect;
-        for (const a of Object.values(arms)) if (a.q || a.was) { rx0 = Math.min(rx0, a.box[0]); ry0 = Math.min(ry0, a.box[1]); rx1 = Math.max(rx1, a.box[2]); ry1 = Math.max(ry1, a.box[3]); }
-        const part = new Uint32Array(comp.getImageData(rx0, ry0, rx1 - rx0, ry1 - ry0).data.buffer), w = rx1 - rx0;
-        for (let y = ry0; y < ry1; y++) src32.set(part.subarray((y - ry0) * w, (y - ry0 + 1) * w), y * W + rx0);
-      } else src32 = new Uint32Array(comp.getImageData(0, 0, W, H).data.buffer);
-      for (const a of Object.values(arms)) a.was = a.q;
-      for (const a of Object.values(arms)) for (let k = 0; k < a.idx.length; k++) if (a.thr[k] >= a.q) { fig[a.idx[k]] = figBase[a.idx[k]]; posed[a.idx[k]] = 0; }
-      for (const a of Object.values(arms)) if (a.q) for (let k = 0; k < a.idx.length; k++) {  // the posed arm over her
-        const i = a.idx[k];
-        if (a.thr[k] < a.q) { fig[i] = a.on[k] ? 1 : 0; posed[i] = a.on[k] ? 2 : 1; armLit[i] = a.lit?.[k] || 0; if (a.on[k] || !cut) src32[i] = a.rgb[k]; }
-      }
-      if (cut) for (let y = ry0; y < ry1; y++) for (let i = y * W + rx0, e = y * W + rx1; i < e; i++) {  // on a scene only she is drawn, lit by it
-        if (!fig[i]) { src32[i] = 0; continue; }
-        const s = posed[i] ? armLit[i] : lit[i];
-        if (!s && !look.amb[3]) continue;
-        const v = src32[i], t = look.amb[3];
-        let r = v & 255, g = v >> 8 & 255, bl = v >> 16 & 255;
-        r += (look.amb[0] * r / 255 - r) * t; g += (look.amb[1] * g / 255 - g) * t; bl += (look.amb[2] * bl / 255 - bl) * t;
-        if (s) { const c = s > 0 ? look.key : look.fill, a = Math.abs(s); r += (c[0] - r) * a; g += (c[1] - g) * a; bl += (c[2] - bl) * a; }
-        src32[i] = (v & 0xff000000) | (bl << 16) | (g << 8) | r;
-      }
-      out32.set(src32);
-    }
-    // smirk and blush fade (seconds for a full fade); the blink cuts, as a real one does
-    const target = { blush: 0, smirk: 0, glance: 0, glance_l: 0, half: 0, closed: 0 }, fade = { blush: 1.6, smirk: .45 };
-    const set = (n, v) => {
-      if (n === 'mouth') { if (mouthNow !== v) { mouthNow = v; dirty = true; } return; }
-      if (n === 'eyes') { if (eyesNow !== v) { eyesNow = v; dirty = true; } return; }
-      if (n === 'gesture') {
-        const now = performance.now();
-        acts.push([now, v, GEST[v]?.len || 1, ['tilt', 'cock', 'droop'].includes(v) && Math.random() < .5 ? -1 : 1]);  // a tilt goes either way
-        if (['shake', 'tilt', 'ponder', 'duck'].includes(v) && eyesNow !== 'closed' && Math.random() < .7)  // never on a surprise: eyes go wide, not shut
-         
-          [[0, 'half', 1], [45, 'half', 0], [45, 'closed', 1], [130, 'closed', 0], [130, 'half', 1], [190, 'half', 0]].forEach(([d, k, x]) => timeline.push([now + d, k, x]));
-        return;
-      }
-      if (n === 'mood') { mood = v; browTo = v.brow || 0; dirty = true; return; }
-      if (n === 'arm') { for (const [k, a] of Object.entries(arms)) a.to = k === v ? 1 : 0; return; }
-      target[n] = v; if (!fade[n]) { state[n] = v; dirty = true; }
-    };
-    // the gestures, as the head's offset (art pixels) and roll (radians) over their time u in 0..1
-    const bump = u => Math.sin(Math.PI * Math.min(1, Math.max(0, u)));
-    const hold = (u, a = .18) => ease(Math.min(1, u / a, (1 - u) / a));
-    const GEST = {
-      nod: { len: 1.0, f: u => ({ y: 1.3 * Math.max(0, Math.sin(u * Math.PI * 4)) * (1 - u * .5), r: 0 }) },
-      shake: { len: 1.3, f: u => ({ x: .7 * Math.sin(u * Math.PI * 6) * (1 - u) ** 1.2, yaw: 1.6 * Math.sin(u * Math.PI * 6) * (1 - u) ** 1.2, r: .015 * Math.sin(u * Math.PI * 6 + .5) * (1 - u) }) },
-      tilt: { len: 3.0, f: u => ({ r: .055 * hold(u), y: .3 * hold(u) }) },
-      ponder: { len: 3.4, f: u => ({ r: -.06 * hold(u, .25), y: -.4 * hold(u, .25), x: .3 * hold(u, .25), yaw: .8 * hold(u, .25) }) },
-      laugh: { len: 2.0, f: u => ({ y: -1.1 * Math.abs(Math.sin(u * Math.PI * 7)) * (1 - u) ** .7, r: .03 * bump(u) }) },
-      jolt: { len: 1.6, f: u => ({ y: u < .12 ? -2 * ease(u / .12) : -2 * (1 - ease((u - .12) / .88)) ** 2, r: 0 }) },
-      droop: { len: 3.8, f: u => ({ y: 1.1 * hold(u, .3), r: .04 * hold(u, .3) }) },
-      duck: { len: 3.0, f: u => ({ y: .9 * hold(u), r: -.05 * hold(u), x: -.2 * hold(u), yaw: -.8 * hold(u) }) },
-      beat: { len: .35, f: u => ({ y: .6 * bump(u), r: 0 }) },  // a word stressed in speech
-      hop: { len: 1.4, f: u => ({ y: -1.4 * Math.abs(Math.sin(u * Math.PI * 3)) * (1 - u * .4), r: .02 * Math.sin(u * Math.PI * 3) }) },  // excited little hops
-      cock: { len: .9, f: u => ({ r: .045 * bump(u), y: 0 }) },  // a question
-    };
-    // the hair on the head's spring: it chases the head, overshoots, swings back
-    const lag = { x: 0, y: 0, r: 0 }, vel = { x: 0, y: 0, r: 0 };
-    function emote(name) {
-      const e = (idle.recipes || EMOTES)[name];
-      if (!e) return;
-      const now = performance.now();
-      for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'eyes', 'mood'].includes(timeline[k][1])) timeline.splice(k, 1);
-      if (e.arm && arms[e.arm]) timeline.push([now, 'arm', e.arm], [now + e.hold - 300, 'arm', 0]);
-      timeline.push([now, 'mouth', e.mouth || null], [now, 'eyes', e.eyes || null], [now, 'mood', { blush: e.blush || 0, gloom: e.gloom || 0, brow: e.brow || 0 }],
-        [now + e.hold, 'mouth', null], [now + e.hold, 'eyes', null], [now + e.hold + 400, 'mood', {}]);
-      if (e.chuckle) for (let k = 1; k < 9; k++) timeline.push([now + k * 230, 'mouth', k % 2 ? 'open2' : 'open3']);
-      if (e.gesture) timeline.push([now, 'gesture', e.gesture]);
-      if (e.icon && ICONS[e.icon]) { icons.length = 0; icons.push({ k: e.icon, t0: now + 120, life: Math.min(2600, e.hold) }); }
-      if (e.eyes || e.brow > 0) nextBlink = Math.max(nextBlink, now + e.hold * (e.eyes === 'closed' || e.brow > 0 ? 1 : .4));  // wide eyes hold open
-      nextGlance = Math.max(nextGlance, now + e.hold + 4000);
-    }
-    // speech: the mouth opens on the vowels, half on the consonants, shuts between the words and rests at the
-    // stops; a stressed word nods, a question cocks the head
-    // speech, as game dialogue animates it: one open mouth per syllable (a vowel group), held a beat, a half-shut
-    // mouth between, shut between the words, rests at the stops; a cheerful mood rests on a smile. Per letter it
-    // flapped at fifteen a second, which read as jitter. A stressed word nods, a question cocks the head
-    function say(text, after, pace = 1) {
-      const now = performance.now();
-      for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth') timeline.splice(k, 1);
-      const rest = ['happy', 'laugh', 'wave', 'yes', 'shy'].includes(after) && ov.smile ? 'smile' : null;
-      if (breathPhase > .45) breathPhase = 0;  // a breath in before the first word
-      let t = now + 120, n = 0;
-      for (const tok of String(text).slice(0, 360).match(/[\p{L}']+|[.!?]+|[,;:]|\s+/gu) || []) {
-        if (/^\p{L}/u.test(tok)) {
-          const syl = Math.max(1, (tok.toLowerCase().match(/[aeiouyäöü]+/g) || []).length);
-          const stress = tok.length > 6 || /^[A-ZÄÖÜ]/.test(tok);
-          for (let k = 0; k < syl; k++) {
-            const big = stress && k === 0 ? 'open3' : Math.random() < .55 ? 'open2' : 'open1';
-            timeline.push([t, 'mouth', big], [t, 'blip', big === 'open3']); t += (105 + Math.random() * 35) * pace;
-            if (k < syl - 1) { timeline.push([t, 'mouth', 'open1']); t += 55 * pace; }
-          }
-          timeline.push([t, 'mouth', rest]); t += 70 * pace;
-          if (stress && ++n % 3 === 0) timeline.push([t - 200, 'gesture', 'beat']);
-        } else if (/[,;:]/.test(tok)) t += 200 * pace;
-        else if (/[.!?]/.test(tok)) {
-          if (tok.includes('?')) timeline.push([t, 'gesture', 'cock']);
-          if (tok.includes('!')) timeline.push([t - 150, 'gesture', 'beat']);
-          t += 360 * pace;
-        }
-      }
-      timeline.push([t, 'mouth', null]);
-      if (after) timeline.push([t + 150, 'emote', after]);
-      speakTill = t;
-      return t - now;
-    }
-    // listening: one attentive tilt and a small smile per burst of typing, the smile kept while the keys go
-    let listenTill = 0, speakTill = 0, brow = 0, browTo = 0;
-    const voiceSeed = [...(idle.base || '')].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7);
-    function listen() {
-      const now = performance.now();
-      if (now > listenTill + 1500 && !acts.length) timeline.push([now, 'gesture', 'tilt']);
-      if (!mouthNow || mouthNow === 'smile') { set('mouth', 'smile'); for (let k = timeline.length - 1; k >= 0; k--) if (timeline[k][1] === 'mouth' && timeline[k][2] === null && timeline[k].listen) timeline.splice(k, 1); const e = [now + 2200, 'mouth', null]; e.listen = 1; timeline.push(e); }
-      listenTill = now;
-    }
-    let thinkOn = false, nextThink = 0;
-    function think(on) {
-      if (on === thinkOn) return;
-      thinkOn = on;
-      const now = performance.now();
-      if (on) nextThink = now;
-      else {  // back to rest: the hand down, the face plain
-        for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'eyes', 'mood', 'arm'].includes(timeline[k][1])) timeline.splice(k, 1);
-        timeline.push([now, 'arm', 0], [now, 'mouth', null], [now, 'eyes', null], [now, 'mood', {}]);
-        icons.length = 0;
-      }
-    }
-    function hush() {
-      const now = performance.now();
-      for (let k = timeline.length - 1; k >= 0; k--) if (['mouth', 'blip', 'gesture'].includes(timeline[k][1])) timeline.splice(k, 1);
-      set('mouth', null);
-      speakTill = now;
-    }
-    p._soul = { emote, say, listen, think, hush };
-    // sparkles: plus-shaped stars glowing up and fading in the background around her
-    const sparks = Array.from({ length: 6 }, () => ({}));
-    function place(s, fresh) {
-      for (let k = 0; k < 50; k++) {
-        const x = (Math.random() * (W / B - 4) + 2 | 0) * B, y = (Math.random() * (idle.chest / B) | 0) * B;
-        if (!fig[y * W + x] && !fig[(y + B) * W + x]) {
-          Object.assign(s, { x, y, life: 2.5 + Math.random() * 2.5, t: fresh ? -Math.random() * 6 : -Math.random() * 3 });
-          return;
-        }
-      }
-    }
-    sparks.forEach(s => place(s, true));
-    const rand = (a, b) => a + Math.random() * (b - a);
-    const t0 = performance.now();
-    let nextBlink = t0 + rand(1500, 3500), nextSmirk = t0 + rand(12000, 20000), nextBlush = t0 + rand(20000, 30000),
-      nextGlance = t0 + rand(6000, 10000), nextMoment = t0 + rand(14000, 24000);
-    const timeline = [];  // [when, overlay, value]
-    let last = 0;
-    // a breath: in quickly, out slower, a short rest; its own clock drifts a little so it never feels metronomic
-    const BREATH = 5.2;
-    let breathPhase = 0, sigh = false, swing = 0;
-    const breathCurve = p => p < .38 ? ease(p / .38) : p < .86 ? 1 - ease((p - .38) / .48) : 0;
-    const hairRow = new Float32Array(H), cloakRow = new Float32Array(H);
-    function frame(now) {
-      if (!p.isConnected) { if (p._keep) requestAnimationFrame(frame); return; }
-      requestAnimationFrame(frame);
-      if (now > nextBlink) {
-        const slow = Math.random() < .15 ? 3 : 1;  // now and then a slow, fond blink: the lid rests a while
-        const b = [[0, 'half', 1], [70 * slow, 'half', 0], [70 * slow, 'closed', 1], [70 * slow + 100 * slow ** 1.6, 'closed', 0], [70 * slow + 100 * slow ** 1.6, 'half', 1], [140 * slow + 100 * slow ** 1.6, 'half', 0]];
-        b.forEach(([d, n, v]) => timeline.push([now + d, n, v]));
-        nextBlink = now + (Math.random() < .12 ? 420 : rand(5000, 9000));  // now and then a double blink
-      }
-      // a glance aside: the eyes jump there and back, as eyes do; a blink often comes with the return
-      if (ov.glance && now > nextGlance) {
-        const hold = rand(1100, 2000);
-        const way = ov.glance_l && Math.random() < .5 ? 'glance_l' : 'glance';
-        timeline.push([now, way, 1], [now + hold, way, 0]);
-        if (Math.random() < .3) timeline.push([now + 260, way, 0], [now + 520, way, 1]);  // a double take
-        if (Math.random() < .5) [[0, 'half', 1], [50, 'half', 0], [50, 'closed', 1], [150, 'closed', 0], [150, 'half', 1], [210, 'half', 0]].forEach(([d, n, v]) => timeline.push([now + hold - 60 + d, n, v]));
-        nextGlance = now + hold + rand(15000, 30000);
-        nextBlink = Math.max(nextBlink, now + hold + 1500);
-      }
-      if (now > nextMoment && !acts.length && !mouthNow) {
-        const r = Math.random();
-        if (r < .4) timeline.push([now, 'mouth', 'smile'], [now, 'gesture', 'tilt'], [now + 2600, 'mouth', null]);
-        else if (r < .7) timeline.push([now, 'mouth', 'smile'], [now, 'gesture', 'beat'], [now + 520, 'gesture', 'beat'], [now + 1040, 'gesture', 'beat'], [now + 1900, 'mouth', null]);  // a little hum along to something
-        else timeline.push([now, 'gesture', 'ponder']);
-        nextMoment = now + rand(22000, 45000);
-      }
-      if (thinkOn && now > nextThink && now > speakTill) { emote('thinking'); nextThink = now + 4200; }
-      if (now > nextSmirk) { const hold = rand(2500, 4000); timeline.push([now, 'smirk', 1], [now + hold, 'smirk', 0]); nextSmirk = now + hold + rand(25000, 45000); }
-      if (now > nextBlush) { const hold = rand(3000, 5000); timeline.push([now, 'blush', 1], [now + hold, 'blush', 0]); nextBlush = now + hold + rand(35000, 60000); }
-      for (let k = 0; k < timeline.length; k++) if (timeline[k][0] <= now) {
-        const [, n, v] = timeline.splice(k--, 1)[0];
-        if (n === 'emote') emote(v); else if (n === 'blip') blip(voiceSeed, v); else set(n, v);
-      }
-      const t = now / 1000, dt = last ? Math.min(.1, t - last) : 0; last = t;
-      for (const n in fade) if (state[n] !== target[n]) {
-        const d = dt / fade[n];
-        state[n] = target[n] > state[n] ? Math.min(target[n], state[n] + d) : Math.max(target[n], state[n] - d);
-        dirty = true;
-      }
-      for (const a of Object.values(arms)) if (a.q !== a.to) {  // an arm rises in about a quarter second, lowers a little slower
-        a.q = a.to > a.q ? Math.min(1, a.q + dt / .26) : Math.max(0, a.q - dt / .34);
-        dirty = true;
-      }
-      if (dirty) {  // the fade's curve, not its linear clock
-        const lin = { ...state };
-        for (const n in fade) state[n] = ease(lin[n]);
-        compose();
-        Object.assign(state, lin);
-      }
-      dirty = false;
-      // all motion in real pixels, every frame: one-pixel steps at display size read as smooth, and nearest
-      // sampling keeps the art crisp
-      const was = breathPhase;
-      breathPhase = (breathPhase + dt / (BREATH * (1 + .08 * Math.sin(t * .37)) * (sigh ? 1.5 : 1))) % 1;
-      if (breathPhase < was) sigh = Math.random() < .12;  // a new breath: now and then a sigh
-      const breath = calm ? 0 : breathCurve(breathPhase) * (sigh ? 1.6 : 1);
-      // the sway: a slow drift of air, never one clean sine (that read as the picture sliding), small enough to
-      // stay a sway; the tips follow the root later, as cloth and hair do
-      swing = swing * Math.exp(-dt * 1.4) + Math.abs(leanTo - lean) * dt * 9;  // the pointer's sweep, dying away
-      const air = calm ? 0 : (.55 + .25 * Math.sin(t * .41) + .2 * Math.sin(t * .93 + 1.7)) * (1 + 1.1 * gust + Math.min(1.2, swing));
-      for (let y = 0; y < H; y++) {
-        hairRow[y] = air * (3.2 * Math.sin(t * 1.63 - y * .009) + 1.3 * Math.sin(t * 2.71 - y * .017 + .6));
-        cloakRow[y] = air * (4.5 * Math.sin(t * 1.21 - y * .005 + .8) + 1.6 * Math.sin(t * 2.07 - y * .011 + 2.1));
-      }
-      // the head rides on the shoulders a beat behind them, as a real one does: risen together it read as one block
-      const breathLate = breathCurve((breathPhase + .94) % 1);
-      // the head's pose: a slow drift of its own (a living head is never still) plus the gestures playing
-      const pose = calm ? { x: 0, y: 0, r: 0 } : { x: 2.2 * Math.sin(t * .31) + 1.3 * Math.sin(t * .73 + 2), y: 0, r: .012 * Math.sin(t * .23 + 1) + .008 * Math.sin(t * .57) };
-      // the pointer near her and moving: her eyes go to it and her head turns a little after them
-      if (!calm && now - ptr.t < 2500 && now > speakTill) {  // speaking, she looks at you, not at the pointer
-        if (!(frameNo++ % 12)) box = p.getBoundingClientRect();
-        const rel = (ptr.x - box.left - box.width / 2) / box.width, up = (ptr.y - box.top) / box.height;
-        const near = Math.abs(rel) < 1.6 && up > -.3 && up < 1.3;
-        gaze += ((near ? Math.max(-1, Math.min(1, rel * 1.4)) : 0) - gaze) * Math.min(1, dt * 3);
-      } else gaze += (0 - gaze) * Math.min(1, dt * 1.5);
-      const side = gaze > .45 ? 'glance' : gaze < -.45 ? 'glance_l' : null;
-      if (side !== lookSide) { lookSide = side; dirty = true; }
-      pose.x += gaze * B * .3; pose.yaw = gaze * B * .7; pose.r += gaze * .012;
-      if (now < speakTill && !calm) {  // a speaker's head is never still: it bobs a little with the words and sways
-        const k = Math.min(1, (speakTill - now) / 400, (now - speakTill + 99999) / 400);
-        pose.y += k * B * .35 * Math.abs(Math.sin(t * 5.3)); pose.r += k * .014 * Math.sin(t * 1.7); pose.yaw += k * B * .4 * Math.sin(t * 1.1);
-      }
-      let lift = 0;
-      for (let k = acts.length - 1; k >= 0; k--) {
-        const u = (now - acts[k][0]) / 1000 / acts[k][2];
-        if (u >= 1) { acts.splice(k, 1); continue; }
-        const g = GEST[acts[k][1]].f(Math.max(0, u)), m = acts[k][3] || 1;
-        pose.x += (g.x || 0) * B * m; pose.y += (g.y || 0) * B; pose.r += (g.r || 0) * m; pose.yaw += (g.yaw || 0) * B * m; lift += (g.y || 0) * B;
-      }
-      for (const k of ['x', 'y', 'r']) {  // underdamped: a quick head leaves the hair swinging
-        vel[k] += ((pose[k] - lag[k]) * 70 - vel[k] * 6.5) * dt;
-        lag[k] += vel[k] * dt;
-      }
-      for (let b = 0; b < NB; b++) {
-        const y = bRow[b], late = ease(Math.min(1, Math.max(0, (idle.chest - y) / (idle.chest - idle.mouth[3]))));
-        const h = bHead[b], hang = bHang[b] * (1 - h);
-        const ox = bX[b] - piv[0], oy = y - piv[1];
-        // a turn about the neck: the point moves by the roll times its arm, plus the head's shift
-        const hdx = pose.x - oy * pose.r, hdy = pose.y + ox * pose.r;
-        const ldx = lag.x - oy * lag.r, ldy = lag.y + ox * lag.r;
-        const tip = h * bHair[b] * .45;  // strands on the head trail it too, at most an art pixel (more doubled the outline)
-        bdy[b] = -Math.round((breath + (breathLate - breath) * late) * bBreath[b] * 3) + Math.round(h * hdy + hang * ldy + tip * Math.max(-B, Math.min(B, ldy - hdy)) + (1 - h) * bBreath[b] * lift * .4);
-        bdx[b] = Math.round(bHair[b] * hairRow[y] + bCloak[b] * cloakRow[y] + h * hdx + hang * ldx + tip * Math.max(-B, Math.min(B, ldx - hdx)) + bFace[b] * pose.yaw
-          + (arm.q === 1 && bArm[b] ? bArm[b] * B * 1.3 * Math.sin(t * 8.5) : 0));
-      }
-      brow += (browTo - brow) * Math.min(1, dt * 14);  // brows jump fast and settle
-      if (Math.abs(brow) > .02) for (let b = 0; b < NB; b++) if (bBrow[b]) bdy[b] -= Math.round(bBrow[b] * brow * B);
-      for (const a of Object.values(arms)) if (a.q > 0 && a.q < 1) {
-        const off = Math.round((1 - ease(a.q)) * 3 * B);
-        for (const b of a.blocks) bdy[b] += off;
-      }
-      for (let k = 0; k < zone.length; k++) {
-        const i = zone[k], y = (i / W) | 0, x = i - y * W, b = blockOf[i];
-        // where this pixel's content comes from: up when breathing in, sideways in the sway
-        const sx = x - bdx[b], sy = y - bdy[b];
-        const q = sy * W + sx;
-        // figure that lands here wins; where the figure moved away the clean plate shows, elsewhere the background
-        // a raised arm is in front: hair or head swaying onto it slides behind it (Glia's strand over her thinking
-        // hand); only the arm itself (the waving hand) moves over it
-        if (posed[i] === 2 && !(arm.q && bArm[b]) && !(sx >= 0 && sx < W && sy >= 0 && sy < H && posed[q] === 2)) out32[i] = src32[i];  // not the swinging hand: it'd leave itself behind as stripes
-        else if (sx >= 0 && sx < W && sy >= 0 && sy < H && fig[q]) out32[i] = src32[q];
-        else out32[i] = fig[i] && !cut ? plate32[i] : cut && rim[i] ? 0 : src32[i];
-      }
-      ctx.putImageData(out, 0, 0);
-      ctx.fillStyle = cut ? `rgb(${look.key.map(c => c + (255 - c) * .55 | 0)})` : '#e9e2ff';  // on a scene, its light
-      for (const sp of sparks) {
-        sp.t += dt;
-        if (sp.t > sp.life) { place(sp); continue; }
-        if (sp.t < 0) continue;
-        const a = Math.sin(Math.PI * sp.t / sp.life) ** 2;
-        ctx.globalAlpha = a;
-        ctx.fillRect(sp.x, sp.y, B, B);
-        ctx.globalAlpha = a * .55;
-        ctx.fillRect(sp.x - B, sp.y, B, B); ctx.fillRect(sp.x + B, sp.y, B, B); ctx.fillRect(sp.x, sp.y - B, B, B); ctx.fillRect(sp.x, sp.y + B, B, B);
-      }
-      ctx.globalAlpha = 1;
-      for (let k = icons.length - 1; k >= 0; k--) {
-        const ic = icons[k], age = (now - ic.t0) / 1000;
-        if (age > ic.life / 1000) { icons.splice(k, 1); continue; }
-        if (age < 0) continue;
-        const [col, rows] = ICONS[ic.k];
-        const pop = age < .28 ? Math.sin(age / .28 * Math.PI) : 0;  // it hops up as it appears, then bobs
-        const C = 2 * B;  // an icon pixel is two art pixels: at one it read as a speck
-        const x0 = Math.min(W - C * rows[0].length - B, Math.round((hx + ew * .85 + pose.x) / B) * B);
-        const y0 = Math.max(5 * B, Math.round((idle.eyes[1] - ew * 1.35 + pose.y - pop * B * 2 + Math.sin(age * 5) * B * .5) / B) * B);
-        ctx.globalAlpha = Math.min(1, age / .08, (ic.life / 1000 - age) / .3);
-        rows.forEach((row, ry) => [...row].forEach((c, rx) => {
-          if (c === '.') return;
-          ctx.fillStyle = c === '#' ? '#1a1020' : c === 'w' ? '#ffffff' : col;
-          ctx.fillRect(x0 + rx * C, y0 + ry * C, C, C);
-        }));
-        ctx.globalAlpha = 1;
-      }
-    }
-    requestAnimationFrame(frame);
   }
 
   // ---------- The host: Morpheus answers in Dreamforge, in a dialogue box with her living face ----------
-  // She comes as an agent package (agents/<id>/agent.json, "glia-agent/1"): the persona, the overlays, the mood
+  // She comes as an agent package (agents/<id>/agent.json, "glia-agent/2"): the persona, the overlays, the mood
   // recipes. One living face is made once and moved into whichever box is speaking, so it never restarts.
   let host = null, hostFace = null, speaker = null, greeting = null, greeted = false;
   const spoken = new WeakSet();
   async function loadHost() {
     try { host = await (await fetch('/api/host')).json(); } catch { host = null; }
     if (!host) return;
-    const r = f => f && host.root + f, a = host.art.anchors;
-    host.live = { base: r(host.art.portrait), plate: r(host.idle.plate), rig: r(host.idle.rig), block: host.art.pixel,
-      eyes: a.eyes, mouth: a.mouth, chest: a.chest, waist: a.waist, recipes: host.mood_recipes,
-      frames: Object.fromEntries(Object.entries(host.idle.overlays).map(([k, f]) => [k, r(f)])) };
     document.documentElement.style.setProperty('--host-frame', host.colors.frame);
   }
   function face() {
@@ -3258,7 +2548,7 @@
     const [x0, y0, x1] = host.art.bust.box, [W, H] = host.art.size, k = 100 / (x1 - x0);
     hostFace = Object.assign(document.createElement('div'), { className: 'portrait host', _keep: true });
     hostFace.style.cssText = `--ar:${W}/${H};width:${W * k}%;left:${-x0 * k}%;top:${-y0 * k}%`;
-    hostFace.innerHTML = `<img src="${host.live.base}" alt="">`;
+    hostFace.innerHTML = `<img src="${host.root}${host.art.portrait}" alt="">`;
     return hostFace;
   }
   // a box of hers: the name tab, her face (alive when she's the one speaking), her words
@@ -3301,7 +2591,7 @@
   async function hostAfterRender() {
     if (!host || !hostFace?.isConnected) return;
     const pt = hostFace;
-    if (!pt._started) { pt._started = true; livePortrait(pt, host.live, false); }
+    if (!pt._started) { pt._started = true; mountAgent(pt, host, { root: host.root, scene: false, keep: true, alt: '', seed: host.voice_seed }); }
     for (let k = 0; k < 50 && !pt._soul; k++) await new Promise(r => setTimeout(r, 100));
     if (!pt._soul || !speaker) return;
     scrollDown();  // her box got its full height only now: keep it in view, not cut off by the input
