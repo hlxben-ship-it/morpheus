@@ -56,30 +56,56 @@ def other_vram_gb() -> float:
         return 2.0
 
 
-def ensure_comfy(timeout: float = 300) -> None:
-    """Start ComfyUI in the background if it is not answering, then wait until it is."""
-    with comfy_lock:
+COMFY_MODE = None  # "video" once started with the video flags; those stay off for pictures
+
+
+def start_comfy(video: bool, timeout: float) -> None:
+    """Hold comfy_lock. Start ComfyUI in the background, then wait until it answers."""
+    global COMFY_MODE
+    log = open(morpheus.ROOT / "comfyui.log", "ab")
+    # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
+    # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
+    # The overcount swings with what the desktop maps (11.9 to 14.9 GB on one afternoon). At 11.9 every model ran
+    # well (SDXL 13 s, Qwen-Edit 85 s); at 14.6 SDXL itself was offloaded (20 s); at 5 Qwen spilled (135 s a step)
+    reserve = min(other_vram_gb() + 1.0, 12.0)
+    flags = (["--reserve-vram", "2", "--disable-smart-memory", "--cache-none"] if video else
+             ["--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"])
+    # our route for the loaded models, refreshed every start so an update lands
+    shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
+    subprocess.Popen(
+        [sys.executable, str(morpheus.ROOT / "ComfyUI" / "main.py"), "--listen", "127.0.0.1", "--port", "8188",
+         "--disable-auto-launch", *flags],
+        stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    COMFY_MODE = "video" if video else None
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         if morpheus.comfy_up():
             return
-        log = open(morpheus.ROOT / "comfyui.log", "ab")
-        # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
-        # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
-        # The overcount swings with what the desktop maps (11.9 to 14.9 GB on one afternoon). At 11.9 every model ran
-        # well (SDXL 13 s, Qwen-Edit 85 s); at 14.6 SDXL itself was offloaded (20 s); at 5 Qwen spilled (135 s a step)
-        reserve = min(other_vram_gb() + 1.0, 12.0)
-        # our route for the loaded models, refreshed every start so an update lands
-        shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
-        subprocess.Popen(
-            [sys.executable, str(morpheus.ROOT / "ComfyUI" / "main.py"), "--listen", "127.0.0.1", "--port", "8188",
-             "--disable-auto-launch", "--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"],
-            stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if morpheus.comfy_up():
-                return
-            time.sleep(1)
-        raise RuntimeError("ComfyUI did not start, see comfyui.log.")
+        time.sleep(1)
+    raise RuntimeError("ComfyUI did not start, see comfyui.log.")
+
+
+def ensure_comfy(timeout: float = 300) -> None:
+    """ComfyUI ready for pictures. After a clip it restarts without the video flags, once the GPU is free."""
+    if COMFY_MODE == "video":
+        with gpu, comfy_lock:  # always gpu before comfy_lock, as in ensure_video_comfy
+            if COMFY_MODE == "video":
+                morpheus.stop_comfy()
+                start_comfy(False, timeout)
+        return
+    with comfy_lock:
+        if not morpheus.comfy_up():
+            start_comfy(False, timeout)
+
+
+def ensure_video_comfy(timeout: float = 300) -> None:
+    """Call with gpu held, so no picture is rendering when ComfyUI restarts with the video flags."""
+    with comfy_lock:
+        if morpheus.comfy_up() and COMFY_MODE == "video":
+            return
+        morpheus.stop_comfy()
+        start_comfy(True, timeout)
 
 
 # Claude runs from its own empty folder: inside C:\dev it would pick up the projects' CLAUDE.md files,
@@ -788,6 +814,24 @@ class Handler(BaseHTTPRequestHandler):
                      for k, l in morpheus.LORAS.items() if morpheus.lora_installed(k)]
             return self.send_json({"models": models, "edit_models": edit_models, "loras": loras, "styles": styles,
                                    "resolutions": RESOLUTIONS})
+        if route == "/api/wake/options":
+            return self.send_json({"presets": [{"key": k, "label": v["label"], "note": v["note"]} for k, v in morpheus.VIDEO_PRESETS.items()],
+                                   "negative": morpheus.VIDEO_NEGATIVE, "installed": morpheus.video_installed()})
+        if route == "/api/boards":
+            return self.send_json(morpheus.board_list())
+        if route.startswith("/api/board/"):
+            try:
+                return self.send_json(morpheus.board_view(morpheus.board_load(route.removeprefix("/api/board/"))))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if route == "/api/wake/clips":
+            clips = []
+            for f in sorted(morpheus.VIDEO_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+                try:
+                    clips.append(json.loads(f.read_text(encoding="utf-8")))
+                except (OSError, json.JSONDecodeError):
+                    continue
+            return self.send_json(clips)
         if route == "/api/host":
             h = host()
             return self.send_json({**h, "root": f"/agents/{h['id']}/"} if h else None)
@@ -842,13 +886,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.agent_export()
         handlers ={"/api/generate": self.generate, "/api/chat": self.chat, "/api/edit": self.edit,
                     "/api/ghost/clear": self.ghost_clear, "/api/faceswap": self.faceswap, "/api/delete": self.delete,
-                    "/api/soul/new": self.soul_new, "/api/soul/chat": self.soul_chat}
+                    "/api/soul/new": self.soul_new, "/api/soul/chat": self.soul_chat, "/api/wake": self.wake,
+                    "/api/wake/stop": self.wake_stop, "/api/wake/delete": self.wake_delete,
+                    "/api/board/save": morpheus.board_store, "/api/board/delete": self.board_delete,
+                    "/api/board/render": self.board_render, "/api/board/picture": self.board_picture}
         if self.path not in handlers:
             return self.send_error(404)
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             handler = handlers[self.path]
-            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat"):
+            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat", "/api/wake", "/api/board/render"):
                 # runs on after the page is gone (a reload mid-render); the page polls /api/job/<id> and finds it again
                 job_id = f"{time.time_ns():x}"
                 JOBS[job_id] = {"state": "running"}
@@ -1386,6 +1433,115 @@ class Handler(BaseHTTPRequestHandler):
                                     ghost=ghost, source_ref=source_ref, progress=progress_for(req),
                                     loras=req["loras"] if isinstance(req.get("loras"), list) else None)
         return ghost_keep(meta) if ghost else meta
+
+    def wake(self, req):
+        """Wake your dream: a gallery picture, a motion prompt and a negative prompt become a 2 s clip."""
+        source, preset = str(req.get("source", "")), req.get("preset")
+        sets = req.get("sets")
+        if not isinstance(sets, list) or not 1 <= len(sets) <= 5:
+            raise ValueError("Please use one to five prompt tabs.")
+        sets = [{"prompt": str(x.get("prompt", "")).strip(), "negative": str(x.get("negative", "")).strip()} for x in sets]
+        if not all(x["prompt"] for x in sets):
+            raise ValueError("Please describe the motion in every tab.")
+        if preset not in morpheus.VIDEO_PRESETS:
+            raise ValueError("Please pick Low or High.")
+        if not morpheus.video_installed():
+            raise ValueError("The Wan 2.2 DaSiWa models are not installed.")
+        if source.startswith("upload:"):
+            source = self.keep_upload(source.removeprefix("upload:"))
+        picture = (morpheus.OUTPUT / source).resolve()
+        if source.startswith("ghost/") or morpheus.OUTPUT.resolve() not in picture.parents or not picture.is_file():
+            raise ValueError("Please pick a saved picture.")
+        if preset != "low":  # chaining is Low only
+            sets = sets[:1]
+        length = len(sets) * 2  # each tab is one 2 s part
+        job = req.get("_job", {})
+        job["phase"] = "Waiting for the GPU"
+        on_part, progress = self.wake_stage(job)
+        with gpu:
+            if job.get("_stop"):
+                raise ValueError("Stopped.")
+            job["phase"] = "Starting ComfyUI"
+            ensure_video_comfy()
+            job["phase"] = "Loading models"
+            return morpheus.run_video(picture, source, sets, preset, length, lambda: job.get("_stop"), progress, on_part)
+
+    def wake_stage(self, job):
+        """The job's progress across 2 s parts; returns on_part and the step callback."""
+        stage = {"offset": 0, "last": 0, "label": "Rendering"}
+
+        def on_part(n, parts):
+            stage["label"] = f"Rendering part {n} of {parts}" if parts > 1 else "Rendering"
+            stage["total"] = parts * 4
+            job["phase"] = "Loading models" if n == 1 else stage["label"]
+
+        def progress(step=None, total=None, preview=None):
+            if step is None:
+                return
+            if step < stage["last"]:  # the second expert counts from 1 again
+                stage["offset"] += stage["last"]
+            stage["last"] = step
+            job["step"], job["total"] = min(stage["offset"] + step, stage["total"]), stage["total"]
+            job["phase"] = "Finishing the part" if stage["offset"] + step >= 4 and (stage["offset"] + step) % 4 == 0 else stage["label"]
+        return on_part, progress
+
+    def keep_upload(self, upload_id):
+        """A picture from the PC, copied to output/uploads so it outlives the temp folder; returns its path under output."""
+        upload = UPLOADS / Path(upload_id).name
+        try:
+            with Image.open(upload) as im:
+                (morpheus.OUTPUT / "uploads").mkdir(exist_ok=True)
+                source = f"uploads/wake_{upload.name}.png"
+                im.convert("RGB").save(morpheus.OUTPUT / source)
+        except OSError:
+            raise ValueError("This file is not a picture, or it is gone. Please open it again.")
+        return source
+
+    def board_picture(self, req):
+        return {"source": self.keep_upload(str(req.get("upload", "")))}
+
+    def board_delete(self, req):
+        morpheus.board_delete(str(req.get("id", "")))
+        return {"ok": True}
+
+    def board_render(self, req):
+        """Render a storyboard, all of it or up to one shot. Stops through /api/wake/stop like a clip."""
+        if not morpheus.video_installed():
+            raise ValueError("The Wan 2.2 DaSiWa models are not installed.")
+        board_id, shot = str(req.get("id", "")), req.get("shot")
+        job = req.get("_job", {})
+        job["phase"] = "Waiting for the GPU"
+        on_part, progress = self.wake_stage(job)
+
+        def part(n, parts):
+            on_part(n, parts)
+            job["rendered"] = n - 1  # tells the page to fetch the board again
+
+        with gpu:
+            if job.get("_stop"):
+                raise ValueError("Stopped.")
+            job["phase"] = "Starting ComfyUI"
+            ensure_video_comfy()
+            job["phase"] = "Loading models"
+            morpheus.board_render(board_id, shot, lambda: job.get("_stop"), progress, part)
+        return morpheus.board_view(morpheus.board_load(board_id))
+
+    def wake_stop(self, req):
+        job = JOBS.get(str(req.get("job", "")))
+        if job:
+            job["_stop"] = True
+        return {"ok": bool(job)}
+
+    def wake_delete(self, req):
+        """A clip and its sidecar. The source picture stays in the gallery."""
+        name = Path(str(req.get("video", ""))).name
+        clip = (morpheus.VIDEO_DIR / name).resolve()
+        if clip.parent != morpheus.VIDEO_DIR.resolve() or clip.suffix != ".mp4" or not clip.is_file():
+            raise ValueError("This clip is gone.")
+        clip.with_suffix(".json").unlink(missing_ok=True)
+        clip.with_name(f"{clip.stem}_thumb.jpg").unlink(missing_ok=True)
+        clip.unlink()
+        return {"ok": True}
 
     def upload(self):
         """Store a raw upload (the video) in chunks and hand back its id."""

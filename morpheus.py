@@ -9,6 +9,8 @@ Styles add a prompt prefix and, for pixel art, a post-processing pass that snaps
 image onto a real pixel grid with a limited palette (diffusion models only fake it).
 The web UI (server.py) uses the same run() as the command line.
 """
+import shutil
+import hashlib
 import argparse
 import asyncio
 import json
@@ -223,6 +225,18 @@ MODELS = {
         "workflow": sdxl_workflow("JANKUTrainedChenkinNoobai_v50.safetensors", "euler_ancestral", "normal", 5.0,
                                   "nsfw, worst quality, low quality, " + SDXL_NEGATIVE,
                                   prefix="masterpiece, best quality, absurdres, "),
+    },
+    # civitai.com/models/1025051 Illustrij v21 (Illustrious merge, VAE baked in); the author's v20 settings: Euler a, 30 steps,
+    # cfg 7, their quality tags. File needs a Civitai login to download.
+    "illustrij-v21": {
+        "label": "Illustrij v21 (SDXL)",
+        "note": "Hybrid anime and comic, 2.5D toward semi-real, Danbooru tags",
+        "files": ["checkpoints/Illustrijv21.safetensors"],
+        "steps": 30,
+        "manual_only": True,  # the chat doesn't offer it
+        "workflow": sdxl_workflow("Illustrijv21.safetensors", "euler_ancestral", "normal", 7.0,
+                                  "worst quality, bad quality, " + SDXL_NEGATIVE,
+                                  prefix="masterpiece, best quality, "),
     },
     # civitai.com/models/4384 DreamShaper 8, SD 1.5: trained at 512 px, so "pixels" renders the picked format at about
     # 0.4 MP (1024 px would double bodies and faces); DPM++ 2M Karras, cfg 7
@@ -614,6 +628,458 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
     if args:
         meta["loras"] = used
     return keep(meta, img, img, out, name, ghost)
+
+
+# ---------- Wake your dream: a picture and a motion prompt become a 2 s clip (Wan 2.2 14B DaSiWa, see the vault seed) ----------
+VIDEO_DIR = OUTPUT / "videos"
+VIDEO_HIGH = "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q4_K_M-fix.gguf"
+VIDEO_LOW = "DaSiWa_Wan22_I2V_14B_LOW_v11_Q4_K_M-fix.gguf"
+VIDEO_PRESETS = {"low": {"label": "Low", "note": "576 × 1024 · about 3 min", "size": (576, 1024)},
+                 "high": {"label": "High", "note": "720 × 1280 · about 13 min", "size": (720, 1280)}}
+VIDEO_FRAMES, VIDEO_FPS = 33, 16  # 2 s
+VIDEO_NEGATIVE = ("vivid colors, overexposed, static, blurry details, subtitles, style, artwork, painting, still image, grey overall, "
+                  "worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, bad hands, bad face, malformed limbs, "
+                  "fused fingers, motionless frame, cluttered background")
+VIDEO_MIN_RAM = 3 * 1024**3  # below this ComfyUI goes, not the desktop
+
+
+def video_workflow(image: str, prompt: str, negative: str, width: int, height: int, seed: int, prefix: str, end: str | None = None,
+                   frames: int = VIDEO_FRAMES) -> dict:
+    """The two-expert graph: HIGH for the first two steps, LOW for the last two. The speed-up is baked into both.
+    With end, the clip must also arrive on that picture (a bridge between two shots)."""
+    def expert(name):
+        return {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": name}}
+
+    def sample(model, latent, start, end, first):
+        return {"class_type": "KSamplerAdvanced", "inputs": {
+            "model": model, "positive": ["13", 0], "negative": ["13", 1], "latent_image": latent,
+            "add_noise": "enable" if first else "disable", "noise_seed": seed if first else 0, "steps": 4, "cfg": 1.0,
+            "sampler_name": "euler", "scheduler": "simple", "start_at_step": start, "end_at_step": end,
+            "return_with_leftover_noise": "enable" if first else "disable"}}
+    graph = {
+        "1": expert(VIDEO_HIGH),
+        "2": expert(VIDEO_LOW),
+        "20": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": 5.0}},
+        "21": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 5.0}},
+        "7": {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
+        "8": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["7", 0], "text": prompt}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["7", 0], "text": negative}},
+        "12": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "13": {"class_type": "WanImageToVideo", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "vae": ["8", 0],
+               "start_image": ["12", 0], "width": width, "height": height, "length": frames, "batch_size": 1}},
+        "14": sample(["20", 0], ["13", 2], 0, 2, True),
+        "15": sample(["21", 0], ["14", 0], 2, 10000, False),
+        "16": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["15", 0], "vae": ["8", 0], "tile_size": 256,
+               "overlap": 64, "temporal_size": max(64, (frames + 16) // 16 * 16), "temporal_overlap": 4}},  # above the clip length: a split shows as a quality snap
+        "17": {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": VIDEO_FPS}},
+        "10": {"class_type": "SaveVideo", "inputs": {"video": ["17", 0], "filename_prefix": prefix, "format": "auto", "codec": "auto"}},
+        # the last frame as PNG, before the video encoder touches it: the next part starts from this one
+        "30": {"class_type": "ImageFromBatch", "inputs": {"image": ["16", 0], "batch_index": frames - 1, "length": 1}},
+        "11": {"class_type": "SaveImage", "inputs": {"images": ["30", 0], "filename_prefix": prefix}},
+    }
+    if end:
+        graph["31"] = {"class_type": "LoadImage", "inputs": {"image": end}}
+        graph["13"]["class_type"] = "WanFirstLastFrameToVideo"
+        graph["13"]["inputs"]["end_image"] = ["31", 0]
+    return graph
+
+
+def video_installed() -> bool:
+    return all((COMFY_MODELS / "unet" / f).is_file() for f in (VIDEO_HIGH, VIDEO_LOW))
+
+
+def stop_comfy() -> None:
+    """Kill whatever listens on ComfyUI's port and wait until it is gone. /interrupt only acts between steps."""
+    import psutil
+    for c in psutil.net_connections(kind="tcp"):
+        if c.laddr and c.laddr.port == 8188 and c.status == psutil.CONN_LISTEN and c.pid:
+            psutil.Process(c.pid).kill()
+    for _ in range(40):
+        if not comfy_up():
+            return
+        time.sleep(0.25)
+
+
+def video_part(graph: dict, stopped, progress) -> tuple[Path, Path]:
+    """Render one graph, with the same stop and RAM guards throughout; returns ComfyUI's clip and last-frame PNG."""
+    import psutil
+    client, done = uuid.uuid4().hex, threading.Event()
+    if progress:
+        ready = threading.Event()
+        threading.Thread(target=watch, args=(client, progress, ready, done), daemon=True).start()
+        ready.wait(3)
+    try:
+        prompt_id = call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"]
+        while True:
+            if stopped():
+                stop_comfy()
+                raise ValueError("Stopped.")
+            if psutil.virtual_memory().available < VIDEO_MIN_RAM:
+                stop_comfy()
+                raise RuntimeError("Stopped to protect the PC: less than 3 GB RAM left.")
+            hist = call(f"/history/{prompt_id}").get(prompt_id)
+            if hist and hist.get("status", {}).get("status_str") == "error":
+                raise RuntimeError(f"ComfyUI error: {json.dumps(hist['status'])[:1500]}")
+            if hist and hist.get("status", {}).get("completed"):
+                break
+            time.sleep(0.5)
+    finally:
+        done.set()
+    clip, last = hist["outputs"]["10"]["images"][0], hist["outputs"]["11"]["images"][0]
+    return tuple(ROOT / "ComfyUI" / "output" / f["subfolder"] / f["filename"] for f in (clip, last))
+
+
+def video_frames(path: Path) -> list:
+    import av
+    with av.open(str(path)) as c:
+        return [f.to_image() for f in c.decode(video=0)]
+
+
+def video_write(frames: list, dest: Path) -> None:
+    """Encode to a temp name first, so a clip on disk is always a whole one."""
+    import av
+    tmp = dest.with_suffix(".tmp.mp4")
+    with av.open(str(tmp), "w") as c:
+        v = c.add_stream("libx264", rate=VIDEO_FPS)
+        v.width, v.height, v.pix_fmt = frames[0].width, frames[0].height, "yuv420p"
+        v.options = {"crf": "17"}
+        for f in frames:
+            c.mux(v.encode(av.VideoFrame.from_image(f).reformat(format="yuv420p")))
+        c.mux(v.encode())
+    tmp.replace(dest)
+
+
+def run_video(source: Path, source_name: str, sets: list[dict], preset: str, length: int = 2, stopped=lambda: False,
+              progress=None, on_part=None) -> dict:
+    """Render a clip into output/videos in 2 s parts: each part starts on the last frame of the one before and takes its
+    own prompt set from sets (the last set repeats if the clip is longer). The clip and
+    its sidecar are rewritten after every part, so stopping keeps what is done. stopped() true, or RAM nearly gone, kills ComfyUI."""
+    width, height = VIDEO_PRESETS[preset]["size"]
+    with Image.open(source) as im:
+        if im.width > im.height:
+            width, height = height, width  # a landscape picture stays landscape
+        start = im.convert("RGB")
+    seed = random.randrange(2**32 - 16)
+    name = f"{time.strftime('%Y%m%d-%H%M%S')}_wake_{preset}_{slug(sets[0]['prompt'])}_{seed}"
+    staged = COMFY_INPUT / "morpheus" / f"wake_{time.time_ns():x}.png"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    began, parts, frames, meta = time.time(), length // 2, [], {}
+    try:
+        for n in range(parts):
+            if on_part:
+                on_part(n + 1, parts)
+            start.save(staged)
+            use = sets[min(n, len(sets) - 1)]
+            graph = video_workflow(f"morpheus/{staged.name}", use["prompt"], use["negative"], width, height, seed + n, f"morpheus/{name}_p{n}")
+            made, last = video_part(graph, stopped, progress)
+            part = video_frames(made)
+            made.unlink(missing_ok=True)
+            frames += part if n == 0 else part[1:]  # the first frame repeats the last one of the part before
+            with Image.open(last) as im:
+                start = im.convert("RGB")
+            last.unlink(missing_ok=True)
+            video_write(frames, VIDEO_DIR / f"{name}.mp4")
+            frames[len(frames) // 2].resize((160, round(160 * height / width))).save(VIDEO_DIR / f"{name}_thumb.jpg", quality=85)
+            meta = {"video": f"videos/{name}.mp4", "thumb": f"videos/{name}_thumb.jpg", "source": source_name, "prompt": sets[0]["prompt"], "sets": sets, "preset": preset,
+                    "width": width, "height": height, "seed": seed, "length": (n + 1) * 2, "seconds": round(time.time() - began),
+                    "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            (VIDEO_DIR / f"{name}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        staged.unlink(missing_ok=True)
+    return meta
+
+
+# ---------- Storyboard: a scene of 2 s shots, kept as JSON in output/boards/<id>/board.json next to its renders ----------
+BOARD_DIR = OUTPUT / "boards"
+BOARD_LOCK = threading.RLock()
+SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length")  # what the page may change
+RENDER_FIELDS = ("clip", "last", "thumb", "seconds", "done", "bridge", "bridge_seconds", "bridge_done")  # what only a render writes
+SHOT_LENGTHS = (2, 3, 4, 5)  # seconds; Wan takes 4n + 1 frames
+TRANSITIONS = ("cut", "fade", "flash", "bridge")
+FLASH_COLORS = {"violet": (150, 70, 255), "pink": (255, 60, 200), "cyan": (60, 230, 255), "white": (255, 255, 255), "black": (0, 0, 0)}
+
+
+def transition_of(raw) -> dict:
+    """How a shot that starts on a new picture is reached from the shot before."""
+    t = raw if isinstance(raw, dict) else {}
+    try:
+        seconds = min(2.0, max(0.1, float(t.get("seconds", 0.5))))
+    except (TypeError, ValueError):
+        seconds = 0.5
+    return {"type": t.get("type") if t.get("type") in TRANSITIONS else "cut", "seconds": seconds,
+            "color": t.get("color") if t.get("color") in FLASH_COLORS else "violet", "prompt": str(t.get("prompt") or ""),
+            "seed": t["seed"] if isinstance(t.get("seed"), int) else random.randrange(2**32)}
+
+
+def has_bridge(board: dict, i: int) -> bool:
+    s = board["shots"][i]
+    return i > 0 and s["start"] == "picture" and s.get("transition", {}).get("type") == "bridge"
+
+
+def bridge_sigs(board: dict) -> dict:
+    """Fingerprint per bridge: both shots it joins, its prompt and seed. Keyed by the index of the shot it leads into."""
+    sigs, out = board_sigs(board), {}
+    for i, s in enumerate(board["shots"]):
+        if has_bridge(board, i):
+            t = s["transition"]
+            out[i] = hashlib.sha1(json.dumps([sigs[i - 1], sigs[i], t["prompt"], t["seed"]]).encode("utf-8")).hexdigest()[:12]
+    return out
+
+
+def scene_sig(board: dict) -> str:
+    """All that shapes the joined scene: a changed fade only needs a new join, no render."""
+    cuts = [s.get("transition") if s["start"] == "picture" else None for s in board["shots"]]
+    return hashlib.sha1(json.dumps([board_sigs(board), bridge_sigs(board), cuts]).encode("utf-8")).hexdigest()[:12]
+
+
+def board_file(board_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-z]{1,40}", str(board_id)):
+        raise ValueError("This board does not exist.")
+    return BOARD_DIR / board_id / "board.json"
+
+
+def board_load(board_id: str) -> dict:
+    try:
+        return json.loads(board_file(board_id).read_text(encoding="utf-8"))
+    except OSError:
+        raise ValueError("This board does not exist.")
+
+
+def board_write(board: dict) -> None:
+    """Through a temp name, so a board on disk is always a whole one."""
+    path = board_file(board["id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    board["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(board, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def board_sigs(board: dict) -> list[str]:
+    """A fingerprint per shot of all that shapes its render; a continuing shot inherits the one before, so a change runs down the chain."""
+    sigs, before = [], ""
+    for i, s in enumerate(board["shots"]):
+        chained = i > 0 and s["start"] == "continue"
+        length = s.get("length", 2)  # a 2 s shot keeps the fingerprint it had before lengths existed
+        text = json.dumps([board.get("character", ""), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]] + ([length] if length != 2 else []))
+        before = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+        sigs.append(before)
+    return sigs
+
+
+def board_view(board: dict) -> dict:
+    """The board plus what is true right now: each shot's status, and whether the joined scene still matches."""
+    view, sigs = json.loads(json.dumps(board)), board_sigs(board)
+    for s, sig in zip(view["shots"], sigs):
+        s["status"] = "waiting" if not s.get("clip") else "rendered" if s.get("done") == sig else "outdated"
+    for i, sig in bridge_sigs(board).items():
+        s = view["shots"][i]
+        s["bridge_status"] = "waiting" if not s.get("bridge") else "rendered" if s.get("bridge_done") == sig else "outdated"
+    if view.get("scene") and view["scene"].get("sig") != scene_sig(board):
+        view["scene"]["outdated"] = True
+    return view
+
+
+def board_list() -> list[dict]:
+    boards = []
+    BOARD_DIR.mkdir(parents=True, exist_ok=True)
+    for f in BOARD_DIR.glob("*/board.json"):
+        try:
+            b = json.loads(f.read_text(encoding="utf-8"))
+            boards.append({"id": b["id"], "title": b["title"], "shots": len(b["shots"]), "updated": b.get("updated", ""), "scene": b.get("scene")})
+        except (OSError, json.JSONDecodeError, KeyError):
+            continue
+    return sorted(boards, key=lambda b: b["updated"], reverse=True)
+
+
+def board_store(req: dict) -> dict:
+    """Save the page's edits. Render results stay the server's; a shot that left the board takes its files along."""
+    with BOARD_LOCK:
+        board_id = str(req.get("id") or f"{time.time_ns():x}")
+        old = board_load(board_id) if board_file(board_id).is_file() else {"id": board_id, "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "shots": []}
+        before = {s["id"]: s for s in old["shots"]}
+        shots = []
+        for raw in req.get("shots") or []:
+            s = {k: raw.get(k) for k in SHOT_FIELDS}
+            if not re.fullmatch(r"[0-9a-z]{1,40}", str(s["id"])):
+                raise ValueError("A shot has a broken id.")
+            s.update(label=str(s["label"] or "").strip(), prompt=str(s["prompt"] or ""), negative=str(s["negative"] or ""),
+                     source=s["source"] or None, start="continue" if s["start"] == "continue" else "picture")
+            s["seed"] = s["seed"] if isinstance(s["seed"], int) else random.randrange(2**32)
+            s["transition"] = transition_of(s["transition"])
+            s["length"] = s["length"] if s["length"] in SHOT_LENGTHS else 2
+            s.update({k: before[s["id"]][k] for k in RENDER_FIELDS if k in before.get(s["id"], {})})
+            shots.append(s)
+        for sid in set(before) - {s["id"] for s in shots}:
+            for f in (before[sid].get("clip"), before[sid].get("last"), before[sid].get("thumb"), before[sid].get("bridge")):
+                if f:
+                    (OUTPUT / f).unlink(missing_ok=True)
+        old.update(title=str(req.get("title") or "Untitled board").strip()[:80], character=str(req.get("character") or ""), shots=shots)
+        board_write(old)
+        return board_view(old)
+
+
+def board_delete(board_id: str) -> None:
+    with BOARD_LOCK:
+        folder = board_file(board_id).parent
+        if folder.is_dir():
+            shutil.rmtree(folder)
+
+
+def board_size(board: dict) -> tuple[int, int]:
+    """Low only; a landscape first picture makes the whole board landscape."""
+    width, height = VIDEO_PRESETS["low"]["size"]
+    first = board["shots"][0] if board["shots"] else {}
+    if first.get("source") and (OUTPUT / first["source"]).is_file():
+        with Image.open(OUTPUT / first["source"]) as im:
+            if im.width > im.height:
+                return height, width
+    return width, height
+
+
+def board_check(board: dict, upto: int) -> None:
+    for i, s in enumerate(board["shots"][:upto + 1]):
+        name = f"Shot {i + 1}"
+        if not s["prompt"].strip():
+            raise ValueError(f"{name} needs a motion prompt.")
+        if i == 0 or s["start"] == "picture":
+            path = (OUTPUT / (s["source"] or "")).resolve()
+            if OUTPUT.resolve() not in path.parents or not path.is_file():
+                raise ValueError(f"{name} needs a picture.")
+
+
+def board_bridge(board: dict, i: int, sig: str, stopped, progress) -> None:
+    """A new clip from the last frame of shot i-1 to the first frame of shot i."""
+    s, before, folder = board["shots"][i], board["shots"][i - 1], board_file(board["id"]).parent
+    width, height = board_size(board)
+    tag = f"bridge_{time.time_ns():x}"
+    first, last = COMFY_INPUT / "morpheus" / f"{tag}_a.png", COMFY_INPUT / "morpheus" / f"{tag}_b.png"
+    first.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(OUTPUT / before["last"]) as im:
+        im.convert("RGB").resize((width, height)).save(first)
+    video_frames(OUTPUT / s["clip"])[0].resize((width, height)).save(last)
+    motion = s["transition"]["prompt"].strip() or "One smooth continuous camera move from the first picture to the second."
+    prompt = ". ".join(x.strip().rstrip(".") for x in (board.get("character", ""), motion) if x.strip()) + "."
+    began = time.time()
+    try:
+        graph = video_workflow(f"morpheus/{first.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["transition"]["seed"],
+                               f"morpheus/{tag}", f"morpheus/{last.name}")
+        made, end = video_part(graph, stopped, progress)
+    finally:
+        first.unlink(missing_ok=True)
+        last.unlink(missing_ok=True)
+    frames = video_frames(made)
+    made.unlink(missing_ok=True)
+    end.unlink(missing_ok=True)
+    video_write(frames, folder / f"{s['id']}_bridge.mp4")
+    with BOARD_LOCK:
+        now = board_load(board["id"])
+        for x in now["shots"]:
+            if x["id"] == s["id"]:
+                x.update(bridge=f"boards/{board['id']}/{s['id']}_bridge.mp4", bridge_seconds=round(time.time() - began), bridge_done=sig)
+        board_write(now)
+
+
+def board_shot(board: dict, i: int, sig: str, stopped, progress) -> None:
+    """Render one shot into the board's folder and record it on the newest board, which may have been edited meanwhile."""
+    from PIL import ImageOps
+    s, folder = board["shots"][i], board_file(board["id"]).parent
+    width, height = board_size(board)
+    chained = i > 0 and s["start"] == "continue"
+    with Image.open(OUTPUT / (board["shots"][i - 1]["last"] if chained else s["source"])) as im:
+        start = ImageOps.fit(im.convert("RGB"), (width, height), Image.LANCZOS)
+    staged = COMFY_INPUT / "morpheus" / f"board_{time.time_ns():x}.png"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    start.save(staged)
+    prompt = ". ".join(x.strip().rstrip(".") for x in (board.get("character", ""), s["prompt"]) if x.strip()) + "."
+    began = time.time()
+    try:
+        graph = video_workflow(f"morpheus/{staged.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["seed"], f"morpheus/board_{s['id']}",
+                               frames=s.get("length", 2) * VIDEO_FPS + 1)
+        made, last = video_part(graph, stopped, progress)
+    finally:
+        staged.unlink(missing_ok=True)
+    frames = video_frames(made)
+    made.unlink(missing_ok=True)
+    video_write(frames, folder / f"{s['id']}.mp4")
+    shutil.move(str(last), folder / f"{s['id']}_last.png")
+    frames[len(frames) // 2].resize((160, round(160 * height / width))).save(folder / f"{s['id']}_thumb.jpg", quality=85)
+    base = f"boards/{board['id']}/{s['id']}"
+    with BOARD_LOCK:
+        now = board_load(board["id"])
+        for x in now["shots"]:
+            if x["id"] == s["id"]:
+                x.update(clip=f"{base}.mp4", last=f"{base}_last.png", thumb=f"{base}_thumb.jpg", seconds=round(time.time() - began), done=sig)
+        board_write(now)
+
+
+def board_join(board_id: str) -> None:
+    """All shots and bridges current: join them with their transitions. A fade overlaps the shots; a flash passes through a colour."""
+    board = board_load(board_id)
+    sigs, bridges = board_sigs(board), bridge_sigs(board)
+    if not board["shots"] or any(s.get("done") != sig for s, sig in zip(board["shots"], sigs)):
+        return
+    if any(board["shots"][i].get("bridge_done") != sig for i, sig in bridges.items()):
+        return
+    frames = []
+    for i, s in enumerate(board["shots"]):
+        part = video_frames(OUTPUT / s["clip"])
+        t = s["transition"] if i and s["start"] == "picture" else None
+        if i and not t:
+            frames += part[1:]  # a continuing shot's first frame repeats the last one before it
+        elif not t or t["type"] == "cut":
+            frames += part
+        elif t["type"] == "bridge":
+            frames += video_frames(OUTPUT / s["bridge"])[1:-1] + part  # its ends are the two neighbouring frames
+        elif t["type"] == "fade":
+            n = min(round(t["seconds"] * VIDEO_FPS), len(frames) - 1, len(part) - 1)
+            for k in range(n):
+                frames[k - n] = Image.blend(frames[k - n], part[k], (k + 1) / (n + 1))
+            frames += part[n:]
+        else:
+            n = min(max(1, round(t["seconds"] * VIDEO_FPS / 2)), len(frames) - 1, len(part) - 1)
+            color = Image.new("RGB", part[0].size, FLASH_COLORS[t["color"]])
+            for k in range(n):
+                frames[k - n] = Image.blend(frames[k - n], color, (k + 1) / n)
+                part[k] = Image.blend(color, part[k], (k + 1) / (n + 1))
+            frames += part
+    video_write(frames, board_file(board_id).parent / "scene.mp4")
+    with BOARD_LOCK:
+        now = board_load(board_id)
+        now["scene"] = {"video": f"boards/{board_id}/scene.mp4", "thumb": now["shots"][0]["thumb"], "sig": scene_sig(board), "length": len(frames) / VIDEO_FPS,
+                        "seconds": sum(s.get("seconds", 0) + s.get("bridge_seconds", 0) for s in now["shots"]), "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        board_write(now)
+
+
+def board_render(board_id: str, shot: str | None, stopped, progress, on_part) -> None:
+    """Render what is not current, up to the given shot; with no shot given, all of it, then the bridges and the join.
+    Finished work is kept, so stopping loses only the running clip."""
+    def todo(board):
+        sigs = board_sigs(board)
+        upto = next((i for i, s in enumerate(board["shots"]) if s["id"] == shot), len(board["shots"]) - 1)
+        work = [(board_shot, i, sigs[i]) for i, s in enumerate(board["shots"][:upto + 1]) if s.get("done") != sigs[i]]
+        if not shot:
+            work += [(board_bridge, i, sig) for i, sig in bridge_sigs(board).items() if board["shots"][i].get("bridge_done") != sig]
+        return upto, work
+
+    board = board_load(board_id)
+    upto, work = todo(board)
+    board_check(board, upto)
+    parts, n = len(work), 0
+    while True:
+        board = board_load(board_id)
+        upto, work = todo(board)
+        if not work:
+            break
+        board_check(board, upto)
+        n += 1
+        on_part(min(n, parts), parts)
+        render, i, sig = work[0]
+        render(board, i, sig, stopped, progress)
+    if not shot:
+        board_join(board_id)
 
 
 def main() -> None:
