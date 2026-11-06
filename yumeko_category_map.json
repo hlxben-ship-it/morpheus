@@ -1,0 +1,484 @@
+{
+ "schema_version": 1,
+ "single_choice": [
+  "shot",
+  "view",
+  "body_position",
+  "lighting"
+ ],
+ "no_pose_shots": [
+  "portrait",
+  "close-up"
+ ],
+ "aliases": {
+  "closeup": "close-up",
+  "braided_hair": "braid",
+  "tea": "tea_cup"
+ },
+ "tags": [
+  {
+   "tag": "portrait",
+   "yumeko_category": "shot",
+   "facet": "shot"
+  },
+  {
+   "tag": "close-up",
+   "yumeko_category": "shot",
+   "facet": "shot"
+  },
+  {
+   "tag": "upper_body",
+   "yumeko_category": "shot",
+   "facet": "shot"
+  },
+  {
+   "tag": "cowboy_shot",
+   "yumeko_category": "shot",
+   "facet": "shot"
+  },
+  {
+   "tag": "full_body",
+   "yumeko_category": "shot",
+   "facet": "shot"
+  },
+  {
+   "tag": "from_side",
+   "yumeko_category": "pose",
+   "facet": "view"
+  },
+  {
+   "tag": "from_behind",
+   "yumeko_category": "pose",
+   "facet": "view"
+  },
+  {
+   "tag": "from_above",
+   "yumeko_category": "pose",
+   "facet": "view"
+  },
+  {
+   "tag": "from_below",
+   "yumeko_category": "pose",
+   "facet": "view"
+  },
+  {
+   "tag": "three_quarter_view",
+   "yumeko_category": "pose",
+   "facet": "view"
+  },
+  {
+   "tag": "standing",
+   "yumeko_category": "pose",
+   "facet": "body_position"
+  },
+  {
+   "tag": "sitting",
+   "yumeko_category": "pose",
+   "facet": "body_position"
+  },
+  {
+   "tag": "walking",
+   "yumeko_category": "pose",
+   "facet": "body_position"
+  },
+  {
+   "tag": "kneeling",
+   "yumeko_category": "pose",
+   "facet": "body_position"
+  },
+  {
+   "tag": "leaning_forward",
+   "yumeko_category": "pose",
+   "facet": "body_position"
+  },
+  {
+   "tag": "smile",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "light_smile",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "open_mouth",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "closed_eyes",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "looking_to_the_side",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "laughing",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "serious",
+   "yumeko_category": "expression",
+   "facet": "expression"
+  },
+  {
+   "tag": "library",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "forest",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "beach",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "city_street",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "garden",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "cafe",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "rooftop",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "castle_interior",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "bedroom_interior",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "classroom",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "mountain",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "snowfield",
+   "yumeko_category": "setting",
+   "facet": "setting"
+  },
+  {
+   "tag": "daytime",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "sunset",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "night",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "moonlight",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "candlelight",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "overcast",
+   "yumeko_category": "lighting",
+   "facet": "lighting"
+  },
+  {
+   "tag": "long_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "short_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "medium_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "black_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "white_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "blonde_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "brown_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "red_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "blue_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "pink_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "purple_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "streaked_hair",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "braid",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "ponytail",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "twintails",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "bangs",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "blue_eyes",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "red_eyes",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "green_eyes",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "purple_eyes",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "brown_eyes",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "pale_skin",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "tattoo",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "mole_under_eye",
+   "yumeko_category": "appearance"
+  },
+  {
+   "tag": "dress",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "white_dress",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "black_dress",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "school_uniform",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "jacket",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "black_jacket",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "cape",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "corset",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "skirt",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "shirt",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "sweater",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "kimono",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "boots",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "high_heels",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "gloves",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "thighhighs",
+   "yumeko_category": "clothing"
+  },
+  {
+   "tag": "book",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "umbrella",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "tea_cup",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "staff",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "sword",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "flower",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "phone",
+   "yumeko_category": "prop"
+  },
+  {
+   "tag": "holding_book",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "holding_umbrella",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "arms_crossed",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "hand_on_hip",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "waving",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "reading",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "running",
+   "yumeko_category": "action"
+  },
+  {
+   "tag": "simple_background",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "white_background",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "cityscape",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "sky",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "clouds",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "stars",
+   "yumeko_category": "background"
+  },
+  {
+   "tag": "centered_composition",
+   "yumeko_category": "composition"
+  },
+  {
+   "tag": "wide_shot",
+   "yumeko_category": "composition"
+  },
+  {
+   "tag": "dutch_angle",
+   "yumeko_category": "composition"
+  },
+  {
+   "tag": "cyberpunk",
+   "yumeko_category": "style"
+  },
+  {
+   "tag": "fantasy",
+   "yumeko_category": "style"
+  },
+  {
+   "tag": "watercolor",
+   "yumeko_category": "style"
+  }
+ ]
+}

@@ -100,16 +100,19 @@ def flux2_klein_workflow(prompt: str, width: int, height: int, seed: int, steps:
     }
 
 
-def sdxl_workflow(ckpt: str, sampler: str, scheduler: str, cfg: float, negative: str, prefix: str = "", clip_skip: int = 1):
+def sdxl_workflow(ckpt: str, sampler: str, scheduler: str, cfg: float, negative: str, prefix: str = "", clip_skip: int = 1,
+                  hires: float = 1.0):
     """Build a workflow function for an SDXL (or SD 1.5) checkpoint (model, text encoders and VAE in one file).
 
     negative is the default; a call can pass its own (Manual's Negative field). build.negative exposes the default.
     clip_skip 2 reads the text encoder's second-to-last layer, which Pony was trained with.
+    hires above 1 is a hires fix: the picture is scaled up in latent space and sampled again at half strength, for
+    SD 1.5, whose small native size looks soft. width and height stay the first pass, the output is hires times larger.
     """
     default, default_prefix = negative, prefix
 
     def build(prompt: str, width: int, height: int, seed: int, steps: int, negative: str | None = None,
-              prefix: str | None = None) -> dict:
+              prefix: str | None = None, loras: list | None = None) -> dict:
         negative = default if negative is None else negative
         prefix = default_prefix if prefix is None else prefix
         clip = ["1", 1] if clip_skip == 1 else ["2", 0]
@@ -126,6 +129,18 @@ def sdxl_workflow(ckpt: str, sampler: str, scheduler: str, cfg: float, negative:
         }
         if clip_skip != 1:
             graph["2"] = {"class_type": "CLIPSetLastLayer", "inputs": {"clip": ["1", 1], "stop_at_clip_layer": -clip_skip}}
+        if hires != 1:
+            graph["11"] = {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["8", 0], "upscale_method": "nearest-exact", "scale_by": hires}}
+            graph["12"] = {"class_type": "KSampler", "inputs": {
+                "model": ["1", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["11", 0],
+                "seed": seed, "steps": max(10, steps // 2), "cfg": cfg, "sampler_name": sampler, "scheduler": scheduler, "denoise": 0.5}}
+            graph["9"]["inputs"]["samples"] = ["12", 0]
+        graph, model = lora_chain(graph, ["1", 0], loras or [])
+        graph["8"]["inputs"]["model"] = model
+        if "12" in graph:
+            graph["12"]["inputs"]["model"] = model
+        triggers = "".join(LORAS[k]["trigger"] + ", " for k in loras or [] if LORAS[k].get("trigger"))
+        graph["5"]["inputs"]["text"] = triggers + graph["5"]["inputs"]["text"]
         return graph
     build.negative, build.prefix = default, default_prefix
     return build
@@ -192,6 +207,8 @@ SDXL_NEGATIVE ="lowres, blurry, out of focus, deformed, bad anatomy, bad hands, 
 # Every workflow ends in node "10" (SaveImage), which generate() reads the result from.
 MODELS = {
     "z-image-turbo": {
+        "category": "realism",
+        "family": "Z-Image",
         "label": "Z-Image-Turbo",
         "note": "Fastest, Apache 2.0",
         "files": ["diffusion_models/z_image_turbo_bf16.safetensors", "text_encoders/qwen_3_4b.safetensors", "vae/ae.safetensors"],
@@ -199,6 +216,8 @@ MODELS = {
         "workflow": zimage_workflow,
     },
     "flux2-klein-4b": {
+        "category": "realism",
+        "family": "FLUX.2",
         "label": "FLUX.2 [klein] 4B",
         "note": "Balanced, Apache 2.0",
         "files": ["diffusion_models/flux-2-klein-4b.safetensors", "text_encoders/qwen_3_4b.safetensors", "vae/flux2-vae.safetensors"],
@@ -206,6 +225,8 @@ MODELS = {
         "workflow": flux2_klein_workflow,
     },
     "noobai-xl": {
+        "category": "manga",
+        "family": "SDXL",
         "label": "NoobAI-XL 1.1 (SDXL)",
         "note": "Anime and illustration, understands Danbooru tags",
         "files": ["checkpoints/NoobAI-XL-v1.1.safetensors"],
@@ -217,6 +238,8 @@ MODELS = {
     # civitai.com/models/1277670 v5.0 (Illustrious/NoobAI/RouWei finetune); author: Euler a, cfg 3-5, 25-30 steps,
     # "nsfw" in the negative for safe pictures
     "janku-v5": {
+        "category": "manga",
+        "family": "SDXL",
         "label": "JANKU v5.0 (SDXL)",
         "note": "Polished modern anime, Danbooru tags, artist styles via \"by name\"",
         "files": ["checkpoints/JANKUTrainedChenkinNoobai_v50.safetensors"],
@@ -229,6 +252,8 @@ MODELS = {
     # civitai.com/models/1025051 Illustrij v21 (Illustrious merge, VAE baked in); the author's v20 settings: Euler a, 30 steps,
     # cfg 7, their quality tags. File needs a Civitai login to download.
     "illustrij-v21": {
+        "category": "manga",
+        "family": "SDXL",
         "label": "Illustrij v21 (SDXL)",
         "note": "Hybrid anime and comic, 2.5D toward semi-real, Danbooru tags",
         "files": ["checkpoints/Illustrijv21.safetensors"],
@@ -241,6 +266,8 @@ MODELS = {
     # civitai.com/models/4384 DreamShaper 8, SD 1.5: trained at 512 px, so "pixels" renders the picked format at about
     # 0.4 MP (1024 px would double bodies and faces); DPM++ 2M Karras, cfg 7
     "dreamshaper-8": {
+        "category": "realism",
+        "family": "SD 1.5",
         "label": "DreamShaper 8 (SD 1.5)",
         "note": "All-rounder: fantasy, portraits, semi-real; small native size",
         "files": ["checkpoints/dreamshaper_8.safetensors"],
@@ -248,11 +275,13 @@ MODELS = {
         "pixels": 512 * 768,
         "manual_only": True,
         "workflow": sdxl_workflow("dreamshaper_8.safetensors", "dpmpp_2m", "karras", 7.0,
-                                  "worst quality, low quality, " + SDXL_NEGATIVE),
+                                  "worst quality, low quality, " + SDXL_NEGATIVE, hires=1.5),
     },
     # civitai.com/models/376130 Nova Anime XL IL v19.0 (Illustrious: NoobAI + Illustrious 2.0 + ChenkinNoob merge);
     # the author's Illustrious settings: Euler a, cfg 4-6, 20-30 steps, their quality tags and negative
     "nova-anime-xl": {
+        "category": "manga",
+        "family": "SDXL",
         "label": "Nova Anime XL v19 (SDXL)",
         "note": "Anime / 2.5D, high contrast, detailed backgrounds; Danbooru tags",
         "files": ["checkpoints/novaAnimeXL_ilV190.safetensors"],
@@ -267,9 +296,82 @@ MODELS = {
                                   prefix="masterpiece, best quality, amazing quality, 4k, very aesthetic, high resolution, "
                                          "ultra-detailed, absurdres, newest, "),
     },
+    # Meina V12, SD 1.5 anime; author: DPM++ 2M Karras 20-60 steps, cfg 4-9, CLIP skip 2, 512x768. Their hires.fix isn't
+    # available here, so this uses their negative for going without it
+    "meina-v12": {
+        "category": "manga",
+        "family": "SD 1.5",
+        "label": "MeinaMix V12 (SD 1.5)",
+        "note": "Soft bright anime; faces want a close framing; small native size",
+        "files": ["checkpoints/MeinaMix_V12.safetensors"],
+        "steps": 30,
+        "pixels": 512 * 768,
+        "manual_only": True,
+        "workflow": sdxl_workflow("MeinaMix_V12.safetensors", "dpmpp_2m", "karras", 7.0,
+                                  "(worst quality:1.6, low quality:1.6), (zombie, sketch, interlocked fingers, comic)", clip_skip=2, hires=1.5),
+    },
+    # RealCartoon3D V18, SD 1.5 3D cartoon; author: Euler a, VAE baked in, 512x768 or 512x904. Author names no steps or cfg, so
+    # 30 and 7 are the usual SD 1.5 values. Their easynegative and badhandv4 embeddings aren't installed and are left out
+    "realcartoon3d-v18": {
+        "category": "manga",
+        "family": "SD 1.5",
+        "label": "RealCartoon3D V18 (SD 1.5)",
+        "note": "3D cartoon look; add Realistic or Cartoon at the front to lean either way; small native size",
+        "files": ["checkpoints/RealCartoon3D_V18.safetensors"],
+        "steps": 30,
+        "pixels": 512 * 768,
+        "manual_only": True,
+        "workflow": sdxl_workflow("RealCartoon3D_V18.safetensors", "euler_ancestral", "normal", 7.0,
+                                  "(bad quality:1.3), (worst quality:1.3), watermark, (blurry)", hires=1.5),
+    },
+    # CetusMix Coda 1, SD 1.5 anime; author: DPM++ 2M Karras 20+ steps, cfg 4-8, CLIP skip 2. Their Pastel VAE, hires.fix and
+    # bad_prompt_v2 embedding aren't available, so this uses the baked VAE and spells out that embedding's kind of negative
+    "cetusmix-coda1": {
+        "category": "manga",
+        "family": "SD 1.5",
+        "label": "CetusMix Coda 1 (SD 1.5)",
+        "note": "Pastel anime; can look soft without an upscale; small native size",
+        "files": ["checkpoints/CetusMix_Coda1.safetensors"],
+        "steps": 25,
+        "pixels": 512 * 768,
+        "manual_only": True,
+        "workflow": sdxl_workflow("CetusMix_Coda1.safetensors", "dpmpp_2m", "karras", 6.0,
+                                  "lowres, bad anatomy, bad hands, (worst quality, low quality:1.4), blurry, text, watermark",
+                                  clip_skip=2, hires=1.5),
+    },
+    # Hassaku XL V3.4, Illustrious line, Fair AI Public License 1.0-SD; author: Euler a, cfg 6, 832x1216 most recommended, "signature"
+    # in the negative. Tag order: number of characters, character, the rest. No metadata or franchise tags. Author names no steps
+    "hassaku-v3-4": {
+        "category": "manga",
+        "family": "SDXL",
+        "label": "Hassaku XL V3.4",
+        "note": "Anime tags: 1girl, character, the rest; no franchise or highres tags",
+        "files": ["checkpoints/hassakuV3_4.safetensors"],
+        "steps": 30,
+        "pixels": 832 * 1216,
+        "manual_only": True,
+        "workflow": sdxl_workflow("hassakuV3_4.safetensors", "euler_ancestral", "normal", 6.0, "signature, " + SDXL_NEGATIVE),
+    },
+    # HC Tai Pony v1.1, an SDXL Pony merge with its VAE baked in (header: hardcore_hentai_pony_v1.1). Author's text is for SD 1.5
+    # sizes (512x768), which don't suit SDXL, so sizes, score tags and CLIP skip 2 follow Pony. From the author: DPM++ 2M Karras, 25-50 steps,
+    # cfg 7, Danbooru tags or sentences, tag only what is visible, generic negative
+    "hc-tai-pony": {
+        "category": "manga",
+        "family": "Pony",
+        "label": "HC Tai Pony v1.1 (SDXL)",
+        "note": "Explicit-leaning Pony: Danbooru tags or sentences, tag only what shows",
+        "files": ["checkpoints/hc_tai_pony_v1.1.safetensors"],
+        "steps": 30,
+        "manual_only": True,
+        "workflow": sdxl_workflow("hc_tai_pony_v1.1.safetensors", "dpmpp_2m", "karras", 7.0,
+                                  "score_4, score_5, score_6, worst quality, low quality, bad quality, normal quality, bad anatomy, monochrome",
+                                  prefix="score_9, score_8_up, score_7_up, ", clip_skip=2),
+    },
     # civitai.com/models/4468 Counterfeit V3.0, SD 1.5 anime; natural language or tags, CLIP skip 2 like the NovelAI-era
     # anime models, DPM++ 2M Karras, cfg 7; small native size like the other SD 1.5 models
     "counterfeit-v3": {
+        "category": "manga",
+        "family": "SD 1.5",
         "label": "Counterfeit V3.0 (SD 1.5)",
         "note": "Classic SD 1.5 anime, free composition; small native size",
         "files": ["checkpoints/counterfeitV30_v30_pruned_fp16.safetensors"],
@@ -278,10 +380,12 @@ MODELS = {
         "manual_only": True,
         "workflow": sdxl_workflow("counterfeitV30_v30_pruned_fp16.safetensors", "dpmpp_2m", "karras", 7.0,
                                   "(worst quality, low quality:1.4), " + SDXL_NEGATIVE,
-                                  prefix="masterpiece, best quality, ", clip_skip=2),
+                                  prefix="masterpiece, best quality, ", clip_skip=2, hires=1.5),
     },
     # civitai.com/models/15003 CyberRealistic Final, SD 1.5 photoreal; author: DPM++ 2M Karras, 30 steps, cfg 5, 512x768
     "cyberrealistic": {
+        "category": "realism",
+        "family": "SD 1.5",
         "label": "CyberRealistic Final (SD 1.5)",
         "note": "Photoreal people and portraits; small native size",
         "files": ["checkpoints/cyberrealistic_final_pruned_fp16.safetensors"],
@@ -291,11 +395,13 @@ MODELS = {
         "workflow": sdxl_workflow("cyberrealistic_final_pruned_fp16.safetensors", "dpmpp_2m", "karras", 5.0,
                                   "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, "
                                   "cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, "
-                                  "username, blurry"),
+                                  "username, blurry", hires=1.5),
     },
     # civitai.com/models/372465 Pony Realism v2.2 (Pony finetune, photoreal); author: DPM++ SDE / Euler a, 30+ steps,
     # cfg 6-7, CLIP skip 2, score_9/8_up/7_up before, score_4/5/6 in the negative, "female"/"male" over "woman"/"man"
     "pony-realism": {
+        "category": "realism",
+        "family": "Pony",
         "label": "Pony Realism v2.2 (SDXL)",
         "note": "Photoreal Pony: Danbooru tags, score tags, female / male",
         "files": ["checkpoints/ponyRealism_V22.safetensors"],
@@ -307,6 +413,8 @@ MODELS = {
     },
     # civitai.com/models/257749 V6 "start with this one"; score tags lead the prompt, CLIP skip 2, cfg 7, 25 steps
     "pony-v6": {
+        "category": "manga",
+        "family": "Pony",
         "label": "Pony Diffusion V6 XL (SDXL)",
         "note": "Cartoon, anime, furry; score tags + source_anime / rating_safe",
         "files": ["checkpoints/ponyDiffusionV6XL_v6StartWithThisOne.safetensors"],
@@ -345,6 +453,15 @@ def noct_edit_workflow(prompt: str, image: str, width: int, height: int, seed: i
 # model; "default" ones are on unless the request says otherwise (chat, Soulforge, CLI). "speed" marks a step
 # distillation: the workflow drops to few steps only while one of those is on.
 LORAS = {
+    # Trained in the Yumeko spike: 31 JANKU pictures, 2000 steps, UNet only. "trigger" goes in front of the prompt while it is on
+    "zzsorc-v1": {
+        "label": "Gothic Sorceress",
+        "note": "Trained character with moon earrings; hair behind ear shows them best",
+        "file": "zzsorc_v1.safetensors",
+        "model": "janku-v5",
+        "strength": 1.0,
+        "trigger": "zzsorc",
+    },
     "qwen-lightning": {
         "label": "Lightning 4-step",
         "note": "About 10x faster; off = 40 full steps",
@@ -422,6 +539,8 @@ def lora_keys(model: str, wanted: list | None = None) -> list:
 # image's name in ComfyUI/input and an output size that follows the source's aspect ratio.
 EDIT_MODELS = {
     "noct-q-v4": {
+        "family": "Qwen",
+        "manual_note": "Edits a source picture, nothing filtered; write full sentences; slow, 25 steps",
         "label": "Noct Q V4 (uncensored)",
         "note": "Qwen Image 2.1 merge, nothing filtered; write full sentences; slow, 25 steps",
         "files": ["diffusion_models/NoctQ_V4_int8_convrot.safetensors", "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
@@ -431,6 +550,8 @@ EDIT_MODELS = {
         "workflow": noct_edit_workflow,
     },
     "flux2-klein-4b-edit": {
+        "family": "FLUX.2",
+        "manual_note": "Edits a source picture: fast, leaves the rest alone",
         "label": "FLUX.2 [klein] 4B",
         "note": "Fast, leaves the rest of the picture alone",
         "files": MODELS["flux2-klein-4b"]["files"],
@@ -438,6 +559,8 @@ EDIT_MODELS = {
         "workflow": flux2_klein_edit_workflow,
     },
     "qwen-image-edit-2511": {
+        "family": "Qwen",
+        "manual_note": "Edits a source picture: restyles, keeps the person",
         "label": "Qwen-Image-Edit 2511",
         "note": "Best at outfit and detail changes, keeps the person and style; slower",
         "files": ["unet/qwen-image-edit-2511-Q4_K_M.gguf",

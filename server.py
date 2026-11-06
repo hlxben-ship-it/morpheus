@@ -25,6 +25,7 @@ from PIL import Image
 
 import agents
 import morpheus
+import yumeko
 import soulforge
 
 PORT = 5196
@@ -799,14 +800,33 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(page.replace("/*GLIA-DATA*/null", data, 1).encode("utf-8"), "text/html; charset=utf-8")
         if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json"):
             return self.send_file(WEB / route[1:], WEB)
+        if route == "/yumeko":
+            return self.send_bytes((WEB / "yumeko.html").read_bytes(), "text/html; charset=utf-8")
+        if route == "/yumeko-head.png":
+            return self.send_file(WEB / "yumeko-head.png", WEB)
+        if route == "/api/yumeko/state":
+            return self.send_json(yumeko.state())
+        if route == "/api/yumeko/tags":
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            return self.send_json({"tags": yumeko.search_tags(query.get("q", [""])[0], query.get("kinds", ["general"])[0].split(","))})
+        if route == "/api/yumeko/catalog":
+            return self.send_json(yumeko.CATALOG)
+        if route == "/api/yumeko/manga":
+            return self.send_json({"panels": yumeko.panels(), "loras": yumeko.finished()})
+        if route.startswith("/api/yumeko/job/"):
+            return self.send_json(yumeko.job_view(route.rsplit("/", 1)[1]))
+        if route.startswith("/api/yumeko/panel/"):
+            return self.send_json(yumeko.panel_load(route.rsplit("/", 1)[1]))
+        if route.startswith("/yumeko-file/"):
+            return self.send_file(yumeko.ROOT / urllib.parse.unquote(route[len("/yumeko-file/"):]), yumeko.ROOT)
         if route == "/api/options":
             models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k),
+                       "category": m["category"], "family": m["family"],
                        "negative": morpheus.default_negative(k), "prefix": morpheus.default_prefix(k)}
                       for k, m in morpheus.MODELS.items()]
-            # Qwen edits in Manual too: picking it there turns the prompt into an edit of a source picture
-            for key, note in (("qwen-image-edit-2511", "Edits a source picture: restyles, keeps the person"),
-                              ("noct-q-v4", "Edits a source picture, nothing filtered; write full sentences; slow, 25 steps")):
-                models.append({"key": key, "label": morpheus.EDIT_MODELS[key]["label"], "note": note, "installed": morpheus.installed(key), "edit": True})
+            # edit models in Manual too: picking one turns the prompt into an edit of a source picture
+            models += [{"key": k, "label": m["label"], "note": m["manual_note"], "installed": morpheus.installed(k), "edit": True,
+                        "category": "edit", "family": m["family"]} for k, m in morpheus.EDIT_MODELS.items()]
             edit_models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
                            for k, m in morpheus.EDIT_MODELS.items()]
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]
@@ -880,6 +900,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
+        if self.path.startswith("/api/yumeko/"):
+            try:
+                action = yumeko.ACTIONS.get(self.path.rsplit("/", 1)[1])
+                if not action:
+                    return self.send_error(404)
+                return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
         if self.path == "/api/agent/export":  # answers with the zip itself
@@ -1625,6 +1653,10 @@ def warm_up() -> None:
         print("Morpheus: ComfyUI is warm.")
     except Exception as e:  # the first real render just pays the cold start then
         print(f"Morpheus: warm-up failed ({e}).")
+
+
+yumeko.ask_claude, yumeko.ensure_comfy = ask_claude, ensure_comfy
+yumeko.register_all()
 
 
 if __name__ == "__main__":

@@ -12,3 +12,6 @@ tools/e2e_seen/
 /soulforge/
 agents/
 .pw/
+
+.venv-train/
+tools/sd-scripts/
