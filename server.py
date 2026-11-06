@@ -804,9 +804,9 @@ class Handler(BaseHTTPRequestHandler):
                        "negative": morpheus.default_negative(k), "prefix": morpheus.default_prefix(k)}
                       for k, m in morpheus.MODELS.items()]
             # Qwen edits in Manual too: picking it there turns the prompt into an edit of a source picture
-            q = morpheus.EDIT_MODELS["qwen-image-edit-2511"]
-            models.append({"key": "qwen-image-edit-2511", "label": q["label"], "note": "Edits a source picture: restyles, keeps the person",
-                           "installed": morpheus.installed("qwen-image-edit-2511"), "edit": True})
+            for key, note in (("qwen-image-edit-2511", "Edits a source picture: restyles, keeps the person"),
+                              ("noct-q-v4", "Edits a source picture, nothing filtered; write full sentences; slow, 25 steps")):
+                models.append({"key": key, "label": morpheus.EDIT_MODELS[key]["label"], "note": note, "installed": morpheus.installed(key), "edit": True})
             edit_models = [{"key": k, "label": m["label"], "note": m["note"], "installed": morpheus.installed(k)}
                            for k, m in morpheus.EDIT_MODELS.items()]
             styles = [{"key": k, "label": s["label"]} for k, s in morpheus.STYLES.items()]

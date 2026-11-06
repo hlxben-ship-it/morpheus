@@ -320,6 +320,27 @@ MODELS = {
 }
 
 
+NOCT_NEGATIVE = ("artifacts, gpt-image, washed-out colors, low quality, low resolution, AI slop, deviantart, sloppy lines, rough sketch, "
+                 "blurry, indistinct, missing fingers, badly drawn hands, wrong number of fingers")
+
+
+def noct_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int) -> dict:
+    """Noct Q V4 (an uncensored merge of Qwen Image 2.1, int8) as an edit: the author's settings, 25 steps at cfg 3 with
+    their negative. The encoder sizes the picture to about 1024 x 1024 pixels at multiples of 32 and hands over the latent."""
+    return {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "NoctQ_V4_int8_convrot.safetensors", "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_2.1_vae_bf16.safetensors"}},
+        "20": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "5": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "prompt": prompt, "negative_prompt": NOCT_NEGATIVE, "vae": ["3", 0],
+                                                                "resolution": 1024, "images.image_1": ["20", 0]}},
+        "8": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["5", 0], "negative": ["5", 1], "latent_image": ["5", 2],
+                                                   "seed": seed, "steps": steps, "cfg": 3.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "morpheus"}},
+    }
+
+
 # LoRAs under ComfyUI/models/loras, each for one model. Manual shows a checkbox per installed LoRA of the picked
 # model; "default" ones are on unless the request says otherwise (chat, Soulforge, CLI). "speed" marks a step
 # distillation: the workflow drops to few steps only while one of those is on.
@@ -400,6 +421,15 @@ def lora_keys(model: str, wanted: list | None = None) -> list:
 # Edit models take a source image plus an instruction. Same rules as MODELS; the workflow gets the
 # image's name in ComfyUI/input and an output size that follows the source's aspect ratio.
 EDIT_MODELS = {
+    "noct-q-v4": {
+        "label": "Noct Q V4 (uncensored)",
+        "note": "Qwen Image 2.1 merge, nothing filtered; write full sentences; slow, 25 steps",
+        "files": ["diffusion_models/NoctQ_V4_int8_convrot.safetensors", "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+                  "vae/qwen_image_2.1_vae_bf16.safetensors"],
+        "steps": 25,
+        "manual_only": True,  # the chat doesn't offer it
+        "workflow": noct_edit_workflow,
+    },
     "flux2-klein-4b-edit": {
         "label": "FLUX.2 [klein] 4B",
         "note": "Fast, leaves the rest of the picture alone",
