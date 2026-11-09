@@ -555,6 +555,10 @@
   /* ---------- Soulforge ---------- */
   /* Wake your dream: its own page, picture on the left, the clips on the right */
   body.wake-mode .side, body.wake-mode .main, body.yumeko-mode .side, body.yumeko-mode .main { display: none; }
+  #yumeko-views { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:3px; margin-left:10px; background:var(--glass); }
+  #yumeko-views button { border:0; background:transparent; color:var(--muted); border-radius:999px; padding:5px 12px; font:600 11px/1 var(--px, monospace); letter-spacing:.08em; white-space:nowrap; cursor:pointer; }
+  #yumeko-views[hidden] { display:none; }
+  #yumeko-views button[aria-current="true"] { background:var(--pink); color:#fff; box-shadow:0 0 14px color-mix(in srgb, var(--pink) 55%, transparent); }
   .yumeko-tab { grid-column: 1 / 3; min-height: 0; width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
   .wake { grid-column: 1 / 3; min-height: 0; overflow-y: auto; padding: 24px 16px 40px; }
   .wake-in { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -890,6 +894,9 @@
       <button type="button" role="tab" data-f="wake" aria-selected="false" title="Turn pictures into a storyboard of clips">Dawnforge</button>
       <button type="button" role="tab" data-f="yumeko" aria-selected="false" title="Character LoRAs and manga panels">Yumeko</button>
     </div>
+    <nav id="yumeko-views" aria-label="Yumeko views" hidden>
+      <button type="button" data-y="" aria-current="true">Sets</button><button type="button" data-y="manga" aria-current="false">Create Manga</button>
+    </nav>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
         <span class="hud-comfy" id="hud-comfy" data-s="off" data-tip="comfy"><i></i><b>Comfy</b> <em>…</em></span>
@@ -1199,6 +1206,11 @@
     renderSessions();
     renderThread();
   }
+  document.querySelectorAll('#yumeko-views button').forEach(b => b.onclick = () => { $('yumeko').contentWindow.location.hash = b.dataset.y; });
+  addEventListener('message', e => {  // her page says which view it landed on, so the bar follows links inside it too
+    if (e.origin !== location.origin || typeof e.data?.yumekoView !== 'string') return;
+    document.querySelectorAll('#yumeko-views button').forEach(b => b.setAttribute('aria-current', String(b.dataset.y === e.data.yumekoView)));
+  });
   $('new-session').onclick = () => {
     if (state.ghost) state.ghostSession = { id: 'ghost', title: '', messages: [], claude: null };
     else { state.currentId = null; store.set('current', null); }
@@ -2438,6 +2450,7 @@
     document.body.classList.toggle('wake-mode', f === 'wake');
     document.body.classList.toggle('yumeko-mode', f === 'yumeko');
     $('yumeko').hidden = f !== 'yumeko';
+    $('yumeko-views').hidden = f !== 'yumeko';
     if (f === 'yumeko' && !$('yumeko').src) $('yumeko').src = '/yumeko';  // stays loaded, so her page keeps its place between tabs
     $('wake').hidden = f !== 'wake';
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));

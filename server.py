@@ -26,6 +26,7 @@ from PIL import Image
 import agents
 import morpheus
 import yumeko
+import yumeko_auto
 import soulforge
 
 PORT = 5196
@@ -813,6 +814,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(yumeko.CATALOG)
         if route == "/api/yumeko/manga":
             return self.send_json({"panels": yumeko.panels(), "loras": yumeko.finished()})
+        if route.startswith("/api/yumeko/live/"):  # the newest preview frame of a Use render
+            frame = yumeko.LIVE.get(route.rsplit("/", 1)[1], {}).get("frame")
+            if not frame:
+                return self.send_error(404)
+            return self.send_bytes(frame, "image/jpeg")
         if route.startswith("/api/yumeko/job/"):
             return self.send_json(yumeko.job_view(route.rsplit("/", 1)[1]))
         if route.startswith("/api/yumeko/panel/"):
@@ -902,7 +908,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/api/yumeko/"):
             try:
-                action = yumeko.ACTIONS.get(self.path.rsplit("/", 1)[1])
+                name = self.path.rsplit("/", 1)[1]
+                action = yumeko.ACTIONS.get(name) or yumeko_auto.ACTIONS.get(name)
                 if not action:
                     return self.send_error(404)
                 return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
@@ -1647,6 +1654,9 @@ def warm_up() -> None:
     """Start ComfyUI and render one tiny throwaway image with the default model, so the first real prompt
     doesn't pay for reading ~20 GB of weights from disk (123 s cold vs ~20 s warm)."""
     try:
+        if yumeko.training_now():  # the trainer needs the VRAM more than the first prompt needs a warm start
+            print("Morpheus: a LoRA is training, skipping the warm-up.")
+            return
         ensure_comfy()
         with gpu:
             morpheus.generate(morpheus.MODELS["z-image-turbo"]["workflow"]("warm up", 256, 256, 0, 1), ghost=True)
@@ -1655,8 +1665,9 @@ def warm_up() -> None:
         print(f"Morpheus: warm-up failed ({e}).")
 
 
-yumeko.ask_claude, yumeko.ensure_comfy = ask_claude, ensure_comfy
+yumeko.ask_claude, yumeko.ensure_comfy, yumeko.CHAT_DIR = ask_claude, ensure_comfy, CHAT_DIR
 yumeko.register_all()
+yumeko_auto.resume_all()
 
 
 if __name__ == "__main__":

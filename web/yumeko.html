@@ -3,23 +3,50 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yumeko · Morpheus</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
 <link rel="icon" href="/favicon.png">
 <style>
-  :root { --bg:#15132b; --panel:#1e1b3a; --raised:#2a2652; --line:#383363; --text:#f6ebdd; --muted:#a79fc4; --accent:#d8384f; --accent-ink:#fff; --ok:#6fd0a0; color-scheme:dark; }
+  :root { --bg:#0a0614; --panel:#120b24; --raised:#1d1238; --line:#3a2470; --text:#eae6ff; --muted:#9a8fd0; --accent:#b14dff; --accent-ink:#fff;
+    --pink:#ff2a6d; --cyan:#2de2e6; --ok:#2de2e6; --glass:rgba(18,11,36,.78); --glow:rgba(177,77,255,.4); --px:'Silkscreen',monospace; --term:'VT323',monospace; color-scheme:dark; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:400 14px/1.55 "IBM Plex Mono",ui-monospace,monospace; }
+  body { margin:0; min-height:100vh; color:var(--text); font:400 14.5px/1.55 Inter,system-ui,sans-serif;
+    background:radial-gradient(900px 500px at 85% -10%, rgba(177,77,255,.28), transparent 60%), radial-gradient(700px 420px at 0% 100%, rgba(255,42,109,.12), transparent 60%), var(--bg); background-attachment:fixed; }
+  body::after { content:''; position:fixed; inset:0; pointer-events:none; z-index:50; opacity:.3; mix-blend-mode:overlay; background:repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px); }
+  h2, h3, .views a, .steps button, .kinds button { font-family:var(--px); font-weight:400; letter-spacing:.05em; }
+  h2 { font-size:17px; } h3 { font-size:13px; color:var(--muted); }
+  ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:var(--line); } ::-webkit-scrollbar-track { background:transparent; }
   a { color:inherit; }
   button, input, textarea, select { font:inherit; color:inherit; }
   button { background:var(--raised); border:1px solid var(--line); border-radius:8px; padding:7px 13px; cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--accent); }
+  .btnlike { background:var(--raised); border:1px solid var(--line); border-radius:8px; padding:5px 11px; cursor:pointer; font-size:13px; }
+  .btnlike:hover { border-color:var(--accent); }
+  .chips { gap:6px; margin-top:4px; } .chip { padding:4px 12px; border-radius:999px; font-size:13px; } .chip[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .lbl { display:block; }
+  .ratios { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; } .ratio { flex:1 1 60px; }
+  .ratio { background:transparent; border-radius:10px; padding:7px 8px 5px; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:64px; }
+  .ratio i { display:block; border:2px solid var(--muted); border-radius:2px; }
+  .ratio span { font-size:11px; line-height:1.2; }
+  .ratio[aria-pressed="true"] { border-color:var(--accent); } .ratio[aria-pressed="true"] i { border-color:var(--accent); }
+  #nb { flex:none; }
+  ul.kinds { display:flex; flex-wrap:wrap; gap:6px 14px; list-style:none; padding:0; margin:8px 0 14px; font-size:13px; }
+  ul.kinds li { display:flex; gap:6px; } ul.kinds b { color:var(--accent); }
+  .examrow { margin:14px 0; } .examrow .thumbs img { width:120px; }
   button:disabled { opacity:.45; cursor:default; }
-  button.go { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  button.go { background:linear-gradient(90deg, var(--accent), var(--pink)); color:#fff; border:0; font-family:var(--px); letter-spacing:.06em; box-shadow:0 0 18px var(--glow); }
+  button.go:hover:not(:disabled) { filter:brightness(1.1); }
   button.danger { color:#ff9aa8; }
+  .hl { position:relative; background:var(--panel); border-radius:8px; }
+  .hl .hlb { position:absolute; inset:0; padding:8px 10px; border:1px solid transparent; white-space:pre-wrap; overflow-wrap:break-word; overflow:hidden; pointer-events:none; color:var(--text); }
+  .hl .hlb mark { background:none; color:var(--cyan); }
+  .hl textarea { position:relative; background:transparent; color:transparent; caret-color:var(--text); }
+  .hl textarea::selection { background:var(--glow); color:transparent; }
   input[type=range] { accent-color:var(--accent); }
   input, textarea, select { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; width:100%; }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   header { display:flex; align-items:center; gap:16px; padding:10px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   header b { font-size:16px; letter-spacing:.02em; }
+  body.embedded > header { display:none; }
   .views { display:flex; padding:3px; border-radius:10px; background:var(--panel); border:1px solid var(--line); }
   .views a { padding:5px 12px; border-radius:7px; color:var(--muted); font-size:14px; text-decoration:none; }
   .views a:hover { color:var(--text); }
@@ -45,13 +72,74 @@
   @media (max-width:640px) { .pics, .pics.four { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   .pic { position:relative; background:var(--panel); border:2px solid var(--line); border-radius:10px; overflow:hidden; padding:0; display:block; width:100%; }
   .pic img { width:100%; display:block; }
+  .judgenote { border-left:3px solid var(--cyan); padding-left:8px; } .judgenote.warn { border-color:var(--pink); color:var(--text); }
   .pic.keep { border-color:var(--ok); } .pic.drop { opacity:.45; } .pic.sel { border-color:var(--accent); }
   .pic .bar { display:flex; gap:6px; padding:6px; }
   .pic .bar button { flex:1; padding:4px 6px; }
   .pic .tags { width:100%; border:0; border-top:1px solid var(--line); border-radius:0; font-size:11.5px; min-height:50px; resize:vertical; }
-  .chat { display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; margin-bottom:10px; }
-  .chat p { margin:0; padding:8px 11px; border-radius:10px; background:var(--panel); }
-  .chat p.user { background:var(--raised); align-self:flex-end; max-width:90%; }
+  .chat { display:flex; flex-direction:column; gap:14px; height:calc(100vh - 530px); min-height:170px; overflow:auto; margin-bottom:12px; padding:6px 2px; }
+  .chat p { margin:0; white-space:pre-wrap; align-self:flex-start; max-width:78%; }
+  .chat p.user { align-self:flex-end; max-width:70%; padding:8px 14px; border:3px solid #e9e4ff; border-radius:7px; color:#f4f1ff; font:400 21px/1.22 var(--term); letter-spacing:.02em; text-shadow:2px 2px 0 #0b0820;
+    background:linear-gradient(180deg, rgba(120,48,150,.92), rgba(62,22,92,.95)); box-shadow:0 0 0 2px #0b0820, inset 0 0 0 2px rgba(255,42,109,.55), 0 0 22px -8px var(--pink); }
+  .stylemini { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px; } .stylemini figure { margin:0; width:132px; overflow:hidden; border:2px solid var(--line); border-radius:7px; background:var(--panel); }
+  .stylemini img { width:100%; aspect-ratio:3/2; object-fit:cover; display:block; } .stylemini figcaption { padding:4px 7px; font:400 10.5px/1.2 var(--px); letter-spacing:.04em; }
+  .chat p.working { padding:10px 14px; border:1px solid var(--line); border-radius:18px; background:var(--panel); color:var(--muted); }
+  /* Yumeko speaks in the same 16-bit dialogue box as Dreamforge's host */
+  .dlg { --host-frame:#ba88f1; align-self:stretch; display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+  .dlg-name, .dlg-box { position:relative; color:#f4f1ff; border:3px solid #e9e4ff; border-radius:7px;
+    background:linear-gradient(180deg, rgba(64,52,168,.92), rgba(26,20,82,.94) 60%, rgba(18,12,58,.95));
+    box-shadow:0 0 0 2px #0b0820, inset 0 0 0 2px color-mix(in srgb, var(--host-frame) 70%, transparent), 0 0 26px -8px var(--host-frame); }
+  .dlg-name::after, .dlg-box::after { content:''; position:absolute; inset:0; border-radius:4px; pointer-events:none; background:repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 2px, transparent 2px 4px); }
+  .dlg-name { font:400 16px/1 'Silkscreen', monospace; letter-spacing:.06em; padding:8px 14px 7px; text-shadow:2px 2px 0 #0b0820; }
+  .dlg-box { align-self:stretch; display:flex; gap:16px; align-items:flex-start; padding:12px 18px 14px 12px; }
+  .dlg-face { flex:none; width:112px; aspect-ratio:1; overflow:hidden; border-radius:4px; background:#0b0820; box-shadow:0 0 0 2px rgba(233,228,255,.5), 0 0 0 4px #0b0820; }
+  .dlg-face img { width:100%; height:100%; object-fit:cover; display:block; }
+  .dlg-text, .chat .dlg-text { flex:1; min-width:0; max-width:none; color:#f4f1ff; margin:0; font:400 24px/1.22 'VT323', monospace; letter-spacing:.02em; text-shadow:2px 2px 0 #0b0820; }
+  .dlg.past .dlg-name { display:none; } .dlg.past .dlg-face { width:52px; } .dlg.past .dlg-box { padding:8px 14px 8px 8px; gap:12px; } .dlg.past .dlg-text, .chat .dlg.past .dlg-text { font-size:20px; }
+  @media (max-width:640px) { .dlg-face { width:72px; } .chat .dlg-text { font-size:20px; } }
+  .pic.pending { aspect-ratio:2/3; border:2px dashed var(--line); background:var(--panel); animation:pendingpulse 1.6s ease-in-out infinite; }
+  @keyframes pendingpulse { 50% { opacity:.45; } } @media (prefers-reduced-motion: reduce) { .pic.pending { animation:none; } }
+  .gridthree { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .gridthree .pic { position:relative; padding:0; overflow:hidden; display:block; text-align:left; background:var(--panel); border:2px solid var(--line); transition:transform .18s ease, box-shadow .18s ease; transform-origin:top center; }
+  .gridthree .pic:first-child { transform-origin:top left; } .gridthree .pic:last-child { transform-origin:top right; }
+  .gridthree .pic:not(.pending):hover, .gridthree .pic:focus-visible { z-index:5; transform:scale(1.5); border-color:var(--accent); box-shadow:0 0 34px var(--glow), 0 18px 40px rgba(0,0,0,.7); }
+  .gridthree .pic.sel { border-color:var(--accent); box-shadow:0 0 18px var(--glow); }
+  .gridthree img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; } .gridthree .bar { padding:6px 9px; font:400 11px/1.2 var(--px); letter-spacing:.04em; }
+  .promptlist { margin-top:6px; font-size:13px; } .promptlist summary { cursor:pointer; color:var(--muted); } .promptlist dd { word-break:break-word; }
+  @media (max-width:640px) { .gridthree .pic:hover { transform:none; } } @media (prefers-reduced-motion: reduce) { .gridthree .pic { transition:none; } }
+  .gridbar { display:flex; align-items:center; gap:12px; min-height:42px; margin-top:8px; }
+  #over { width:min(420px,92vw); padding:22px; border:2px solid var(--pink); border-radius:8px; background:var(--panel); color:var(--text); } #over::backdrop { background:rgba(5,3,11,.75); }
+  .chat > :first-child { margin-top:auto; }
+  .openfull { position:absolute; top:8px; left:8px; width:30px; height:30px; display:grid; place-items:center; border:2px solid #fff; border-radius:6px; background:rgba(10,6,20,.6); color:#fff; font-size:17px; line-height:1; text-decoration:none; }
+  .openfull:hover { background:var(--accent); }
+  html, body { overflow-x:hidden; }
+  body.fixedpage { height:100vh; overflow:hidden; } body.fixedpage main { padding-top:12px; padding-bottom:0; }
+  .gridthree { max-width:calc((100vh - 400px) * 2 + 24px); } .promptlist[open] { max-height:150px; overflow-y:auto; }
+  body.fixedpage .stylemini:has(+ .design.has) { max-width:52%; margin-bottom:12px; } body.fixedpage .design.has { margin-top:0; }
+  body.fixedpage .design.has > :last-child { margin-top:-125px; } body.fixedpage .design.has .chat { height:calc(100vh - 405px); }
+  .compare { display:grid; grid-template-columns:repeat(3,min(calc((100vh - 245px) * .684), calc((100% - 32px) / 3))); justify-content:center; gap:16px; align-items:start; }
+  .baseref { position:sticky; top:12px; margin:0; } .baseref button { display:block; width:100%; padding:0; border:2px solid var(--line); border-radius:8px; overflow:hidden; background:var(--panel); cursor:zoom-in; }
+  .baseref button:hover, .baseref button:focus-visible { border-color:var(--accent); } .baseref img { display:block; width:100%; height:auto; }
+  .baseref figcaption { margin-top:6px; font:400 11px/1.2 var(--px); letter-spacing:.04em; color:var(--muted); text-align:center; }
+  @media (max-width:900px) { .compare { grid-template-columns:1fr 1fr; } .compare #b { grid-column:1 / -1; grid-row:2; } .baseref { position:static; } }
+  .swipe { min-width:0; text-align:center; } .shot { display:block; width:100%; padding:0; border:2px solid var(--accent); border-radius:8px; overflow:hidden; background:var(--panel); cursor:zoom-in; box-shadow:0 0 18px var(--glow); }
+  .shot img { display:block; width:100%; height:auto; } .shotbox { position:relative; }
+  .swipebar { position:absolute; left:0; right:0; bottom:16px; display:flex; justify-content:center; gap:28px; pointer-events:none; } .swipebar button { pointer-events:auto; width:68px; height:68px; padding:0; border-radius:50%; border:2px solid; background:rgba(10,6,20,.78); box-shadow:0 4px 16px rgba(0,0,0,.55); font-size:30px; line-height:1; cursor:pointer; }
+  .nope { color:#ff6b81; border-color:#ff6b81; } .love { color:#ff3d9a; border-color:#ff3d9a; } .nope:hover { background:#ff6b81; color:#fff; } .love:hover { background:#ff3d9a; color:#fff; }
+  .swipecount { margin-top:8px; } .swipedone { padding:40px 12px; }
+  .settop { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px 16px; margin-bottom:14px; } .settop [hidden] { display:none !important; }
+  .setsum { display:flex; align-items:baseline; gap:8px; color:var(--muted); font-size:13px; } .setsum strong { font:400 22px/1 var(--px); color:var(--text); } .setsum small { font-size:13px; color:var(--muted); }
+  .setnow { margin:0; } .setacts { display:flex; align-items:center; gap:8px; } .setacts button { padding:8px 14px; } .setacts [aria-expanded="true"] { border-color:var(--accent); }
+  .settrack { grid-column:1 / -1; display:flex; gap:4px; margin:0; padding:0; list-style:none; }
+  .settrack li { position:relative; flex:1 0 auto; display:flex; justify-content:space-between; gap:6px; padding:7px 8px; overflow:hidden; border:1px solid var(--line); border-radius:4px; background:var(--panel); color:var(--muted); font:400 10px/1.2 var(--px); letter-spacing:.03em; }
+  .settrack i { position:absolute; inset:0 auto 0 0; background:var(--accent); opacity:.35; } .settrack span, .settrack b { position:relative; font-weight:400; white-space:nowrap; } .settrack span { overflow:hidden; text-overflow:ellipsis; }
+  .settrack .now { border-color:var(--accent); color:var(--text); box-shadow:0 0 10px var(--glow); } .settrack .done { color:var(--ok); border-color:var(--ok); } .settrack .done i { background:var(--ok); } .settrack .off { opacity:.4; border-style:dashed; }
+  .settrack { flex-wrap:wrap; }
+  .composerbox { display:flex; align-items:flex-end; gap:10px; padding:10px 10px 10px 14px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+  .promptbox > .composerbox { align-self:start; }
+  .composerbox:focus-within { border-color:var(--accent); }
+  .composerbox textarea { flex:1; min-width:0; padding:4px 0; border:0; background:none; resize:none; outline:none; }
+  .composerbox button { flex:none; width:42px; height:42px; padding:0; font-size:18px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .note { color:var(--muted); font-size:12.5px; }
   .err { color:#ff9aa8; margin:8px 0; }
@@ -64,6 +152,9 @@
   .sugg li { padding:4px 8px; cursor:pointer; border-radius:6px; } .sugg li:hover { background:var(--panel); }
   .jobtop { display:flex; gap:14px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
   .jobtop img { width:52px; height:52px; border-radius:50%; object-fit:cover; object-position:top; border:2px solid var(--accent); flex:none; }
+  .jobtop .dlg { flex:1 1 300px; min-width:0; }
+  .jobtop .dlg-face img { width:100%; height:100%; border:0; border-radius:0; }
+  main > .dlg { margin-bottom:22px; }
   .jobtop h2 { margin:0; } .jobtop .steps { margin:0 0 0 auto; } .jobtop .say { padding:7px 12px; min-height:0; flex:1 1 260px; font-size:13px; }
   .steps li { padding:0; border:0; } .steps button { padding:4px 11px; border-radius:999px; font-size:12.5px; background:transparent; color:var(--muted); }
   .steps li.done button { color:var(--ok); } .steps li.now button { border-color:var(--accent); color:var(--text); }
@@ -78,9 +169,6 @@
   dialog.lb img { width:100%; height:100%; min-height:0; object-fit:contain; display:block; }
   dialog.lb .nav { width:48px; height:72px; font-size:24px; padding:0; } dialog.lb p { grid-column:1 / 4; margin:0; text-align:center; font-size:12.5px; color:var(--muted); }
   dialog.lb .x { position:absolute; top:12px; right:16px; }
-  .groups { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; padding:0; list-style:none; }
-  .groups li { padding:3px 10px; border:1px solid var(--line); border-radius:999px; font-size:12.5px; color:var(--muted); }
-  .groups li.done { color:var(--ok); } .groups li.now { border-color:var(--accent); color:var(--text); } .groups li.off { opacity:.45; text-decoration:line-through; }
   .plan { display:grid; gap:8px; margin-top:8px; } .plan label { display:block; font-size:12.5px; color:var(--muted); margin-bottom:3px; }
   .plan .o { display:grid; grid-template-columns:190px minmax(0,1fr); gap:10px; align-items:center; } .plan .o label { margin:0; color:var(--text); display:flex; align-items:center; gap:8px; } .plan .o input[type=checkbox] { width:auto; flex:none; margin:0; }
   @media (max-width:640px) { .plan .o { grid-template-columns:1fr; } }
@@ -91,6 +179,23 @@
   .kinds { display:flex; flex-wrap:wrap; gap:4px; } .kinds button { padding:1px 8px; border-radius:999px; font-size:11.5px; color:var(--muted); background:none; }
   .kinds button[aria-pressed=true] { background:var(--raised); border-color:var(--accent); color:var(--text); }
   @media (max-width:640px) { .promptbox { grid-template-columns:1fr; } }
+  .design { display:grid; gap:20px; margin-top:16px; } .design.has { grid-template-columns:minmax(0,1.2fr) minmax(340px,1fr); }
+  .design.has .promptbox { grid-template-columns:1fr; } @media (max-width:860px) { .design.has { grid-template-columns:1fr; } }
+  .styletiles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; max-width:min(1300px, calc((100vh - 345px) * 2 + 42px)); min-width:min(100%, 480px); margin:16px auto 0; }
+  .stylepick { position:relative; width:fit-content; max-width:100%; margin:0 auto; } .stylepick .styletiles { width:calc(min(1300px, (100vh - 345px) * 2 + 42px)); max-width:100%; }
+  #stylego { position:absolute; left:calc(100% + 14px); bottom:0; white-space:nowrap; padding:12px 18px; } #stylego[hidden] { display:none; }
+  @media (max-aspect-ratio:7/5) { #stylego { position:static; display:block; margin:12px auto 0; } }
+  .check { position:absolute; top:8px; right:8px; width:30px; height:30px; display:grid; place-items:center; border:2px solid #fff; border-radius:6px; background:rgba(10,6,20,.6); color:transparent; font-size:18px; line-height:1; }
+  .pic.sel .check { background:var(--accent); color:#fff; box-shadow:0 0 12px var(--glow); }
+  .slim .dlg-face { width:58px; } .slim .dlg-box { padding:7px 14px 7px 8px; align-items:center; } .slim .dlg-name { padding:5px 10px 4px; font-size:13px; }
+  .styletiles .pic { position:relative; padding:0; overflow:hidden; display:block; text-align:left; background:var(--panel); border:2px solid var(--line); transition:transform .18s ease, box-shadow .18s ease; }
+  .styletiles img { width:100%; aspect-ratio:3/2; object-fit:cover; display:block; }
+  .styletiles .bar { padding:7px 10px; font-family:var(--px); font-size:12px; letter-spacing:.05em; }
+  .styletiles .pic:hover, .styletiles .pic:focus-visible { z-index:5; transform:scale(1.5); border-color:var(--accent); box-shadow:0 0 34px var(--glow), 0 18px 40px rgba(0,0,0,.7); }
+  .styletiles .pic { transform-origin:var(--x, center) var(--y, center); } .styletiles .pic:nth-child(4n+1) { --x:left; } .styletiles .pic:nth-child(4n) { --x:right; }
+  .styletiles .pic:nth-child(-n+4) { --y:top; } .styletiles .pic:nth-last-child(-n+4) { --y:bottom; }
+  @media (max-width:640px) { .styletiles { max-width:none; grid-template-columns:repeat(2,minmax(0,1fr)); } .styletiles .pic:hover, .styletiles .pic:focus-visible { transform:none; } }
+  @media (prefers-reduced-motion: reduce) { .styletiles .pic { transition:none; } }
   .gal { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
   .gal figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .gal img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; } .gal figcaption { padding:6px 8px; font-size:11.5px; color:var(--muted); }
@@ -99,12 +204,36 @@
   .use { display:grid; grid-template-columns:minmax(280px,32%) minmax(0,1fr); gap:20px; height:calc(100vh - 170px); min-height:520px; }
   .viewer { display:flex; flex-direction:column; min-height:0; gap:8px; }
   .viewer .big { flex:1; min-height:0; display:grid; place-items:center; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .bigbtn { all:unset; display:contents; cursor:zoom-in; } .bigbtn:focus-visible img { outline:2px solid var(--accent); }
+  dialog.pv { width:min(1200px,96vw); max-width:none; height:min(860px,92vh); padding:16px; }
+  dialog.pv[open] { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr); gap:18px; }
+  dialog.pv img { width:100%; height:100%; min-height:0; object-fit:contain; display:block; }
+  .pvside { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-width:0; position:relative; padding-top:28px; }
+  .pvside .x { position:absolute; top:0; right:0; } .pvside pre { white-space:pre-wrap; margin:0; }
+  @media (max-width:760px) { dialog.pv { height:auto; max-height:94vh; overflow-y:auto; } dialog.pv[open] { grid-template-columns:1fr; } dialog.pv img { height:auto; max-height:55vh; } }
+  .live { position:relative; max-width:100%; max-height:100%; width:auto; height:100%; background:repeating-linear-gradient(135deg, var(--panel) 0 12px, var(--raised) 12px 24px); border-radius:8px; overflow:hidden; }
+  .viewer .big .live img[hidden] { display:none; }
+  .live img { width:100%; height:100%; object-fit:cover; filter:saturate(1.1); }
+  .livebar { position:absolute; left:12px; right:12px; bottom:12px; height:6px; border-radius:3px; background:rgba(0,0,0,.45); overflow:hidden; }
+  .livebar i { display:block; height:100%; width:0; background:var(--accent); transition:width .5s; }
+  .livetxt { position:absolute; left:12px; bottom:22px; margin:0; font-size:12px; color:#fff; text-shadow:0 1px 3px #000; }
+  @media (prefers-reduced-motion: reduce) { .livebar i { transition:none; } }
+  .gtile { position:relative; } .gtile .pic img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; }
+  .gdel { position:absolute; top:6px; right:6px; padding:2px 8px; font-size:12px; background:rgba(8,6,20,.75); opacity:0; transition:opacity .15s; }
+  .gtile:hover .gdel, .gdel:focus-visible, .gdel[data-sure] { opacity:1; } .gdel[data-sure] { background:var(--danger, #c0304a); color:#fff; }
+  @media (hover:none) { .gdel { opacity:1; } }
+  .pvpic { position:relative; min-height:0; } .pvpic .nav { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:64px; font-size:24px; padding:0; background:rgba(8,6,20,.6); }
+  .pvpic .prev { left:6px; } .pvpic .next { right:6px; }
+  .slides { position:fixed; inset:0; z-index:100; background:#000; cursor:pointer; }
+  .slides img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; transition:opacity .8s; }
+  .slides img.back { opacity:0; } .slides .x { position:absolute; top:14px; right:16px; opacity:.5; } .slides .x:hover { opacity:1; }
+  @media (prefers-reduced-motion: reduce) { .slides img { transition:none; } }
   .viewer .big img { width:100%; height:100%; object-fit:contain; display:block; }
   .strip { display:flex; gap:8px; overflow-x:auto; flex:none; padding-bottom:4px; }
   .strip button { padding:0; width:66px; height:96px; flex:none; overflow:hidden; border-width:2px; }
   .strip button[aria-current=true] { border-color:var(--accent); } .strip img { width:100%; height:100%; object-fit:cover; display:block; }
-  .side { display:flex; flex-direction:column; gap:10px; }
-  @media (max-width:860px) { .use { grid-template-columns:1fr; height:auto; } .viewer .big { height:60vh; } }
+  .side { display:flex; flex-direction:column; gap:10px; overflow-x:hidden; min-width:0; } .side .tagsearch ul:empty { height:0; }
+  @media (max-width:860px) { .use { grid-template-columns:minmax(0,1fr); height:auto; } .viewer .big { height:60vh; } }
   .thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px; }
   .thumbs img { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:6px; display:block; }
   .trainbox { display:grid; grid-template-columns:220px minmax(0,1fr); gap:20px; }
@@ -132,6 +261,7 @@
   </nav>
 </header>
 <main id="app"></main>
+<dialog id="over" aria-labelledby="over-t"><h2 id="over-t">Start over?</h2><p>This deletes every picture, the chat, both base images and the training set for this character. It can't be undone.</p><div class="row"><button class="danger" id="over-go">Delete and start over</button><button id="over-no">Keep working</button></div></dialog>
 <dialog id="del"><p id="del-text"></p><input id="del-name" aria-label="Agent name"><div class="row" style="margin-top:12px"><button id="del-go" class="danger">Delete for good</button><button id="del-no">Keep it</button></div></dialog>
 <script>
 const $ = id => document.getElementById(id), app = $('app');
@@ -148,7 +278,7 @@ const act = async (a, b) => { try { const r = await post(a, b); return r; } catc
 // ---------- home ----------
 async function home() {
   clearTimeout(timer); S = await get('/api/yumeko/state');
-  app.innerHTML = `<div class="head"><img src="/yumeko-head.png" alt="Yumeko"><div class="say" id="say" aria-live="polite"></div></div>
+  app.innerHTML = `${dialogueBox('', true, 'say')}
     <div class="grid" id="sets"></div>`;
   const say = $('say'); let i = 0; (function type() { if (i <= S.greeting.length) { say.textContent = S.greeting.slice(0, i++); setTimeout(type, 16); } })();
   const g = $('sets'), add = document.createElement('button');
@@ -156,7 +286,7 @@ async function home() {
   S.jobs.forEach(j => {
     const t = document.createElement('div'); t.className = 'tile'; t.tabIndex = 0;
     t.innerHTML = `${j.cover ? `<img src="${file(j.id, j.cover)}" alt="">` : '<span class="blank">?</span>'}<div class="meta"><b>${esc(j.agent)}</b>
-      <small>${j.finished ? 'Finished' : `In progress, ${PHASES[j.phase - 1]}`}${j.phase === 3 ? `, ${j.accepted} kept` : ''}</small>
+      <small>${j.finished ? 'Finished' : `In progress, ${j.step || PHASES[j.phase - 1]}`}${j.phase === 3 && !j.step ? `, ${j.accepted} kept` : ''}</small>
       <div class="row"><button data-a="star" aria-label="Favourite">${j.star ? '★' : '☆'}</button><button data-a="del" class="danger">Delete</button></div></div>`;
     t.onclick = e => { const a = e.target.dataset.a;
       if (a === 'star') act('star', { id:j.id }).then(home);
@@ -172,6 +302,8 @@ function askDelete(j) {
   $('del-no').onclick = () => $('del').close();
   $('del-go').onclick = async () => { const r = await act('delete', { id:j.id, confirm:$('del-name').value }); $('del').close(); if (r) home(); };
 }
+$('over-no').onclick = () => $('over').close();
+$('over-go').onclick = async () => { $('over').close(); const r = await act('start_over', { id:job.id }); if (r) { job = { ...job, ...r, tab:null, form:null, picks:null, gridPicks:[], chatDraft:'', spoken:null, choosing:false }; paintJob(); } };
 async function newSet() {
   clearTimeout(timer); S = await get('/api/yumeko/state');
   app.innerHTML = `<h2>From scratch</h2><form class="row" id="fresh" style="margin-bottom:22px"><input id="fresh-name" aria-label="Character name" placeholder="Character name" maxlength="40" required style="flex:0 1 280px"><button class="go">Start building</button></form>
@@ -186,25 +318,79 @@ async function newSet() {
 async function openJob(id) { clearTimeout(timer); job = await get('/api/yumeko/job/' + id); paintJob(); poll(); }
 function poll() { clearTimeout(timer); timer = setTimeout(async () => {
   if (!location.hash.includes(job?.id)) return;
-  const before = JSON.stringify([job.busy, job.phase, job.train?.step, job.dataset.batch.length, job.phase1.grid.length, job.phase2.grid.length, job.phase1.chat.length, job.stage_tests, job.gallery.length]);
-  const { tab, form, viewing, tagQuery, chatDraft } = job; job = { ...await get('/api/yumeko/job/' + job.id), tab, form, viewing, tagQuery, chatDraft };
-  if (before !== JSON.stringify([job.busy, job.phase, job.train?.step, job.dataset.batch.length, job.phase1.grid.length, job.phase2.grid.length, job.phase1.chat.length, job.stage_tests, job.gallery.length])) paintJob();
-  poll(); }, 2000); }
+  const before = JSON.stringify([job.busy, job.phase, job.train?.step, job.dataset.batch.length, job.dataset.batch.at(-1)?.file, job.phase1.grid.length, job.phase2.grid.length, job.phase1.chat.length, job.stage_tests, job.gallery.length, job.auto?.now, job.auto?.state, job.auto?.paused, job.auto?.running, job.auto?.chat?.length, job.auto?.slots?.map(s => s.state).join(''), job.auto?.log?.length, job.exam, job.calib?.rounds?.length, job.calib?.done]);
+  const { tab, form, viewing, tagQuery, chatDraft, spoken, picks, choosing, gridPicks, ownOpen, at, planOpen, refDraft, reviewNote } = job; job = { ...await get('/api/yumeko/job/' + job.id), tab, form, viewing, tagQuery, chatDraft, spoken, picks, choosing, gridPicks, ownOpen, at, planOpen, refDraft, reviewNote };
+  if (before !== JSON.stringify([job.busy, job.phase, job.train?.step, job.dataset.batch.length, job.dataset.batch.at(-1)?.file, job.phase1.grid.length, job.phase2.grid.length, job.phase1.chat.length, job.stage_tests, job.gallery.length, job.auto?.now, job.auto?.state, job.auto?.paused, job.auto?.running, job.auto?.chat?.length, job.auto?.slots?.map(s => s.state).join(''), job.auto?.log?.length, job.exam, job.calib?.rounds?.length, job.calib?.done])) paintJob();
+  paintLive();
+  poll(); }, job?.busy === 'Rendering' ? 600 : 2000); }
+// The picture forming during a Use render: ComfyUI's preview frames in the big viewer, plus the sampler steps.
+function paintLive() { const box = $('live'); if (!box || !job.live) return; const l = job.live;
+  if (l.n && box.dataset.n !== String(l.n)) { box.dataset.n = l.n; const img = box.querySelector('img'); img.onload = () => img.hidden = false; img.src = `/api/yumeko/live/${job.id}?n=${l.n}`; }
+  const pct = l.total ? Math.round(100 * l.step / l.total) : 0; box.querySelector('.livebar i').style.width = pct + '%';
+  box.querySelector('.livetxt').textContent = l.total ? `Step ${l.step} of ${l.total}` : 'Starting …'; }
 const refresh = r => { if (r && r.id) { const { defaults, sent, balance } = job; job = { ...job, ...r, defaults, sent, balance }; paintJob(); } };
+// The tabs are the steps of the flow. An autopilot job has eight, a hand-picked one the old five.
+const AUTO_STEPS = {
+  base:{ label:'Base image', line:'Tell me who she is. I will pretend it was my idea.' },
+  second:{ label:'Second view', line:'Same woman, new angle. I draw, you judge.' },
+  card:{ label:'Her card', line:'Tell me what matters about her. I write it down so I never forget it. Probably.' },
+  building:{ label:'Building', line:'I build the set myself. You may watch, quietly.' },
+  review:{ label:'Review', line:'Heart the good ones. Tell me what is wrong with the rest, I fix it everywhere.' },
+  training:{ label:'Training', line:'She is training. I am supervising, horizontally.' },
+  exam:{ label:'Exam', line:'Same scenes for every stage. Pick the one that looks most like her.' },
+  use:{ label:'Use', line:'Done. Try not to look surprised.' },
+};
+const isAuto = j => !!j.auto || (j.phase === 3 && !j.dataset.accepted.length && !j.dataset.batch.length && !j.manual);
+// The second view is optional: it only becomes a step once the user adds one.
+const autoKeys = j => ['base', ...(j.bases.length > 1 || j.phase === 2 ? ['second'] : []), 'card', 'building', 'review', 'training', 'exam', 'use'];
+function nowKey(j) {
+  if (j.phase === 1) return 'base';
+  if (j.phase === 2) return 'second';
+  if (j.phase === 3) { const a = j.auto; return !a || a.state === 'card' ? 'card' : a.reviewed ? 'review' : 'building'; }
+  if (j.phase === 4) return 'training';
+  return j.lora ? 'use' : 'exam';
+}
+function stepOf(j) { return isAuto(j) ? autoKeys(j).indexOf(nowKey(j)) : j.phase - 1; }
+function stepsOf(j) {
+  if (isAuto(j)) return autoKeys(j).map(k => ({ key:k, ...AUTO_STEPS[k] }));
+  return PHASES.map((label, i) => ({ label, line:{ 1:AUTO_STEPS.base.line, 2:AUTO_STEPS.second.line, 3:'Keep the good ones. Tiny flaws get learned too.', 4:AUTO_STEPS.training.line, 5:j.lora ? AUTO_STEPS.use.line : 'Pick the stage that looks most like her.' }[i + 1] }));
+}
+function cardView(el) {  // her card as it was settled, read only
+  const a = job.auto;
+  el.innerHTML = `<h3>Checklist</h3><ul class="note">${a.checklist.map(c => `<li>${esc(c)}</li>`).join('')}</ul><dl class="kv"><dt>Always on her</dt><dd>${esc(a.permanent)}</dd><dt>Signature outfit</dt><dd>${esc(a.signature)}</dd><dt>Negative</dt><dd>${esc(a.negative)}</dd></dl>
+    <details><summary>Chat</summary>${a.chat.map(m => m.role === 'user' ? `<p class="user">${esc(m.text)}</p>` : `<p class="note">${esc(m.text)}</p>`).join('')}</details>`;
+}
+function buildView(el) {  // how the set came together: test rounds and the log
+  const a = job.auto;
+  el.innerHTML = `<h3>Hardening</h3><ul class="note">${a.rounds.map(r => `<li>Test round ${r.round}: ${r.passed} of ${r.of} passed${r.changes ? `. ${esc(r.changes)}` : ''}</li>`).join('')}</ul>
+    <p class="note">${a.rejected || 0} pictures rejected by the judge.</p><details><summary>Log</summary><ul class="note">${(a.log || []).slice().reverse().map(l => `<li>${esc(l.text)}</li>`).join('')}</ul></details>`;
+}
 function paintJob() {
-  const j = job, n = j.phase, tab = Math.min(j.tab || n, n);
-  const line = j.busy ? `${j.busy} …` : { 1:'Tell me who she is. I will pretend it was my idea.', 2:'Your turn. I am on break.', 3:'Keep the good ones. Tiny flaws get learned too.', 4:'She is training. I am supervising, horizontally.', 5:j.lora ? 'Done. Try not to look surprised.' : 'Pick the stage that looks most like her.' }[n];
-  app.innerHTML = `<div class="jobtop"><img src="/yumeko-head.png" alt="Yumeko"><h2>${esc(j.agent.name)}</h2><div class="say">${esc(line)}</div><ol class="steps">${PHASES.map((p, i) => `<li class="${i + 1 === tab ? 'on' : ''} ${i + 1 === n ? 'now' : i + 1 < n ? 'done' : ''}"><button data-tab="${i + 1}" ${i + 1 > n ? 'disabled' : ''}>${i + 1}. ${p}</button></li>`).join('')}</ol></div>
+  const j = job, steps = stepsOf(j), now = stepOf(j);
+  if (j.lora && j.phase >= 5) steps.push({ key:'gallery', label:'Gallery', line:'Everything we made. Admire freely.' });
+  const tab = Math.min(j.tab ?? now, steps.length - 1);
+  const line = j.busy ? `${j.busy} …` : steps[now].line;
+  app.innerHTML = `<div class="jobtop"><h2>${esc(j.agent.name)}</h2>${now <= 1 && tab === now ? '' : dialogueBox(line, false)}${j.phase <= 3 && !j.busy ? '<button id="startover">Start over</button>' : ''}<ol class="steps">${steps.map((s, i) => `<li class="${i === tab ? 'on' : ''} ${i === now ? 'now' : i < now ? 'done' : ''}"><button data-tab="${i}" ${i > now && s.key !== 'gallery' ? 'disabled' : ''}>${i + 1}. ${s.label}</button></li>`).join('')}</ol></div>
     ${j.error ? `<p class="err">${esc(j.error)}</p>` : ''}<div id="ph"></div>`;
-  app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { job.tab = +b.dataset.tab; paintJob(); });
-  if (tab < n) ({ 1:r => review(r, 0), 2:r => review(r, 1), 3:reviewSet, 4:reviewTrain }[tab])($('ph'));
-  else ({ 1:p1, 2:p2, 3:p3, 4:p4, 5:p5 }[n])($('ph'));
+  document.body.classList.toggle('fixedpage', tab === now && now <= 1);
+  if ($('startover')) $('startover').onclick = () => $('over').showModal();
+  app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { job.tab = +b.dataset.tab === now ? null : +b.dataset.tab; paintJob(); });
+  const el = $('ph');
+  if (steps[tab].key === 'gallery') return galleryView(el);
+  if (!isAuto(j)) {
+    if (tab < now) ({ 0:r => review(r, 0), 1:r => review(r, 1), 2:reviewSet, 3:reviewTrain }[tab])(el);
+    else ({ 0:p1, 1:p2, 2:p3, 3:p4, 4:p5 }[now])(el);
+    return;
+  }
+  const views = { base:r => review(r, 0), second:r => review(r, 1), card:cardView, building:buildView, review:j.dataset.accepted.length ? reviewSet : p3auto, training:reviewTrain, exam:r => { r.innerHTML = examView(j); examWire(j); } };
+  if (tab < now) return views[steps[tab].key](el);
+  ({ base:p1, second:p2, card:p3auto, building:p3auto, review:p3auto, training:p4, exam:p5, use:p5 }[steps[now].key])(el);
 }
 function lightbox(items, start) {
-  let i = start; const d = document.createElement('dialog'); d.className = 'lb'; d.setAttribute('aria-label', 'Training picture');
+  let i = start; const d = document.createElement('dialog'); d.className = 'lb'; d.setAttribute('aria-label', 'Enlarged picture');
   d.innerHTML = '<button class="nav" aria-label="Previous picture">‹</button><img alt=""><button class="nav" aria-label="Next picture">›</button><p></p><button class="x">Close</button>';
   const [prev, next] = d.querySelectorAll('.nav'), img = d.querySelector('img'), cap = d.querySelector('p');
-  const show = n => { i = (n + items.length) % items.length; img.src = items[i].src; cap.textContent = `${i + 1} of ${items.length}: ${items[i].caption}`; };
+  const show = n => { i = (n + items.length) % items.length; img.src = items[i].src; cap.textContent = `${i + 1} of ${items.length}${items[i].caption ? `: ${items[i].caption}` : ''}`; };
   prev.onclick = () => show(i - 1); next.onclick = () => show(i + 1); d.querySelector('.x').onclick = () => d.close();
   d.onclick = e => { if (e.target === d) d.close(); };
   d.onkeydown = e => { if (e.key === 'ArrowLeft') show(i - 1); if (e.key === 'ArrowRight') show(i + 1); };
@@ -221,6 +407,13 @@ function outfitLine(tags) {
   return worn.length ? `<p class="note"><b>Signature outfit:</b> ${esc(worn.join(', '))}</p>` : '';
 }
 let tagKinds = ['general'];
+function autocomplete(input) {
+  const wrap = input.parentElement; let ul;
+  input.addEventListener('input', () => { ul?.remove(); const word = input.value.split(/[,\n]/).pop().trim().replace(/ /g, '_').toLowerCase(); if (word.length < 2) return;
+    const hits = catalog.tags.filter(t => t.tag.includes(word)).slice(0, 8); if (!hits.length) return;
+    ul = document.createElement('ul'); hits.forEach(h => { const li = document.createElement('li'); li.textContent = `${h.tag}  (${h.yumeko_category})`;
+      li.onclick = () => { const v = input.value.split(','); v[v.length - 1] = ' ' + h.tag; input.value = v.join(',').replace(/^ /, '') + ', '; ul.remove(); input.focus(); }; ul.append(li); }); wrap.append(ul); });
+}
 function tagBox() { return `<div class="tagsearch"><label for="ts">Danbooru tags</label><input id="ts" type="search" placeholder="Search, click to add" value="${esc(job.tagQuery || '')}"><div class="kinds" id="tk"></div><ul id="tr"></ul></div>`; }
 function tagSearch(fields, onAdd) {
   let target = Object.keys(fields)[0], wait;
@@ -251,77 +444,229 @@ function review(el, i) {
 }
 function setGallery(j) { return `<div class="gal">${j.dataset.accepted.map(a => `<figure><a href="${file(j.id, a.file)}" target="_blank"><img loading="lazy" src="${file(j.id, a.file)}" alt=""></a><figcaption>${esc(a.tags.join(', '))}</figcaption></figure>`).join('')}</div>`; }
 function reviewSet(el) { el.innerHTML = `<h3>${job.dataset.accepted.length} training pictures, with their captions</h3>${setGallery(job)}`; }
-function reviewTrain(el) { const j = job, t = j.train; el.innerHTML = `<dl class="kv"><dt>Result</dt><dd>${esc(t.state)}</dd><dt>Steps</dt><dd>${t.step} of ${t.total}</dd><dt>Trigger</dt><dd>${esc(j.agent.trigger_token)}</dd><dt>Settings</dt><dd>dim 32, alpha 16, learning rate 0.0001, UNet only</dd><dt>Kept stage</dt><dd>${j.lora?.stage ?? 'not chosen'}</dd></dl>
+function reviewTrain(el) { const j = job, t = j.train; el.innerHTML = `<dl class="kv"><dt>Result</dt><dd>${esc(t.state)}</dd><dt>Steps</dt><dd>${t.step} of ${t.total}</dd><dt>Trigger</dt><dd>${esc(j.agent.trigger_token)}</dd><dt>Settings</dt><dd>${j.auto ? `dim 32, alpha 16, UNet 0.0001 and text encoders 0.00002, captions of what is in each picture, trigger words ${esc(j.agent.trigger_token)} and ${esc(j.auto.outfit_trigger || j.agent.trigger_token + "_outfit")}` : 'dim 32, alpha 16, learning rate 0.0001, UNet only'}</dd><dt>Kept stage</dt><dd>${j.lora?.stage ?? 'not chosen'}</dd></dl>
   <div class="pics">${Object.entries(j.stage_tests || {}).map(([s, f]) => `<div class="pic ${j.lora?.stage === +s ? 'sel' : ''}"><img src="${file(j.id, f)}" alt=""><div class="bar">Stage ${s}</div></div>`).join('')}</div>`; }
-function pickable(box, list, onPick) { box.className = 'pics'; list.forEach(g => { const b = document.createElement('button'); b.className = 'pic'; b.innerHTML = `<img src="${file(job.id, g.file)}" alt="Option">`; b.title = 'This is it'; b.onclick = () => onPick(g); box.append(b); }); }
+function pickable(box, list, onPick) {
+  box.className = 'gridthree';
+  const rendering = /^Rendering/.test(job.busy || ''), bar = document.createElement('div'); bar.className = 'gridbar'; box.after(bar);
+  job.gridPicks = (job.gridPicks || []).filter(f => list.some(g => g.file === f));
+  const update = () => { const n = job.gridPicks.length;
+    bar.innerHTML = rendering || !list.length ? '' : `<span class="note">${n ? `${n} picked` : 'Tick the ones you like'}</span>${n === 1 ? '<button class="go" id="thisis">This is it</button>' : ''}`;
+    if ($('thisis')) $('thisis').onclick = () => { if (!job.busy) onPick(list.find(g => g.file === job.gridPicks[0])); };
+    if ($('att')) $('att').textContent = n ? `${n} picture${n > 1 ? 's' : ''} attached` : ''; };
+  list.forEach(g => { const b = document.createElement('div'), on = () => job.gridPicks.includes(g.file); b.className = 'pic' + (on() ? ' sel' : ''); b.tabIndex = 0; b.setAttribute('role', 'button');
+    b.innerHTML = `<img src="${file(job.id, g.file)}" alt="Option"><span class="openfull" role="button" tabindex="0" title="Enlarge" aria-label="Enlarge picture">↗</span><span class="check" aria-hidden="true">✓</span>${g.label ? `<div class="bar">${esc(g.label)}</div>` : ''}`; b.setAttribute('aria-pressed', on());
+    b.onclick = () => { if (job.busy) return; if (on()) job.gridPicks = job.gridPicks.filter(f => f !== g.file); else if (job.gridPicks.length < 3) job.gridPicks = [...job.gridPicks, g.file]; else return;
+      b.classList.toggle('sel', on()); b.setAttribute('aria-pressed', on()); update(); };
+    const big = b.querySelector('.openfull'), enlarge = e => { e.stopPropagation(); e.preventDefault(); lightbox(list.map(x => ({ src:file(job.id, x.file), caption:x.label || '' })), list.indexOf(g)); };
+    big.onclick = enlarge; big.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') enlarge(e); };
+    b.onkeydown = e => { if (e.target === b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); } }; box.append(b); });
+  if (rendering) for (let i = list.length; i < 3; i++) { const d = document.createElement('div'); d.className = 'pic pending'; box.append(d); }
+  update();
+  const told = list.filter(g => g.character);
+  if (told.length && !rendering) { const d = document.createElement('details'); d.className = 'promptlist'; d.innerHTML = `<summary>Prompts of this round</summary>${told.map(g => `<h3>${esc(g.label)}</h3><dl class="kv"><dt>Character</dt><dd>${esc(g.character)}</dd><dt>Signature</dt><dd>${esc(g.outfit)}</dd><dt>Scene</dt><dd>${esc(g.scene)}</dd><dt>Raw prompt</dt><dd>${esc(g.positive)}</dd><dt>Seed</dt><dd>${g.seed}</dd></dl>`).join('')}`; bar.after(d); }
+}
+function dialogueBox(text, live, id) {
+  return `<div class="dlg ${live ? 'live' : 'past'}"><span class="dlg-name">Yumeko</span><div class="dlg-box"><div class="dlg-face"><img src="/yumeko-head.png" alt=""></div><p class="dlg-text" ${id ? `id="${id}" aria-live="polite"` : ''}>${esc(text)}</p></div></div>`;
+}
+function typeOut(box) {  // each new line types out once; a redraw of the same line stays still
+  const text = box?.textContent; if (!text || job.spoken === text) return;
+  job.spoken = text;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  let n = 0; box.textContent = ''; const t = setInterval(() => { box.textContent = text.slice(0, ++n); const log = box.closest('.chat'); if (log) log.scrollTop = 1e6; if (n >= text.length) clearInterval(t); }, 18);
+  box.closest('.dlg-box').onclick = () => { clearInterval(t); box.textContent = text; const log = box.closest('.chat'); if (log) log.scrollTop = 1e6; };
+}
 function p1(el) {
   const j = job, q = j.phase1;
-  el.innerHTML = `<h3>Style</h3><p class="note">Previews show this agent on JANKU, the checkpoint proven for training. A style applies to everything this job renders.</p>
-    <div class="row" style="margin-bottom:8px"><input id="look" placeholder="Her look as tags (used for the previews)" value="${esc(j.lookText || '')}" style="flex:1"><button id="prev" ${j.busy ? 'disabled' : ''}>Render style previews</button></div>
-    <div class="pics four" id="styles"></div>
-    <div class="two" style="margin-top:14px"><div><div id="grid"></div>${outfitLine(q.tags)}${q.grid.length ? '<p class="note">Click the picture that is it, or keep chatting for another grid.</p>' : ''}</div>
-    <div><div class="chat" id="log"></div><div class="row"><textarea id="txt" rows="2" placeholder="Describe her, or ask for changes" style="flex:1">${esc(job.chatDraft || '')}</textarea><button class="go" id="send" ${j.busy ? 'disabled' : ''}>Send</button></div><div style="margin-top:10px">${tagBox()}</div></div></div>`;
-  const s = $('styles'); Object.entries({ modern:'Modern anime', nineties:'90s anime', '2.5d':'2.5D', semireal:'Semi-real' }).forEach(([k, label]) => {
-    const f = j.style_previews?.[k], b = document.createElement('button'); b.className = 'pic' + (j.style === k ? ' sel' : '');
-    b.innerHTML = `${f ? `<img src="${file(j.id, f)}?${j.updated}" alt="">` : ''}<div class="bar">${label}</div>`;
-    b.onclick = () => act('style', { id:j.id, style:k }).then(refresh); s.append(b); });
-  $('prev').onclick = () => act('previews', { id:j.id, look:$('look').value }).then(refresh);
-  $('log').innerHTML = q.chat.map(m => `<p class="${m.role === 'user' ? 'user' : ''}">${esc(m.text)}</p>`).join('') || '<p>Fine, I\'m up. Who are we drawing?</p>';
-  $('log').scrollTop = 1e6;
+  const showGrid = q.grid.length || /^Rendering/.test(j.busy || '');
+  const styleNames = { modern:'Modern anime', nineties:'90s anime', '2.5d':'2.5D', semireal:'Semi-real', gothic:'Gothic', photoreal:'Photorealistic', '3d':'3D render', novel:'Light novel', cel:'Cel shading', lineart:'Clean lineart', cyberpunk:'Cyberpunk', softfantasy:'Soft fantasy' };
+  if (j.choosing || !(j.styles?.length || q.chat.length || q.grid.length)) {  // the styles come first; the chat opens once they're chosen
+    job.picks ||= [...(j.styles || [])];
+    el.innerHTML = `<div class="slim">${dialogueBox('What style are we drawing today?', true)}</div><div class="stylepick"><div class="styletiles" id="styles"></div><button class="go" id="stylego">Continue</button></div>`;
+    const go = $('stylego'), mark = () => { go.hidden = !job.picks.length; };
+    Object.entries(styleNames).forEach(([k, label]) => { const b = document.createElement('button'); b.className = 'pic' + (job.picks.includes(k) ? ' sel' : ''); b.setAttribute('aria-pressed', job.picks.includes(k));
+      b.innerHTML = `<img src="/yumeko-file/_styles/${encodeURIComponent(k)}.png" alt="Example of ${label}"><span class="check" aria-hidden="true">✓</span><div class="bar">${label}</div>`;
+      b.onclick = () => { job.picks = job.picks.includes(k) ? job.picks.filter(x => x !== k) : [...job.picks, k]; b.classList.toggle('sel', job.picks.includes(k)); b.setAttribute('aria-pressed', job.picks.includes(k)); mark(); }; $('styles').append(b); });
+    mark();
+    go.onclick = () => { const styles = job.picks; job.choosing = false; job.picks = null; act('style', { id:j.id, styles }).then(refresh); };
+    typeOut(el.querySelector('.dlg-text'));
+    return;
+  }
+  el.innerHTML = `<div class="stylemini">${(j.styles || [j.style]).map(k => `<figure><img src="/yumeko-file/_styles/${encodeURIComponent(k)}.png" alt=""><figcaption>${esc(styleNames[k])}</figcaption></figure>`).join('')}${q.grid.length ? '' : '<button id="restyle">Change</button>'}</div>
+    <div class="design ${showGrid ? 'has' : ''}">
+      <div ${showGrid ? '' : 'hidden'}><div id="grid"></div>${outfitLine(q.tags)}</div>
+      <div><div class="chat" id="log"></div><div class="promptbox"><p class="note" id="att" style="margin:0 0 4px;min-height:1.55em"></p><div class="composerbox"><textarea id="txt" rows="3" aria-label="Message to Yumeko" placeholder="Describe her, or ask for changes">${esc(job.chatDraft || '')}</textarea><button class="go" id="send" aria-label="Send" ${j.busy ? 'disabled' : ''}>↑</button></div><div class="row" style="margin:6px 0"><label class="btnlike" for="ref">Attach a picture to recreate</label><input type="file" id="ref" accept="image/*" hidden></div>${tagBox()}</div></div>
+    </div>`;
+  $('ref').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { job.refDraft = r.result; $('att').textContent = `Attached: ${f.name}`; }; r.readAsDataURL(f); };
+  if (job.refDraft) $('att').textContent = 'Picture attached';
+  if ($('restyle')) $('restyle').onclick = () => { job.choosing = true; paintJob(); };
+  chatPanel(q, "Fine, I'm up. Who are we drawing?");
+}
+function chatPanel(q, hello) {
+  const j = job, lines = q.chat.length ? q.chat : [{ role:'yumeko', text:hello }];
+  const lastBot = j.busy ? -1 : lines.map(m => m.role).lastIndexOf('yumeko');
+  $('log').innerHTML = lines.map((m, i) => m.role === 'user' ? `<p class="user">${m.reference ? `<img src="${file(j.id, m.reference)}" alt="Reference picture" style="display:block;max-width:140px;border-radius:6px;margin-bottom:4px">` : ''}${esc(m.text)}</p>` : dialogueBox(m.text, i === lastBot)).join('') + (j.busy ? dialogueBox(j.busy + ' …', true) : '');
+  if (!j.busy) typeOut($('log').querySelector('.dlg.live .dlg-text'));
+  const toEnd = () => { if ($('log')) $('log').scrollTop = 1e6; }; toEnd(); requestAnimationFrame(toEnd); setTimeout(toEnd, 200);
   tagSearch({ txt:'text' }, (key, value) => job.chatDraft = value);
   $('txt').oninput = e => job.chatDraft = e.target.value;
-  const send = () => { const t = $('txt').value.trim(); if (t) { job.chatDraft = ''; act('chat', { id:j.id, text:t }).then(refresh); } };
+  const send = () => { const t = $('txt').value.trim(); if (t) { job.chatDraft = ''; const reference = job.refDraft; job.refDraft = null; act('chat', { id:j.id, text:t, picks:job.gridPicks || [], ...(reference ? { reference } : {}) }).then(refresh); } };
   $('send').onclick = send; $('txt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
   pickable($('grid'), q.grid, g => act('approve', { id:j.id, file:g.file }).then(refresh));
 }
-function autocomplete(input) {
-  const wrap = input.parentElement; let ul;
-  input.addEventListener('input', () => { ul?.remove(); const word = input.value.split(/[,\n]/).pop().trim().replace(/ /g, '_').toLowerCase(); if (word.length < 2) return;
-    const hits = catalog.tags.filter(t => t.tag.includes(word)).slice(0, 8); if (!hits.length) return;
-    ul = document.createElement('ul'); hits.forEach(h => { const li = document.createElement('li'); li.textContent = `${h.tag}  (${h.yumeko_category})`;
-      li.onclick = () => { const v = input.value.split(','); v[v.length - 1] = ' ' + h.tag; input.value = v.join(',').replace(/^ /, '') + ', '; ul.remove(); input.focus(); }; ul.append(li); }); wrap.append(ul); });
-}
+const openedSecond = new Set();
 function p2(el) {
-  const j = job, q = j.phase2;
-  el.innerHTML = `<div class="two"><div><div id="grid"></div></div><div><h3>First base</h3><img src="${file(j.id, j.bases[0].file)}" alt="First base" style="width:100%;border-radius:10px">
-    ${outfitLine(j.bases[0].tags)}<h3>Your prompt</h3><p class="note">You steer now. Aim for a second picture that complements the first, such as another angle. Tags autocomplete.</p>
-    <div class="sugg"><textarea id="pos" rows="7">${esc(q.positive)}</textarea></div>${tagBox()}<h3>Negative</h3><textarea id="neg" rows="3">${esc(q.negative)}</textarea>
-    <div class="row" style="margin-top:8px"><button class="go" id="r" ${j.busy ? 'disabled' : ''}>Render 3×3</button></div></div></div>`;
-  autocomplete($('pos')); tagSearch({ pos:'positive' });
-  $('r').onclick = () => act('phase2', { id:j.id, positive:$('pos').value, negative:$('neg').value }).then(refresh);
-  pickable($('grid'), q.grid, g => act('approve', { id:j.id, file:g.file }).then(refresh));
+  const j = job, q = j.phase2; q.chat ||= [];
+  el.innerHTML = `<div class="stylemini"><figure><img src="${file(j.id, j.bases[0].file)}" alt="First base"><figcaption>First base</figcaption></figure></div>
+    <div class="design has">
+      <div><div id="grid"></div>${q.grid.length ? `<details class="promptlist" id="own" ${j.ownOpen ? 'open' : ''}><summary>Write the prompt yourself</summary><div class="sugg"><textarea id="pos" rows="5" aria-label="Prompt">${esc(q.positive)}</textarea></div><h3>Negative</h3><textarea id="neg" rows="2" aria-label="Negative prompt">${esc(q.negative)}</textarea><div class="row" style="margin-top:8px"><button class="go" id="r" ${j.busy ? 'disabled' : ''}>Render 3</button></div></details>` : ''}</div>
+      <div><div class="chat" id="log"></div><div class="promptbox"><p class="note" id="att" style="margin:0 0 4px;min-height:1.55em"></p><div class="composerbox"><textarea id="txt" rows="3" aria-label="Message to Yumeko" placeholder="Pick what you like, or ask for changes">${esc(job.chatDraft || '')}</textarea><button class="go" id="send" aria-label="Send" ${j.busy ? 'disabled' : ''}>↑</button></div>${tagBox()}</div></div>
+    </div>`;
+  chatPanel(q, 'Same woman, new angle. Give me a moment.');
+  if ($('own')) { $('own').ontoggle = e => job.ownOpen = e.target.open; $('r').onclick = () => act('phase2', { id:j.id, positive:$('pos').value, negative:$('neg').value, picks:job.gridPicks || [] }).then(refresh); }
+  if (!q.chat.length && !q.grid.length && !j.busy && !j.error && !openedSecond.has(j.id)) { openedSecond.add(j.id); act('chat', { id:j.id, opening:true }).then(refresh); }
+}
+const fillKick = {};
+function baseRef(j, i, label) {
+  const b = j.bases[i];
+  return b ? `<figure class="baseref"><button data-i="${i}" aria-label="Enlarge ${label.toLowerCase()}"><img src="${file(j.id, b.file)}" alt="${label}"></button><figcaption>${label}</figcaption></figure>` : '<span></span>';
 }
 function p3(el) {
   const j = job, d = j.dataset, undecided = d.batch.filter(c => c.keep == null).length, kept = d.accepted.length + d.batch.filter(c => c.keep).length;
   const groups = d.plan?.groups || [], inGroup = k => d.accepted.filter(a => (a.group || 'signature') === k).length + d.batch.filter(c => c.keep && (c.group || 'signature') === k).length;
   const now = groups.find(g => g.on && inGroup(g.key) < g.target), goal = groups.filter(g => g.on).reduce((n, g) => n + g.target, 0) || 30;
-  const showing = d.batch[0] ? groups.find(g => g.key === (d.batch[0].group || 'signature')) : now;
+  const first = d.batch.find(c => c.keep == null), showing = (first && groups.find(g => g.key === (first.group || 'signature'))) || now;
   const open = !d.accepted.length && !d.batch.length ? 'open' : '';
-  el.innerHTML = `<div class="row"><b>${kept} of ${goal} kept</b><span class="note">${showing ? `${esc(showing.label)}, ${inGroup(showing.key)} of ${showing.target}` : 'Every outfit is done'}</span></div>
-    <div class="meter"><i style="width:${Math.min(100, kept / goal * 100)}%"></i></div>
-    <ol class="groups">${groups.map(g => `<li class="${!g.on ? 'off' : inGroup(g.key) >= g.target ? 'done' : g === now ? 'now' : ''}">${esc(g.label)} ${inGroup(g.key)}/${g.target}</li>`).join('')}</ol>
-    <div class="row" style="margin-bottom:12px"><button class="go" id="next" ${j.busy || undecided || (groups.length && !now) ? 'disabled' : ''}>${!d.batch.length ? 'Start first batch' : now && now !== showing ? 'Next: ' + esc(now.label) : 'Next'}</button>
-    <button id="train" ${kept < 30 || undecided || j.busy ? 'disabled' : ''}>Start training</button>${undecided ? `<span class="note">${undecided} left to decide</span>` : ''}</div>
-    ${d.plan ? `<details ${open} style="margin-bottom:12px"><summary>Outfit plan</summary><div class="plan">
+  const groupClass = g => !g.on ? 'off' : inGroup(g.key) >= g.target ? 'done' : g === showing ? 'now' : '';
+  el.innerHTML = `<div class="settop">
+      <div class="setsum"><strong>${kept}<small> / ${goal}</small></strong><span>kept</span></div>
+      <p class="note setnow">${undecided ? `${undecided} ready${showing ? `, ${esc(showing.label)}` : ''}` : showing ? `${esc(showing.label)}, ${inGroup(showing.key)} of ${showing.target}` : 'Every outfit is done'}</p>
+      <div class="setacts">${d.plan ? `<button id="plantoggle" aria-expanded="${!!(job.planOpen ?? open)}" aria-controls="planbox">Outfit plan</button>` : ''}
+        <button class="go" id="train" ${j.busy ? 'disabled' : ''} ${kept < 30 ? 'hidden' : ''}>Start training</button></div>
+      <ol class="settrack">${groups.map(g => `<li class="${groupClass(g)}" style="flex-grow:${g.target}" title="${esc(g.label)}, ${inGroup(g.key)} of ${g.target}"><i style="width:${Math.min(100, inGroup(g.key) / g.target * 100)}%"></i><span>${esc(g.label.split(' and ')[0])}</span><b>${inGroup(g.key)}/${g.target}</b></li>`).join('')}</ol>
+    </div>
+    ${d.plan ? `<div id="planbox" style="margin-bottom:12px" ${(job.planOpen ?? open) ? '' : 'hidden'}><div class="plan">
       <div><label for="pm">Always on her: stays out of the captions, so it sticks to the trigger</label><textarea id="pm" rows="2">${esc(d.plan.permanent.join(', '))}</textarea></div>
       <div><label for="sg">Signature outfit: removed for the other outfits and captioned</label><textarea id="sg" rows="2">${esc(d.plan.signature.join(', '))}</textarea></div>
       ${groups.slice(1).map(g => `<div class="o"><label><input type="checkbox" data-on="${g.key}" ${g.on ? 'checked' : ''}> ${esc(g.label)}</label><input data-tags="${g.key}" aria-label="${esc(g.label)} tags" value="${esc(g.tags)}"></div>`).join('')}
-    </div></details>` : ''}
-    <div class="pics" id="b"></div><details style="margin-top:14px"><summary>Tag balance</summary><div class="bal">${Object.values(j.balance).flatMap(f => Object.entries(f)).map(([t, n]) => `<span>${esc(t)} ${n}</span>`).join('')}</div></details>
+    </div></div>` : ''}
+    <div class="compare">${baseRef(j, 0, 'First base')}<div class="swipe" id="b"></div>${baseRef(j, 1, 'Second base')}</div><details style="margin-top:14px"><summary>Tag balance</summary><div class="bal">${Object.values(j.balance).flatMap(f => Object.entries(f)).map(([t, n]) => `<span>${esc(t)} ${n}</span>`).join('')}</div></details>
     ${d.accepted.length ? `<details style="margin-top:10px"><summary>Kept so far, ${d.accepted.length}</summary><div style="margin-top:8px">${setGallery(j)}</div></details>` : ''}`;
   if (d.plan) {
+    $('plantoggle').onclick = e => { job.planOpen = $('planbox').hidden; $('planbox').hidden = !job.planOpen; e.target.setAttribute('aria-expanded', job.planOpen); };
     const send = body => act('outfits', { id:j.id, ...body }).then(refresh);
     $('pm').onchange = e => send({ permanent:e.target.value }); $('sg').onchange = e => send({ signature:e.target.value });
     el.querySelectorAll('[data-on]').forEach(c => c.onchange = () => send({ groups:{ [c.dataset.on]:{ on:c.checked } } }));
     el.querySelectorAll('[data-tags]').forEach(c => c.onchange = () => send({ groups:{ [c.dataset.tags]:{ tags:c.value } } }));
   }
-  d.batch.forEach(c => { const w = document.createElement('div'); w.className = 'pic' + (c.keep === true ? ' keep' : c.keep === false ? ' drop' : '');
-    w.innerHTML = `<img src="${file(j.id, c.file)}" alt="Candidate"><div class="bar"><button data-k="1">Keep</button><button data-k="0">Discard</button></div><textarea class="tags" aria-label="Tags visible in this picture">${esc(c.tags.join(', '))}</textarea>`;
-    w.querySelectorAll('[data-k]').forEach(b => b.onclick = () => act('decide', { id:j.id, file:c.file, keep:b.dataset.k === '1', tags:w.querySelector('textarea').value.split(',') }).then(refresh));
-    w.querySelector('textarea').onchange = e => act('decide', { id:j.id, file:c.file, tags:e.target.value.split(',') });
-    $('b').append(w); });
-  $('next').onclick = () => act('batch', { id:j.id }).then(refresh);
+  const wanted = d.batch.findIndex(x => x.file === job.at), at = wanted >= 0 ? wanted : d.batch.findIndex(x => x.keep == null), c = d.batch[at];
+  const decided = d.batch.filter(x => x.keep != null).length, back = at < 0 ? d.batch.length - 1 : at - 1;
+  const decide = async keep => { if (job.deciding) return; job.deciding = true; const r = await act('decide', { id:j.id, file:c.file, keep }); job.deciding = false; if (r) { job = { ...job, ...r, at:null }; paintJob(); } };
+  $('b').innerHTML = (c ? `<div class="shotbox"><button class="shot" id="big" aria-label="Enlarge this picture"><img src="${file(j.id, c.file)}" alt="Candidate ${at + 1} of ${d.batch.length}"></button>
+      <div class="swipebar"><button class="nope" id="no" aria-label="Dismiss" title="Dismiss, left arrow key">✕</button><button class="love" id="yes" aria-label="Keep" title="Keep, right arrow key">♥</button></div></div>`
+    : `<p class="note swipedone">${now ? 'Rendering the next picture …' : 'Every outfit is done. Start training when you like.'}</p>`)
+    + (d.batch.length ? `<p class="note swipecount">${c ? `${undecided} ready` : ''}${back >= 0 ? ' <button id="back">Back one</button>' : ''}</p>` : '');
+  if (c) { $('no').onclick = () => decide(false); $('yes').onclick = () => decide(true); $('big').onclick = () => lightbox([{ src:file(j.id, c.file), caption:'' }], 0); }
+  if ($('back')) $('back').onclick = () => { job.at = d.batch[back].file; paintJob(); };
+  if (now && undecided < 9 && !j.busy && !j.error && Date.now() - (fillKick[j.id] || 0) > 15000) { fillKick[j.id] = Date.now(); act('batch', { id:j.id }); }
+  document.onkeydown = e => { if (!$('yes') || e.repeat || document.querySelector('dialog[open]') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if (e.key === 'ArrowRight') decide(true); if (e.key === 'ArrowLeft') decide(false); };
+  el.querySelectorAll('.baseref button').forEach(b => b.onclick = () => lightbox(j.bases.map((x, i) => ({ src:file(j.id, x.file), caption:i ? 'Second base' : 'First base' })), +b.dataset.i));
   $('train').onclick = () => act('train', { id:j.id }).then(refresh);
+}
+const FORMATS = [['Square', 1024, 1024], ['Landscape 3:2', 1216, 832], ['Wide 16:9', 1344, 768], ['Portrait 2:3', 832, 1216], ['Tall 9:16', 768, 1344]];
+const KINDS = { closeup:'Close-ups', upper:'Upper body', cowboy:'Cowboy shots', full:'Full body', action:'Action', back:'Back and side' };
+function p3auto(el) {
+  const j = job, a = j.auto;
+  if (!a) {
+    el.innerHTML = `<div class="slim">${dialogueBox('I can build the whole set myself. You check the result, one picture at a time. Or you pick every picture by hand, if you enjoy that sort of thing.', true)}</div>
+      <div class="row" style="margin-top:14px"><button class="go" id="auto" ${j.busy ? 'disabled' : ''}>Let Yumeko build it</button><button id="manual">Pick by hand</button></div>`;
+    typeOut(el.querySelector('.dlg-text'));
+    $('auto').onclick = () => act('auto_open', { id:j.id }).then(refresh);
+    $('manual').onclick = () => { job.manual = true; paintJob(); };
+    return;
+  }
+  const refs = `<div class="stylemini">${j.bases.map((b, i) => `<figure><img src="${file(j.id, b.file)}" alt=""><figcaption>${i ? 'Second base' : 'First base'}</figcaption></figure>`).join('')}${j.phase1.reference ? `<figure><img src="${file(j.id, j.phase1.reference)}" alt=""><figcaption>Reference</figcaption></figure>` : ''}</div>`;
+  if (a.state === 'card') {
+    el.innerHTML = `${refs}<div class="design has"><div>
+        <h3>Checklist, one check per line</h3><p class="note">Every picture has to pass these. Edit freely.</p><textarea id="ck" rows="9">${esc(a.checklist.join('\n'))}</textarea>
+        <details class="promptlist"><summary>Her tags</summary><label for="pm">Always on her, in every outfit: hair, eyes, marks, and accessories she keeps</label><textarea id="pm" rows="3">${esc(a.permanent)}</textarea>
+          <label for="sg">Signature outfit: her other outfits replace all of this</label><textarea id="sg" rows="3">${esc(a.signature)}</textarea><label for="ng">Negative</label><textarea id="ng" rows="2">${esc(a.negative)}</textarea></details>
+        <fieldset class="row" style="border:0;padding:0;margin:10px 0"><legend class="note">Size</legend><label><input type="radio" name="bud" value="quick" ${a.budget === 'quick' ? 'checked' : ''}> Quick, about 35 pictures</label><label><input type="radio" name="bud" value="full" ${a.budget !== 'quick' ? 'checked' : ''}> Thorough, about 70</label></fieldset>
+        <div class="row"><button class="go" id="build" ${j.busy || !a.checklist.length ? 'disabled' : ''}>Build the set</button>${j.bases.length < 2 ? `<button id="second" ${j.busy ? 'disabled' : ''} title="For a back or a detail the base doesn't show">Add a second view</button>` : ''}</div></div>
+      <div><div class="chat" id="log"></div><div class="promptbox"><p class="note" id="att" style="margin:0 0 4px;min-height:1.55em"></p><div class="composerbox"><textarea id="txt" rows="3" aria-label="Message to Yumeko" placeholder="What matters most about her? What did I miss?">${esc(job.chatDraft || '')}</textarea><button class="go" id="send" aria-label="Send" ${j.busy ? 'disabled' : ''}>↑</button></div></div></div></div>`;
+    const lines = a.chat.length ? a.chat : [{ role:'yumeko', text:'Let me look at her first …' }], lastBot = j.busy ? -1 : lines.map(m => m.role).lastIndexOf('yumeko');
+    $('log').innerHTML = lines.map((m, i) => m.role === 'user' ? `<p class="user">${esc(m.text)}</p>` : dialogueBox(m.text, i === lastBot)).join('') + (j.busy ? dialogueBox(j.busy + ' …', true) : '');
+    if (!j.busy) typeOut($('log').querySelector('.dlg.live .dlg-text'));
+    $('log').scrollTop = 1e6;
+    $('txt').oninput = e => job.chatDraft = e.target.value;
+    const save = () => act('auto_card', { id:j.id, checklist:$('ck').value.split('\n'), permanent:$('pm').value, signature:$('sg').value, negative:$('ng').value, budget:el.querySelector('[name=bud]:checked').value });
+    ['ck', 'pm', 'sg', 'ng'].forEach(k => $(k).onchange = () => save().then(refresh));
+    el.querySelectorAll('[name=bud]').forEach(r => r.onchange = () => save().then(refresh));
+    const send = () => { const t = $('txt').value.trim(); if (t) { job.chatDraft = ''; act('auto_chat', { id:j.id, text:t }).then(refresh); } };
+    $('send').onclick = send; $('txt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+    if ($('second')) $('second').onclick = () => act('auto_second', { id:j.id }).then(refresh);
+    $('build').onclick = async () => { const r = await save(); if (r) act('auto_go', { id:j.id }).then(refresh); };
+    return;
+  }
+  const S = a.slots, count = st => S.filter(s => st.includes(s.state)).length, inSet = count(['kept', 'approved']);
+  const has = s => ['kept', 'approved'].includes(s.state);
+  const byKind = Object.keys(KINDS).map(k => { const of = S.filter(s => s.group === 'signature' && s.kind === k); return `<li><span>${KINDS[k]}</span><b>${of.filter(has).length}/${of.length}</b></li>`; }).join('')
+    + `<li><span>Other outfits</span><b>${S.filter(s => s.group === 'other' && has(s)).length}/${S.filter(s => s.group === 'other').length}</b></li>`;
+  const working = ['hardening', 'building'].includes(a.state);
+  const status = a.paused ? 'Paused' : working ? (a.running ? (a.now || 'Working') + ' …' : 'Paused, the server restarted') : 'Set built';
+  const rounds = a.rounds.map(r => `<li>Test round ${r.round}: ${r.passed} of ${r.of} passed${r.changes ? `. ${esc(r.changes)}` : ''}</li>`).join('');
+  const up = S.find(s => s.state === 'kept'), approved = count(['approved']), open = count(['kept']), todo = count(['todo']);
+  const reviewing = a.reviewed && up;
+  el.innerHTML = `${refs}<div class="settop"><div class="setsum"><strong>${inSet}<small> / ${S.length}</small></strong><span>in the set</span></div>
+      <p class="note setnow" aria-live="polite">${esc(status)}${a.rejected ? `, ${a.rejected} rejected so far` : ''}${count(['skipped']) ? `, ${count(['skipped'])} given up` : ''}</p>
+      <div class="setacts">${working ? (a.paused || !a.running ? '<button class="go" id="resume">Resume</button>' : '<button id="pause">Pause</button>') : ''}
+      ${a.reviewed ? `<button class="go" id="train" ${open || todo || j.busy ? 'disabled' : ''}>Start training</button>` : ''}${j.train?.state === 'stopped' ? `<button id="exstop" ${j.busy ? 'disabled' : ''} title="Test the stages the stopped training saved, then pick one">Examine the stopped run</button>` : ''}</div></div>
+    <ul class="kinds">${byKind}</ul>
+    ${reviewing ? `<div class="compare">${baseRef(j, 0, 'First base')}<div class="swipe"><div class="shotbox"><button class="shot" id="big" aria-label="Enlarge this picture"><img src="${file(j.id, up.file)}" alt="Picture up for review"></button>
+        <p class="note">${esc(KINDS[up.kind] || up.kind)}${up.outfit ? `, ${esc(up.outfit)}` : ''}. Caption: ${esc(up.caption)}</p>
+        ${up.notes ? `<p class="note judgenote${/^missing:/i.test(up.notes) ? ' warn' : ''}" title="What the judge noticed but let pass">Judge noted: ${esc(up.notes)}</p>` : ''}
+        <div class="row"><input id="why" placeholder="What's wrong? Needed to dismiss" aria-label="Reason for dismissing" value="${esc(job.reviewNote || '')}" style="flex:1"></div>
+        <div class="swipebar"><button class="nope" id="no" aria-label="Dismiss" title="Dismiss with the reason above">✕</button><button class="love" id="yes" aria-label="Keep" title="Keep, right arrow key">♥</button></div>
+        <p class="note swipecount">${approved} kept, ${open} to go${todo ? `, ${todo} being rendered` : ''}</p></div></div>${baseRef(j, 1, 'Second base')}</div>`
+      : a.reviewed ? `<p class="note">${todo ? 'Rendering replacements …' : 'Every picture has a heart. Start training when you like.'}</p>` : ''}
+    ${rounds ? `<h3>Hardening</h3><ul class="note">${rounds}</ul>` : ''}
+    <details ${a.reviewed ? '' : 'open'}><summary>In the set so far, ${inSet}</summary><div class="thumbs">${S.filter(has).map(s => `<img loading="lazy" src="${file(j.id, s.file)}" alt="" title="${esc(s.caption)}">`).join('')}</div></details>
+    ${a.reviewed ? `<details><summary>Her tags</summary><p class="note">Change what stays with her in every outfit, then redraw her other outfits. Signature pictures keep their hearts.</p>
+      <label for="rpm">Always on her, in every outfit</label><textarea id="rpm" rows="3">${esc(a.permanent)}</textarea>
+      <label for="rsg">Signature outfit: her other outfits replace all of this</label><textarea id="rsg" rows="3">${esc(a.signature)}</textarea>
+      <button id="retag" ${working ? 'disabled' : ''}>Save and redraw other outfits</button></details>` : ''}
+    <details><summary>Checklist</summary><ul class="note">${a.checklist.map(c => `<li>${esc(c)}</li>`).join('')}</ul></details>
+    <details><summary>Log</summary><ul class="note">${(a.log || []).slice().reverse().map(l => `<li>${esc(l.text)}</li>`).join('')}</ul></details>`;
+  if ($('pause')) $('pause').onclick = () => act('auto_pause', { id:j.id }).then(refresh);
+  if ($('resume')) $('resume').onclick = () => act('auto_resume', { id:j.id }).then(refresh);
+  if ($('train')) $('train').onclick = () => act('auto_train', { id:j.id }).then(refresh);
+  if ($('exstop')) $('exstop').onclick = () => act('auto_exam', { id:j.id }).then(refresh);
+  if ($('retag')) $('retag').onclick = () => act('auto_retag', { id:j.id, permanent:$('rpm').value, signature:$('rsg').value }).then(refresh);
+  if (reviewing) {
+    $('why').oninput = e => job.reviewNote = e.target.value;
+    const send = async keep => { if (job.deciding) return; const comment = $('why').value.trim(); if (!keep && !comment) { $('why').focus(); return; }
+      job.deciding = true; const r = await act('auto_verdict', { id:j.id, slot:up.id, keep, comment }); job.deciding = false; if (r) { job.reviewNote = ''; refresh(r); } };
+    $('yes').onclick = () => send(true); $('no').onclick = () => send(false); $('big').onclick = () => lightbox([{ src:file(j.id, up.file), caption:up.caption }], 0);
+    document.onkeydown = e => { if (e.repeat || document.querySelector('dialog[open]') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === 'ArrowRight') send(true); };
+    el.querySelectorAll('.baseref button').forEach(b => b.onclick = () => lightbox(j.bases.map((x, i) => ({ src:file(j.id, x.file), caption:i ? 'Second base' : 'First base' })), +b.dataset.i));
+  }
+}
+function examView(j) {
+  const e = j.exam;
+  return `<p>Training finished. The exam renders the same six scenes with every stage, on the trigger words alone, and I judge them against the checklist. You decide.</p>
+    <div class="row"><button class="go" id="ex" ${j.busy ? 'disabled' : ''}>${j.busy ? esc(j.busy) + ' …' : e ? 'Run the exam again' : 'Run the exam'}</button></div>
+    ${e ? Object.entries(e.stages).map(([s, r]) => `<section class="examrow"><h3>Stage ${s}: ${r.passed} of ${e.of} passed${s === e.suggested ? ', my pick' : ''}</h3>
+      <div class="thumbs">${r.files.map((f, i) => `<img loading="lazy" src="${file(j.id, f)}" alt="" title="${esc(r.problems[i] || 'passed')}">`).join('')}</div>
+      <p class="note">${r.problems.filter(Boolean).map(esc).join('. ')}</p><button data-stage="${s}" class="${s === e.suggested ? 'go' : ''}">Keep stage ${s}</button></section>`).join('') : ''}
+    ${j.calib ? `<h3>Identity calibration${j.calib.done ? '' : ', running'}</h3><p class="note">Keeping a stage finds the fewest tags her trigger needs. Use adds them silently while the Identity pill is on.</p>
+      ${j.calib.rounds.map(r => `<section class="examrow"><h3>Round ${r.round}: ${r.passed} of ${j.calib.of} passed, ${r.tags} tags${r.round === j.calib.best ? ', kept' : ''}</h3>
+      <p class="note">${esc(Object.entries(r.sets).filter(([, v]) => v).map(([k, v]) => `${k.replace('_', ' ')}: ${v}`).join(' | ') || 'trigger words alone')}</p>
+      <div class="thumbs">${r.files.map((f, i) => `<img loading="lazy" src="${file(j.id, f)}" alt="" title="${esc(r.problems[i] || 'passed')}">`).join('')}</div>${r.changes ? `<p class="note">Next: ${esc(r.changes)}</p>` : ''}</section>`).join('')}` : ''}`;
+}
+function examWire(j) {
+  $('ex').onclick = () => act('auto_exam', { id:j.id }).then(refresh);
+  document.querySelectorAll('[data-stage]').forEach(b => b.onclick = () => act('auto_stage', { id:j.id, stage:+b.dataset.stage }).then(refresh));
 }
 function p4(el) {
   const j = job, t = j.train, pct = Math.round((t.step || 0) / (t.total || 2000) * 100);
@@ -338,34 +683,134 @@ function p4(el) {
 function p5(el) {
   const j = job, l = j.lora;
   const shown = j.gallery.find(g => g.file === j.viewing) || j.gallery[0];
-  const f = job.form ||= { prompt:'', quality:j.defaults.quality, negative:j.defaults.negative, seed:'', size:'832,1216', strength:l?.strength ?? 1 };
-  el.innerHTML = l ? `<div class="use"><div class="viewer"><div class="big">${shown ? `<a href="${file(j.id, shown.file)}" target="_blank" style="display:contents"><img src="${file(j.id, shown.file)}" alt=""></a>` : '<p class="note">Describe a picture to start.</p>'}</div><div class="strip" id="g"></div></div>
+  const f = job.form ||= { prompt:'', block:true, identity:true, trained:j.defaults.trained ?? '', quality:j.defaults.quality, negative:j.defaults.negative, seed:'', size:'832,1216', strength:l?.strength ?? 1 }; if (!f.pilled) { f.pilled = true; pillsFill(j, f); }
+  el.innerHTML = l ? `<div class="use"><div class="viewer"><div class="big">${j.busy === 'Rendering' ? `<div id="live" class="live" style="aspect-ratio:${f.size.replace(',', ' / ')}"><img alt="The picture forming" hidden><div class="livebar"><i></i></div><p class="livetxt">Starting …</p></div>` : shown ? `<button id="open" class="bigbtn" aria-label="Open picture with its prompt"><img src="${file(j.id, shown.file)}" alt=""></button>` : '<p class="note">Describe a picture to start.</p>'}</div><div class="strip" id="g"></div></div>
     <div class="side form"><div class="promptbox"><div><label for="p">Prompt</label><div class="sugg"><textarea id="p" rows="4" placeholder="close-up, smile, garden, daytime">${esc(f.prompt)}</textarea></div></div>
     ${tagBox()}</div>
-    <div><label for="q">Quality tags <button id="qd" style="padding:0 6px;font-size:11px">Default</button></label><textarea id="q" rows="3">${esc(f.quality)}</textarea></div>
-    <div><label for="n">Negative <button id="nd" style="padding:0 6px;font-size:11px">Default</button></label><textarea id="n" rows="3">${esc(f.negative)}</textarea></div>
-    <div class="row"><div style="flex:1"><label for="fmt">Format</label><select id="fmt"><option value="832,1216">Portrait 832×1216</option><option value="1024,1024">Square 1024×1024</option><option value="1216,832">Landscape 1216×832</option></select></div>
-    <div style="flex:1"><label for="seed">Seed</label><div class="row" style="flex-wrap:nowrap"><input id="seed" inputmode="numeric" placeholder="Random" value="${esc(f.seed)}"><button id="dice">Random</button></div></div></div>
+    <div class="row" style="align-items:center;gap:8px"><span class="lbl" id="ttl" style="margin:0" title="Words her LoRA learned besides her name. Outfit trigger on: her signature outfit. Off: she wears what the prompt says.">Trained tags</span><div class="row chips" role="group" aria-labelledby="ttl" style="margin:0">${j.defaults.identity ? `<button class="chip" id="idp" aria-pressed="${f.identity}" title="Identity: writes the few tags her trigger alone misses into Quality and Negative. ${esc(j.defaults.identity)}">Identity</button>` : ''}${(j.defaults.trained_options || []).map(t => `<button class="chip" data-tt="${esc(t)}" aria-pressed="${f.trained.split(', ').includes(t)}"${j.defaults.outfit_tags ? ` title="Also adds: ${esc(j.defaults.outfit_tags)}"` : ''}>${esc(t)}</button>`).join('')}</div></div>
+    <div><label for="q">Quality tags <button id="qd" style="padding:0 6px;font-size:11px">Default</button></label><div class="hl"><div class="hlb" id="qb" aria-hidden="true"></div><textarea id="q" rows="3">${esc(f.quality)}</textarea></div></div>
+    <div><label for="n">Negative <button id="nd" style="padding:0 6px;font-size:11px">Default</button></label><div class="hl"><div class="hlb" id="nb2" aria-hidden="true"></div><textarea id="n" rows="3">${esc(f.negative)}</textarea></div></div>
+    <div><span class="lbl" id="fmtl">Format</span><div class="ratios" role="group" aria-labelledby="fmtl">${FORMATS.map(([label, w, h]) => `<button class="ratio" data-size="${w},${h}" aria-pressed="${f.size === `${w},${h}`}" title="${w}×${h}"><i style="width:${w * 22 / Math.max(w, h)}px;height:${h * 22 / Math.max(w, h)}px"></i><span>${label}</span></button>`).join('')}</div></div>
+    <div><label for="seed">Seed</label><div class="row" style="flex-wrap:nowrap"><input id="seed" style="min-width:0" inputmode="numeric" placeholder="Random" value="${esc(f.seed)}"><button id="dice">Random</button><button class="chip" id="nb" aria-pressed="${f.block}" title="On: ${esc(j.defaults.nudity_block)} go into the negative. Off: they don't. loli and child stay in the negative either way.">NSFW</button></div></div>
     <div><label>LoRA strength <span id="sv">${f.strength}</span></label><input id="str" type="range" min=".3" max="1.3" step=".05" value="${f.strength}" style="padding:0"></div>
     <button class="go" id="r" ${j.busy ? 'disabled' : ''}>${j.busy ? esc(j.busy) + ' …' : 'Render'}</button>
-    <p class="always">Always added: ${esc(j.defaults.always_positive)}. Always in the negative: ${esc(j.defaults.always_negative)}. Stage ${l.stage}.</p>
-    ${shown ? `<details><summary class="note">Exact prompt of this picture</summary><pre class="exact">${esc(shown.sent_positive || shown.prompt)}</pre><pre class="exact">${esc(shown.sent_negative || '')}</pre><p class="note">Seed ${shown.seed}, strength ${shown.strength}, ${shown.width || 832} × ${shown.height || 1216}</p><button id="reuse">Use these settings</button></details>` : ''}</div></div>`
-  : `<p>Training finished. Test the stages, then keep the best one.</p><div class="row"><button class="go" id="t" ${j.busy ? 'disabled' : ''}>Test all stages</button></div><div class="pics" id="st" style="margin-top:12px"></div>`;
+    <p class="always">Always added: ${esc(j.defaults.always_positive)}. Always in the negative: ${esc(j.defaults.always_negative)}${f.block ? '' : ', underage, young, and adult woman in the prompt'}. Stage ${l.stage}.</p>
+</div></div>`
+  : j.auto ? examView(j) : `<p>Training finished. Test the stages, then keep the best one.</p><div class="row"><button class="go" id="t" ${j.busy ? 'disabled' : ''}>Test all stages</button></div><div class="pics" id="st" style="margin-top:12px"></div>`;
+  if (!l && j.auto) return examWire(j);
+  paintLive();
   if (l) { autocomplete($('p'));
     tagSearch({ p:'prompt', q:'quality' }, (key, value) => f[key] = value);
-    $('fmt').value = f.size;
     const bind = (id, key) => $(id).oninput = e => f[key] = e.target.value;
-    bind('p', 'prompt'); bind('q', 'quality'); bind('n', 'negative'); bind('seed', 'seed'); $('fmt').onchange = e => f.size = e.target.value;
+    bind('p', 'prompt'); bind('q', 'quality'); bind('n', 'negative');
+    // Pill tags show in cyan: a backdrop under the transparent textarea repeats its text with those tags marked.
+    const pillSet = i => new Set([j.defaults.pill_tags?.identity, j.defaults.pill_tags?.outfit].flatMap(p => (p?.[i] || '').split(',').map(t => t.trim()).filter(Boolean)));
+    const paintHl = (ta, bd, set) => { bd.innerHTML = ta.value.split(/(,\s*)/).map(t => set.has(t.trim()) ? `<mark>${esc(t)}</mark>` : esc(t)).join('') + ' '; bd.scrollTop = ta.scrollTop; };
+    [['q', 'qb', pillSet(0)], ['n', 'nb2', pillSet(1)]].forEach(([t, b, set]) => { const ta = $(t), bd = $(b), p = () => paintHl(ta, bd, set);
+      ta.addEventListener('input', p); ta.addEventListener('scroll', () => bd.scrollTop = ta.scrollTop); ta._hl = p; p(); });
+    const rehl = () => { $('q')._hl?.(); $('n')._hl?.(); }; bind('seed', 'seed'); el.querySelectorAll('[data-size]').forEach(b => b.onclick = e => { e.preventDefault(); f.size = b.dataset.size; el.querySelectorAll('[data-size]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
     $('str').oninput = e => { f.strength = +e.target.value; $('sv').textContent = e.target.value; };
-    $('qd').onclick = e => { e.preventDefault(); f.quality = j.defaults.quality; $('q').value = f.quality; };
-    $('nd').onclick = e => { e.preventDefault(); f.negative = j.defaults.negative; $('n').value = f.negative; };
+    el.querySelectorAll('[data-tt]').forEach(b => b.onclick = e => { e.preventDefault(); const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
+      pillTags(f, j.defaults.pill_tags?.outfit, on); $('q').value = f.quality; $('n').value = f.negative; rehl();
+      f.trained = [...el.querySelectorAll('[data-tt]')].filter(x => x.getAttribute('aria-pressed') === 'true').map(x => x.dataset.tt).join(', '); });
+    $('qd').onclick = e => { e.preventDefault(); f.quality = j.defaults.quality; pillsFill(j, f, 0); $('q').value = f.quality; rehl(); };
+    $('nd').onclick = e => { e.preventDefault(); f.negative = j.defaults.negative; pillsFill(j, f, 1); $('n').value = f.negative; rehl(); };
+    $('nb').onclick = e => { e.preventDefault(); f.block = !f.block; paintJob(); };
+    if ($('idp')) $('idp').onclick = e => { e.preventDefault(); f.identity = !f.identity; $('idp').setAttribute('aria-pressed', f.identity);
+      pillTags(f, j.defaults.pill_tags?.identity, f.identity); $('q').value = f.quality; $('n').value = f.negative; rehl(); };
     $('dice').onclick = () => { f.seed = ''; $('seed').value = ''; };
-    $('r').onclick = () => { job.viewing = null; const [width, height] = f.size.split(',').map(Number); act('use', { id:j.id, prompt:f.prompt, quality:f.quality, negative:f.negative, seed:f.seed, width, height, strength:f.strength }).then(refresh); };
+    $('r').onclick = () => { job.viewing = null; const [width, height] = f.size.split(',').map(Number); act('use', { id:j.id, prompt:f.prompt, block_nudity:f.block, identity:f.identity !== false, explicit:true, trained:f.trained, quality:f.quality, negative:f.negative, seed:f.seed, width, height, strength:f.strength }).then(refresh); };
     $('p').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('r').click(); } };
-    if ($('reuse')) $('reuse').onclick = () => { Object.assign(f, { prompt:shown.prompt, quality:shown.quality ?? f.quality, negative:shown.negative ?? f.negative, seed:String(shown.seed), strength:shown.strength, size:`${shown.width || 832},${shown.height || 1216}` }); paintJob(); };
+    if ($('open')) $('open').onclick = () => picModal(j, shown, () => { fillUse(j, shown); paintJob(); $('p')?.focus(); });
     j.gallery.forEach(g => { const b = document.createElement('button'); b.title = g.prompt; b.setAttribute('aria-current', g === shown); b.innerHTML = `<img src="${file(j.id, g.file)}" alt="">`; b.onclick = () => { job.viewing = g.file; paintJob(); }; $('g').append(b); });
   } else { $('t').onclick = () => act('stage_test', { id:j.id }).then(refresh);
     Object.entries(j.stage_tests || {}).forEach(([s, f]) => { const b = document.createElement('button'); b.className = 'pic'; b.innerHTML = `<img src="${file(j.id, f)}" alt=""><div class="bar">Keep stage ${s}</div>`; b.onclick = () => act('stage', { id:j.id, stage:+s }).then(refresh); $('st').append(b); }); }
+}
+
+// Pills write their tags visibly: [positive, negative] go into / come out of the Quality and Negative fields.
+function pillTags(f, pair, on) {
+  if (!pair) return;
+  const split = s => (s || '').split(',').map(t => t.trim()).filter(Boolean);
+  [['quality', pair[0]], ['negative', pair[1]]].forEach(([key, tags]) => {
+    const add = split(tags); if (!add.length) return;
+    const have = split(f[key]).filter(t => !add.includes(t));
+    f[key] = (on ? [...have, ...add] : have).join(', ');
+  });
+}
+// Fresh form (or Default button: only = 0 quality, 1 negative): add the tags of every pill that is on.
+function pillsFill(j, f, only) {
+  const p = j.defaults.pill_tags; if (!p) return;
+  const keep = only === undefined ? null : only ? 'negative' : 'quality', save = keep && { ...f };
+  if (f.identity !== false) pillTags(f, p.identity, true);
+  if ((j.defaults.trained_options || []).some(t => f.trained.split(', ').includes(t))) pillTags(f, p.outfit, true);
+  if (keep) Object.keys(save).forEach(k => { if (k !== keep && (k === 'quality' || k === 'negative')) f[k] = save[k]; });
+}
+
+// Prefill the Use form with a rendered picture's prompt, seed and settings.
+function fillUse(j, g) {
+  const f = job.form ||= { prompt:'', block:true, identity:true, trained:j.defaults.trained ?? '', quality:j.defaults.quality, negative:j.defaults.negative, seed:'', size:'832,1216', strength:j.lora?.strength ?? 1 }; f.pilled = true;
+  Object.assign(f, { prompt:g.prompt, block:g.block_nudity ?? true, identity:g.identity ?? true, trained:g.trained ?? f.trained, quality:g.quality ?? f.quality, negative:g.negative ?? f.negative, seed:String(g.seed), strength:g.strength, size:`${g.width || 832},${g.height || 1216}` });
+}
+// Gallery: every Use render as minis; a viewer with prev/next, and a fullscreen slideshow in shuffled order.
+function galleryView(el) {
+  const j = job, g = j.gallery;
+  el.innerHTML = g.length ? `<div class="row" style="justify-content:space-between;margin-bottom:12px"><p class="note" style="margin:0">${g.length} pictures</p><button class="go" id="show">Slideshow</button></div><div class="gal" id="gl"></div>` : '<p class="note">No pictures yet. Render some in Use.</p>';
+  if (!g.length) return;
+  g.forEach((x, i) => { const t = document.createElement('div'); t.className = 'gtile';
+    t.innerHTML = `<button class="pic" title="${esc(x.prompt)}"><img src="${file(j.id, x.file)}" alt="" loading="lazy"></button><button class="gdel" aria-label="Delete picture">✕</button>`;
+    t.querySelector('.pic').onclick = () => galView(j, i);
+    const del = t.querySelector('.gdel');
+    del.onclick = async () => { if (!del.dataset.sure) { del.dataset.sure = 1; del.textContent = 'Delete?'; return; }
+      const r = await act('use_remove', { id:j.id, file:x.file }); if (r) { if (job.viewing === x.file) job.viewing = null; refresh(r); } };
+    del.onblur = () => { delete del.dataset.sure; del.textContent = '✕'; };
+    $('gl').append(t); });
+  $('show').onclick = () => slideshow(j);
+}
+function galView(j, start) {
+  let i = start; const d = document.createElement('dialog'); d.className = 'pv'; d.setAttribute('aria-label', 'Picture and its prompt');
+  d.innerHTML = `<div class="pvpic"><img alt=""><button class="nav prev" aria-label="Previous picture">‹</button><button class="nav next" aria-label="Next picture">›</button></div><div class="pvside"><button class="x" aria-label="Close">✕</button>
+    <p class="note" id="gvn"></p><span class="lbl">Prompt</span><pre class="exact" id="gvp"></pre><p class="note" id="gvs"></p>
+    <div class="row"><button class="go" id="gvuse">Open in Use</button><a class="btnlike" id="gvdl">Download</a></div></div>`;
+  const show = n => { i = (n + j.gallery.length) % j.gallery.length; const g = j.gallery[i], src = file(j.id, g.file);
+    d.querySelector('img').src = src; d.querySelector('#gvn').textContent = `${i + 1} of ${j.gallery.length}`;
+    d.querySelector('#gvp').textContent = g.prompt; d.querySelector('#gvs').textContent = `Seed ${g.seed} · strength ${g.strength} · ${g.width || 832} × ${g.height || 1216}`;
+    const a = d.querySelector('#gvdl'); a.href = src; a.download = g.file; };
+  d.querySelector('.prev').onclick = () => show(i - 1); d.querySelector('.next').onclick = () => show(i + 1);
+  d.querySelector('.x').onclick = () => d.close(); d.onclick = e => { if (e.target === d) d.close(); }; d.onclose = () => d.remove();
+  d.onkeydown = e => { if (e.key === 'ArrowLeft') show(i - 1); if (e.key === 'ArrowRight') show(i + 1); };
+  d.querySelector('#gvuse').onclick = () => { fillUse(j, j.gallery[i]); job.viewing = j.gallery[i].file; job.tab = null; d.close(); paintJob(); };
+  document.body.append(d); show(i); d.showModal();
+}
+function slideshow(j) {
+  const order = j.gallery.map(g => file(j.id, g.file)).sort(() => Math.random() - .5);
+  const box = document.createElement('div'); box.className = 'slides'; box.tabIndex = -1;
+  box.innerHTML = '<img alt=""><img alt="" class="back"><button class="x" aria-label="End slideshow">✕</button>';
+  const [a, b] = box.querySelectorAll('img'); let i = 0, front = a;
+  const next = () => { const back = front === a ? b : a; back.onload = () => { back.classList.remove('back'); front.classList.add('back'); front = back; }; back.src = order[i++ % order.length]; };
+  const end = () => { clearInterval(t); if (document.fullscreenElement) document.exitFullscreen(); box.remove(); };
+  box.querySelector('.x').onclick = end; box.onclick = e => { if (e.target !== box.querySelector('.x')) next(); };
+  box.onkeydown = e => { if (e.key === 'Escape') end(); if (e.key === 'ArrowRight' || e.key === ' ') next(); };
+  document.body.append(box); a.src = order[i++]; const t = setInterval(next, 5000);
+  box.requestFullscreen?.().catch(() => {}); box.focus();
+  document.addEventListener('fullscreenchange', function f() { if (!document.fullscreenElement) { document.removeEventListener('fullscreenchange', f); end(); } });
+}
+function picModal(j, g, variant) {
+  const d = document.createElement('dialog'); d.className = 'pv'; d.setAttribute('aria-label', 'Picture and its prompt');
+  const src = file(j.id, g.file);
+  d.innerHTML = `<img src="${src}" alt=""><div class="pvside"><button class="x" aria-label="Close">✕</button>
+    <span class="lbl">Prompt</span><pre class="exact">${esc(g.sent_positive || g.prompt)}</pre>
+    <span class="lbl">Negative</span><pre class="exact">${esc(g.sent_negative || g.negative || '')}</pre>
+    <p class="note">Seed ${g.seed} · strength ${g.strength} · ${g.width || 832} × ${g.height || 1216}${g.block_nudity === false ? ' · NSFW off' : ''}</p>
+    <div class="row"><button class="go" id="pvvar">Make a variant</button><a class="btnlike" href="${src}" download="${esc(g.file.split('/').pop())}">Download</a><button class="danger" id="pvdel" style="margin-left:auto">Delete</button></div>
+    <p class="note">Make a variant fills the form with this prompt, seed and settings. Change what you like, then render.</p></div>`;
+  document.body.append(d); d.showModal();
+  const close = () => { d.close(); d.remove(); };
+  d.querySelector('.x').onclick = close; d.onclose = () => d.remove();
+  d.onclick = e => { if (e.target === d) close(); };
+  d.querySelector('#pvvar').onclick = () => { close(); variant(); };
+  const del = d.querySelector('#pvdel');
+  del.onclick = async () => { if (!del.dataset.sure) { del.dataset.sure = 1; del.textContent = 'Delete for good?'; return; }
+    const r = await act('use_remove', { id:j.id, file:g.file }); close(); if (r) { job.viewing = null; refresh(r); } };
 }
 
 // ---------- Create Manga ----------
@@ -450,7 +895,8 @@ async function saveMasks() { for (const ch of panel.characters) { const m = draw
     const r = await act('panel_mask', { id:panel.id, character:ch.id, mask:t.toDataURL('image/png') }); if (r) ch.masked = true; } }
 
 // ---------- routes ----------
-async function route() { const h = location.hash.slice(1); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel'));
+if (parent !== window) document.body.classList.add('embedded');  // inside Morpheus the top bar carries this navigation
+async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel'));
   catalog ||= await get('/api/yumeko/catalog');
   try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else await home(); }
   catch (e) { app.innerHTML = ''; fail(e); } }

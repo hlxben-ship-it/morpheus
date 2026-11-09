@@ -16,8 +16,21 @@ accelerate.state.PartialState.destroy_process_group = lambda self, group=None: N
 
 SCRIPTS = Path(__file__).parent / "sd-scripts"
 sys.path.insert(0, str(SCRIPTS))
-sys.argv = ["sdxl_train_network.py"] + sys.argv[1:] + """--caption_extension .txt --resolution 832,1216 --network_module networks.lora
- --network_dim 32 --network_alpha 16 --network_train_unet_only --learning_rate 0.0001 --optimizer_type AdamW --lr_scheduler constant
+# --text-encoders: the recipe proven on Nova2 v5. Short captions, the text encoders learn the trigger words, captions shuffle
+# behind the first two tags (the trigger and, on signature pictures, the outfit trigger).
+args = sys.argv[1:]
+te = "--text-encoders" in args
+args = [a for a in args if a != "--text-encoders"]
+# --lr UNET,TE overrides the v2 recipe's learning rates (A/B tests); the default stays the Nova2 v5 recipe.
+unet_lr, te_lr = "0.0001", "0.00002"
+if "--lr" in args:
+    i = args.index("--lr")
+    unet_lr, te_lr = args[i + 1].split(",")
+    del args[i:i + 2]
+learn = (f"--unet_lr {unet_lr} --text_encoder_lr {te_lr} --shuffle_caption --keep_tokens 2" if te
+         else "--network_train_unet_only --learning_rate 0.0001 --cache_text_encoder_outputs")
+sys.argv = ["sdxl_train_network.py"] + args + f"""--caption_extension .txt --resolution 832,1216 --network_module networks.lora
+ --network_dim 32 --network_alpha 16 {learn} --optimizer_type AdamW --lr_scheduler constant
  --train_batch_size 1 --save_model_as safetensors --mixed_precision fp16 --save_precision fp16 --sdpa --gradient_checkpointing
- --cache_latents --cache_text_encoder_outputs --max_data_loader_n_workers 0 --seed 42""".split()
+ --cache_latents --max_data_loader_n_workers 0 --seed 42""".split()
 runpy.run_path(str(SCRIPTS / "sdxl_train_network.py"), run_name="__main__")

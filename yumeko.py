@@ -36,40 +36,70 @@ STEPS = 2000
 BIG_SET = 40  # a set above this has more to learn, so it gets more steps
 BIG_STEPS = 2500
 SIZE = (832, 1216)
-SAFE = "nsfw, nude, loli, child, "  # added in front of the model's own negative on everything Yumeko renders
+NO_MARKS = "watermark, copyright, signature, artist name, text, "
+SAFE = "nsfw, nude, loli, child, " + NO_MARKS  # added in front of the model's own negative on everything Yumeko renders
 NO_MINORS = "loli, child, "  # stays on in Use, whatever the fields hold
+NO_MINORS_OPEN = "underage, young, "  # added too whenever nudity isn't blocked
+NO_NUDITY = "nsfw, nude, nipples, topless, "  # Use's "Block nudity" toggle, on by default
 ADULT = "adult woman, mature female, "
 STYLES = {
     "modern": {"label": "Modern anime", "tags": "modern anime style, clean lineart, cel shading, vibrant colors, "},
     "nineties": {"label": "90s anime", "tags": "1990s anime style, retro anime, cel animation, muted colors, film grain, "},
     "2.5d": {"label": "2.5D", "tags": "2.5d, semi-realistic anime, soft shading, detailed skin, volumetric lighting, "},
     "semireal": {"label": "Semi-real", "tags": "realistic, semi-realistic, cinematic lighting, depth of field, detailed face, "},
+    "gothic": {"label": "Gothic", "tags": "gothic, dark atmosphere, dramatic shadows, ornate details, muted colors, "},
+    "photoreal": {"label": "Photorealistic", "tags": "photorealistic, photo, realistic skin texture, 85mm lens, natural lighting, "},
+    "3d": {"label": "3D render", "tags": "3d render, 3d, blender, subsurface scattering, soft global illumination, "},
+    "novel": {"label": "Light novel", "tags": "light novel illustration, official art, detailed illustration, soft colors, "},
+    "cel": {"label": "Cel shading", "tags": "cel shading, flat color, bold outlines, anime screencap, "},
+    "lineart": {"label": "Clean lineart", "tags": "clean lineart, crisp lines, flat shading, minimal shading, white highlights, "},
+    "cyberpunk": {"label": "Cyberpunk", "tags": "cyberpunk, neon lights, neon glow, futuristic, high contrast, "},
+    "softfantasy": {"label": "Soft fantasy", "tags": "soft fantasy anime, pastel colors, thin lineart, gentle lighting, painterly background, muted colors, "},
 }
+DATA = threading.Lock()  # job.json while the queue thread and the page both write it
+FILLING = set()  # jobs whose training-set queue is being topped up
+QUEUE = 9  # pictures waiting for a verdict
+KEEP_BACK = 5  # decided pictures that stay reachable with Back one
 GPU = threading.Lock()  # one render or training at a time, and Yumeko's renders run one after another
 ensure_comfy = lambda: None  # server.py hands in its own
 ask_claude = None
+CHAT_DIR = None  # server.py hands in its own
 VARIED = ["shot", "view", "body_position", "expression", "setting", "lighting"]  # the facets Phase 3 balances
 CHAT_SCHEMA = {
     "type": "object",
     "properties": {
         "reply": {"type": "string"},
         "render": {"type": "boolean"},
-        "positive": {"type": "string"},
-        "tags": {"type": "array", "items": {"type": "object", "properties": {
-            "tag": {"type": "string"}, "yumeko_category": {"type": "string"},
-            "role": {"type": "string", "enum": ["identity", "outfit", "variable", "style"]}},
-            "required": ["tag", "yumeko_category", "role"]}},
+        "variants": {"type": "array", "items": {"type": "object", "properties": {
+            "label": {"type": "string"}, "character": {"type": "string"}, "outfit": {"type": "string"}, "scene": {"type": "string"}},
+            "required": ["label", "character", "outfit", "scene"]}},
     },
-    "required": ["reply", "render", "positive", "tags"],
+    "required": ["reply", "render", "variants"],
 }
 CHAT_SYSTEM = """You are Yumeko, lazy, playful and a little smug, helping design an anime character's base image. She is an
-adult woman. Keep replies to two sentences. Write positive as Danbooru tags, comma separated, describing one adult character,
-fully clothed, always SFW; never describe a child. Include her stable look and one simple pose and background. List every tag in
-tags with a category out of appearance, shot, pose, clothing, expression, action, setting, background, prop, lighting,
-composition, style. Give each tag a role: identity for what never changes on her (hair, eyes, marks, jewellery, glasses), outfit for
-every piece of her signature outfit, variable for the rest. Always define a full signature outfit, head to toe, in specific tags with
-colours, and keep those tags word for word in later replies unless the user asks to change her clothes.
-Set render true when the request calls for new pictures, false when you only answer."""
+adult woman. Keep replies to two sentences. Your job is to fine tune her prompts from the user's reactions.
+Each round is exactly three variants, each rendered as one picture, and you keep the full prompt of every variant:
+- label: two or three words naming what sets this variant apart.
+- character: Danbooru tags, comma separated, for what never changes on her: hair, eyes, face, marks, jewellery, glasses. No quality,
+  count or age tags such as masterpiece, 1girl, solo or adult; those are added for you.
+- outfit: Danbooru tags for her full signature outfit, head to toe, specific and with colours.
+- scene: Danbooru tags for one simple pose, framing, expression and a plain or simple background.
+Real Danbooru tags only, never invented phrases ("small chrome plates on right cheek"): the model doesn't know them. Use the
+nearest real tags (cyborg, mechanical parts, facial mark) and say in your reply what the model can't draw exactly.
+Always one adult character, fully clothed, always SFW; never describe a child.
+Vary only what the user asks about and keep everything else word for word across the three. "Try different hair colors" means three
+variants that differ only in hair colour. With no such request, offer three clearly different takes on her.
+You get last round's variants. When the user picks pictures, look at them, say briefly what they share, and build the next three
+from the picked variants. Set render true and give three variants when the request calls for new pictures. Set render false and give
+no variants when you only answer."""
+SECOND_SYSTEM = CHAT_SYSTEM + """
+
+This is the second base image: the same woman in the same outfit as the first base, seen another way, so the two complement each other.
+You get the first base's character and outfit tags. Copy them word for word into every variant unless the user asks to change them.
+Open the first base picture with Read and check the new views against it. Vary the scene: side view, from behind, sitting, close-up and so on.
+Show what the first base doesn't already show. Each variant is a different view unless the user asks otherwise."""
+SECOND_OPENING = "Give me three different views of her that complement the first base. Render."
+
 _entries = {e["tag"]: e for e in CATALOG["tags"]}
 
 
@@ -136,8 +166,18 @@ def jobs() -> list:
                 train_state(j)
             out.append({k: j.get(k) for k in ("id", "phase", "star", "busy", "updated", "error")} | {
                 "agent": j["agent"]["name"], "cover": j["bases"][0]["file"] if j.get("bases") else None,
-                "accepted": len(j["dataset"]["accepted"]), "finished": bool(j.get("lora"))})
+                "accepted": len(j["dataset"]["accepted"]), "finished": bool(j.get("lora")), "step": step_label(j)})
     return sorted(out, key=lambda j: (not j["star"], j["agent"].lower(), -j["phase"]))
+
+
+def step_label(job: dict) -> str | None:
+    """The autopilot step a job is at, as the page's tabs name it; None for a set picked by hand."""
+    a = job.get("auto")
+    if not a:
+        return None
+    if job["phase"] == 3:
+        return "Her card" if a["state"] == "card" else "Review" if a.get("reviewed") else "Building"
+    return {4: "Training", 5: "Use" if job.get("lora") else "Exam"}.get(job["phase"])
 
 
 def delete(req: dict) -> dict:
@@ -197,32 +237,71 @@ def _background(job: dict, label: str, work) -> dict:
     return job
 
 
-def render(positive: str, negative: str | None, seed: int, size=SIZE, loras=(), prefix: str | None = None, safe: str = SAFE) -> Image.Image:
+LIVE: dict[str, dict] = {}  # job id -> the Use render forming: step, total, preview count and the newest frame
+
+
+def render(positive: str, negative: str | None, seed: int, size=SIZE, loras=(), prefix: str | None = None, safe: str = SAFE, progress=None) -> Image.Image:
     m = morpheus.MODELS[MODEL]
     default = m["workflow"].negative
     g = m["workflow"](positive, size[0], size[1], seed, m["steps"], negative=safe + (default if negative is None else negative), prefix=m["workflow"].prefix if prefix is None else prefix)
-    return morpheus.generate(_with_loras(g, loras))
+    return morpheus.generate(_with_loras(g, loras), progress=progress)
 
 
 def _with_loras(graph: dict, loras) -> dict:
-    model = ["1", 0]
+    """Chain full LoRA loaders, so a LoRA with trained text encoders keeps that part. Works for UNet-only LoRAs too."""
+    model, clip = ["1", 0], ["1", 1]
     for i, (name, strength) in enumerate(loras):
-        graph[f"6{i}"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": model, "lora_name": name, "strength_model": strength}}
-        model = [f"6{i}", 0]
+        graph[f"6{i}"] = {"class_type": "LoraLoader", "inputs": {"model": model, "clip": clip, "lora_name": name, "strength_model": strength, "strength_clip": strength}}
+        model, clip = [f"6{i}", 0], [f"6{i}", 1]
+    for key, node in graph.items():
+        if not (key.startswith("6") and node["class_type"] == "LoraLoader"):
+            node["inputs"] = {k: clip if v == ["1", 1] else v for k, v in node["inputs"].items()}
     graph["8"]["inputs"]["model"] = model
     return graph
 
 
-def _grid(job: dict, positive: str, negative: str | None, prefix: str) -> list:
-    pics = []
-    for i in range(9):
-        job["busy"] = f"Rendering {i + 1} of 9"
+GRID = 3
+MAX_PICKS = 3
+
+
+def _picked(slot: dict, files) -> list:
+    return [g for g in slot["grid"] if g["file"] in list(files or [])[:MAX_PICKS]]
+
+
+def _grid(job: dict, positive: str, negative: str | None, prefix: str, slot: dict, seeds=()) -> None:
+    """Fill slot["grid"] one picture at a time, saving each, so the page shows them as they land.
+    Seeds of the pictures the user liked come first, so the next round stays near them."""
+    pics = slot["grid"] = []
+    seeds = list(seeds)
+    for i in range(GRID):
+        job["busy"] = f"Rendering {i + 1} of {GRID}"
         save(job)
-        seed = random.randrange(2 ** 31)
+        seed = seeds[i] if i < len(seeds) else random.randrange(2 ** 31)
         name = f"{prefix}_{time.time_ns():x}.png"
         render(positive, negative, seed).save(ROOT / job["id"] / name)
         pics.append({"file": name, "seed": seed, "positive": positive, "negative": negative or morpheus.MODELS[MODEL]["workflow"].negative})
-    return pics
+        save(job)
+
+
+def _variant_tags(v: dict) -> list:
+    roles = (("character", "identity", "appearance"), ("outfit", "outfit", "clothing"), ("scene", "variable", "setting"))
+    return [{"tag": t, "yumeko_category": cat, "role": role} for key, role, cat in roles for t in _split(v[key])]
+
+
+def _render_variants(job: dict, variants: list, slot: dict, seeds: list) -> None:
+    """One picture per variant, on one seed, so what differs between them is what the prompts changed."""
+    pics = slot["grid"] = []
+    seeds = seeds or [random.randrange(2 ** 31)]
+    for i, v in enumerate(variants[:GRID]):
+        job["busy"] = f"Rendering {i + 1} of {min(GRID, len(variants))}"
+        save(job)
+        seed = seeds[i % len(seeds)]
+        name = f"p1_{time.time_ns():x}.png"
+        positive = style_tags(job) + ADULT + "1girl, solo, " + ", ".join(v[k] for k in ("character", "outfit", "scene"))  # the prompt promises these; Akane came out two or three times per picture without
+        render(positive, None, seed).save(ROOT / job["id"] / name)
+        pics.append({"file": name, "seed": seed, "positive": positive, "negative": morpheus.MODELS[MODEL]["workflow"].negative, "label": v["label"],
+                     "character": v["character"], "outfit": v["outfit"], "scene": v["scene"], "tags": _variant_tags(v)})
+        save(job)
 
 
 def previews(req: dict) -> dict:
@@ -243,33 +322,105 @@ def previews(req: dict) -> dict:
     return _background(job, "Rendering styles", work)
 
 
+def start_over(req: dict) -> dict:
+    """Back to the style picker. Pictures and chat go; the job, its name and its trigger stay."""
+    job = load(req.get("id"))
+    if job.get("busy") or job["phase"] > 3:
+        raise ValueError("Only a job that isn't rendering and hasn't started training can start over.")
+    FILLING.discard(job["id"])
+    d = ROOT / job["id"]
+    for f in d.iterdir():
+        if f.suffix == ".png" or f.name.startswith("base-"):
+            f.unlink(missing_ok=True)
+    shutil.rmtree(d / "dataset", ignore_errors=True)
+    job.update(phase=1, error=None, styles=[], style="modern", bases=[], style_previews={},
+               phase1={"session": None, "chat": [], "grid": [], "positive": "", "tags": []}, phase2={"positive": "", "negative": "", "grid": []},
+               dataset={"accepted": [], "batch": [], "counts": {}, "rounds": 0})
+    for k in ("auto", "exam", "calib", "look"):  # the autopilot card belonged to the old bases; open_card returned it unchanged
+        job.pop(k, None)
+    return save(job)
+
+
+def style_tags(job: dict) -> str:
+    """All picked styles, without repeating a tag two styles share."""
+    tags = [t for k in job.get("styles") or [job["style"]] for t in _split(STYLES[k]["tags"])]
+    return ", ".join(dict.fromkeys(tags)) + ", "
+
+
 def pick_style(req: dict) -> dict:
     job = load(req.get("id"))
-    if req.get("style") not in STYLES:
-        raise ValueError("Unknown style.")
-    job["style"] = req["style"]
+    picks = [k for k in dict.fromkeys(req.get("styles") or []) if k in STYLES]
+    if not picks:
+        raise ValueError("Pick at least one style.")
+    job["style"], job["styles"] = picks[0], picks
     return save(job)
 
 
 def chat(req: dict) -> dict:
     job = load(req.get("id"))
     text = str(req.get("text", "")).strip()
+    opening = req.get("opening") is True
+    phase = job["phase"]
+    if phase not in (1, 2):
+        raise ValueError("Yumeko only chats during the base images.")
+    if opening:
+        if phase != 2 or job["phase2"].get("chat"):
+            return job
+        text = SECOND_OPENING
     if not text:
         raise ValueError("Say something first.")
-    p = job["phase1"]
-    p["chat"].append({"role": "user", "text": text})
+    slot = f"phase{phase}"
+    p = job[slot]
+    p.setdefault("chat", [])
+    p.setdefault("session", None)
+    picks = _picked(p, req.get("picks"))
+    if req.get("reference"):  # a picture to recreate; it stays with the job and every later turn can look at it
+        import base64
+        import io
+        name = f"ref_{time.time_ns():x}.png"
+        Image.open(io.BytesIO(base64.b64decode(str(req["reference"]).split(",", 1)[-1]))).convert("RGB").save(ROOT / job["id"] / name)
+        p["reference"] = name
+    if not opening:
+        p["chat"].append({"role": "user", "text": text, "picked": len(picks)} | ({"reference": p["reference"]} if req.get("reference") else {}))
 
     def work(j):
-        q = j["phase1"]
+        q = j[slot]
         j["busy"] = "Yumeko is thinking"
         save(j)
-        context = f"[Character: {j['agent']['name']}. {j['agent']['identity_summary'] or 'New character, designed only from this chat.'}]\n[Current tags: {q['positive']}]\n{text}"
-        answer, q["session"] = ask_claude(context, q["session"], ghost=True, system=CHAT_SYSTEM, schema=CHAT_SCHEMA)
+        recent = "\n".join(f"{m['role']}: {m['text']}" for m in q["chat"][-9:-1])
+        context = f"[Character: {j['agent']['name']}. {j['agent']['identity_summary'] or 'New character, designed only from this chat.'}]\n[Conversation so far:\n{recent}]\n[Current tags: {q['positive']}]\n"
+        last = [g for g in q["grid"] if g.get("character")]
+        if last:
+            context += "[Last round:\n" + "\n".join(f"{'PICKED ' if g in picks else ''}{g['label']}: character: {g['character']} | outfit: {g['outfit']} | scene: {g['scene']}" for g in last) + "]\n"
+        base = j["bases"][0] if phase == 2 else None
+        if base:
+            kept = lambda role: ", ".join(t["tag"] for t in base["tags"] if t.get("role") == role)
+            context += f"[First base. character: {kept('identity')} | outfit: {kept('outfit')} | scene: {kept('variable')}]\n"
+        copies = []
+        for i, g in enumerate(picks):  # she reads them from her working folder, the only place Read reaches
+            copy = CHAT_DIR / f"yumeko_{j['id']}_{i}.png"
+            shutil.copy(ROOT / j["id"] / g["file"], copy)
+            copies.append(copy)
+        if q.get("reference"):
+            ref = CHAT_DIR / f"yumeko_{j['id']}_ref.png"
+            shutil.copy(ROOT / j["id"] / q["reference"], ref)
+            copies.append(ref)
+            context += f"[The user's reference picture, the look to recreate as closely as the model allows. Open it with Read: {ref.name}]\n"
+        if base:
+            first = CHAT_DIR / f"yumeko_{j['id']}_base.png"
+            shutil.copy(ROOT / j["id"] / base["file"], first)
+            copies.append(first)
+            context += f"[First base picture, open it with Read: {first.name}]\n"
+        if picks:
+            context += "[The user picked these pictures from the last grid. Open each with Read before answering: " + ", ".join(c.name for c in copies[:len(picks)]) + "]\n"
+        try:
+            answer, q["session"] = ask_claude(context + text, q["session"], ghost=True, see=bool(copies), system=SECOND_SYSTEM if base else CHAT_SYSTEM, schema=CHAT_SCHEMA)
+        finally:
+            for c in copies:
+                c.unlink(missing_ok=True)
         q["chat"].append({"role": "yumeko", "text": answer["reply"]})
-        if answer.get("positive"):
-            q["positive"], q["tags"] = answer["positive"], answer.get("tags") or []
-        if answer.get("render") and q["positive"]:
-            q["grid"] = _grid(j, STYLES[j["style"]]["tags"] + ADULT + q["positive"], None, "p1")
+        if answer.get("render") and answer.get("variants"):
+            _render_variants(j, answer["variants"], q, [g["seed"] for g in picks] or ([base["base_image"]["seed"]] if base else []))
         return j
     return _background(job, "Yumeko is thinking", work)
 
@@ -281,7 +432,7 @@ def _manifest(job: dict, pick: dict, anchor: str, role: str, tags: list) -> dict
     shutil.copy(source, ROOT / job["id"] / name)
     return {"schema_version": 1, "kind": "yumeko.base-image", "anchor_id": anchor, "anchor_role": role, "file": name, "agent": job["agent"],
             "base_image": {"file": name, "width": w, "height": h, "seed": pick["seed"]},
-            "generation": {"model": job["model"], "anime_style": job["style"], "positive_prompt": pick["positive"], "negative_prompt": pick["negative"]},
+            "generation": {"model": job["model"], "anime_style": " + ".join(job.get("styles") or [job["style"]]), "positive_prompt": pick["positive"], "negative_prompt": pick["negative"]},
             "tags": tags}
 
 
@@ -293,12 +444,12 @@ def approve(req: dict) -> dict:
     if not pick:
         raise ValueError("Pick a picture from the grid.")
     if job["phase"] == 1:
-        tags = [t | {"source": "claude"} for t in job["phase1"]["tags"]]
+        tags = [t | {"source": "claude"} for t in pick.get("tags") or job["phase1"]["tags"]]
         job["bases"] = [_manifest(job, pick, "base-1", "initial", tags)]
         job["phase2"]["positive"], job["phase2"]["negative"] = pick["positive"], pick["negative"]
-        job["phase"] = 2
+        job["phase"] = 3 if req.get("second") is not True else 2  # the second view is optional; the card comes next
     elif job["phase"] == 2:
-        tags = [t | {"source": "human"} for t in job["bases"][0]["tags"]]
+        tags = [t | {"source": "claude" if pick.get("tags") else "human"} for t in pick.get("tags") or job["bases"][0]["tags"]]
         job["bases"].append(_manifest(job, pick, "base-2", "complementary", tags))
         job["phase"] = 3
     (ROOT / job["id"] / (job["bases"][-1]["anchor_id"] + ".json")).write_text(json.dumps(job["bases"][-1], ensure_ascii=False, indent=1), encoding="utf-8")
@@ -311,10 +462,11 @@ def phase2_render(req: dict) -> dict:
         raise ValueError("This job isn't in Phase 2.")
     job["phase2"]["positive"] = str(req.get("positive", job["phase2"]["positive"]))
     job["phase2"]["negative"] = str(req.get("negative", job["phase2"]["negative"]))
+    seeds = [g["seed"] for g in _picked(job["phase2"], req.get("picks"))]
 
     def work(j):
         q = j["phase2"]
-        q["grid"] = _grid(j, q["positive"], q["negative"], "p2")
+        _grid(j, q["positive"], q["negative"], "p2", q, seeds)
         return j
     return _background(job, "Rendering", work)
 
@@ -371,7 +523,7 @@ def conflicts(tags: list) -> list:
 
 CLOTHES = re.compile(r"shirt|blouse|vest|neck ?tie|\btie\b|bow ?tie|skirt|dress|gown|robe|kimono|yukata|jacket|coat|cape|cloak|corset|sweater|hoodie|cardigan|uniform|"
                      r"pants|trousers|jeans|shorts|leggings|thighhighs|stockings|socks|pantyhose|boots|shoes|heels|sandals|gloves|armor|bikini|swimsuit|lingerie|\bbra\b|collar|sleeves|belt", re.I)
-NOT_LOOK = {"1girl", "solo", "adult", "adult woman", "mature female", "anime style"}
+NOT_LOOK = {"1girl", "solo", "adult", "adult woman", "mature female", "anime style", "masterpiece", "best quality", "absurdres"}
 # Each extra outfit is kept to shots that show it. Bikini and lingerie stay calm and few, because they pull hardest on the sexualised drift.
 OUTFITS = [
     {"key": "signature", "label": "Signature outfit", "target": 24},
@@ -443,12 +595,23 @@ def identity_tags(job: dict) -> list:
     return out
 
 
-def plan(job: dict) -> list:
-    """One batch for the current outfit: in each facet, the tag used least so far, counting this batch too. Ties go by chance."""
+def next_group(job: dict) -> dict | None:
+    """The first outfit that still needs pictures, counting those waiting for a verdict plus two spare for dismissals."""
+    waiting = [c.get("group", "signature") for c in job["dataset"]["batch"] if c.get("keep") is None]
+    return next((g for g in outfit_plan(job)["groups"] if g["on"] and kept(job, g["key"]) < g["target"]
+                 and kept(job, g["key"]) + waiting.count(g["key"]) < g["target"] + 2), None)
+
+
+def plan(job: dict, group: dict | None = None) -> list:
+    """Pictures for one outfit: in each facet, the tag used least so far, counting those still in the queue. Ties go by chance."""
     counts = dict(job["dataset"]["counts"])
+    for c in job["dataset"]["batch"]:
+        if c.get("keep") is not False:
+            for t in c.get("planned", []):
+                counts[t] = counts.get(t, 0) + 1
     tags_of = {f: [e["tag"] for e in CATALOG["tags"] if e.get("facet") == f] for f in VARIED}
-    style = STYLES[job["style"]]["tags"]
-    p, g = outfit_plan(job), current_group(job)
+    style = style_tags(job)
+    p, g = outfit_plan(job), group or current_group(job)
     if not g:
         raise ValueError("Every outfit is done. Start training.")
     signature = g["key"] == "signature"
@@ -475,50 +638,83 @@ def plan(job: dict) -> list:
 
 
 def batch(req: dict) -> dict:
+    """Top up the queue. Nothing to press: the page calls this on opening and every verdict does too."""
     job = load(req.get("id"))
     if job["phase"] != 3:
         raise ValueError("This job isn't building its set.")
-    if any(c.get("keep") is None for c in job["dataset"]["batch"]):
-        raise ValueError("Keep or discard every picture first.")
-    _commit(job)
-    plans = plan(job)
-
-    def work(j):
-        d = j["dataset"]
-        d["batch"], d["rounds"] = [], d["rounds"] + 1
-        for i, p in enumerate(plans):
-            j["busy"] = f"Rendering {i + 1} of {len(plans)}"
-            save(j)
-            seed = random.randrange(2 ** 31)
-            name = f"cand_{time.time_ns():x}.png"
-            render(p["positive"], p["negative"], seed).save(ROOT / j["id"] / name)
-            d["batch"].append({"file": name, "seed": seed, "positive": p["positive"], "negative": p["negative"], "planned": p["planned"], "tags": list(p["tags"]), "group": p["group"], "keep": None})
-        return j
-    return _background(job, "Planning", work)
+    _fill(job["id"])
+    return job
 
 
-def _commit(job: dict) -> None:
+def _fill(job_id: str) -> None:
+    """Keep QUEUE pictures waiting, oldest first. Takes the GPU one picture at a time so other renders can get in between."""
+    if job_id in FILLING or training_now():
+        return
+    FILLING.add(job_id)
+
+    def run():
+        try:
+            while job_id in FILLING:
+                with DATA:
+                    j = load(job_id)
+                    if j["phase"] != 3 or sum(c.get("keep") is None for c in j["dataset"]["batch"]) >= QUEUE:
+                        break
+                    _commit(j, KEEP_BACK)
+                    j["error"] = None
+                    g = next_group(j)
+                    save(j)
+                if not g:
+                    break
+                p = plan(j, g)[0]
+                seed = random.randrange(2 ** 31)
+                name = f"cand_{time.time_ns():x}.png"
+                with GPU:
+                    ensure_comfy()
+                    picture = render(p["positive"], p["negative"], seed)
+                with DATA:
+                    if job_id not in FILLING:
+                        break
+                    picture.save(ROOT / job_id / name)
+                    j = load(job_id)
+                    j["dataset"]["batch"].append({"file": name, "seed": seed, "positive": p["positive"], "negative": p["negative"], "planned": p["planned"], "tags": list(p["tags"]), "group": p["group"], "keep": None})
+                    save(j)
+        except Exception as e:
+            with DATA:
+                j = load(job_id)
+                j["error"] = str(e)
+                save(j)
+        finally:
+            FILLING.discard(job_id)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _commit(job: dict, keep_back: int = 0) -> None:
+    """Move verdicts into the set. With keep_back, undecided pictures and the latest verdicts stay; without, nothing does."""
     d = job["dataset"]
-    for c in d["batch"]:
+    decided = [c for c in d["batch"] if c.get("keep") is not None]
+    done = (decided[:-keep_back] if keep_back else d["batch"])
+    for c in done:
         if c.get("keep"):
             d["accepted"].append({"file": c["file"], "tags": c["tags"], "planned": c["planned"], "group": c.get("group", "signature")})
             for t in c["tags"]:
                 d["counts"][t] = d["counts"].get(t, 0) + 1
         else:
             (ROOT / job["id"] / c["file"]).unlink(missing_ok=True)
-    d["batch"] = []
+    d["batch"] = [c for c in d["batch"] if not any(c is x for x in done)]
 
 
 def decide(req: dict) -> dict:
     job = load(req.get("id"))
     c = next((c for c in job["dataset"]["batch"] if c["file"] == req.get("file")), None)
     if not c:
-        raise ValueError("That candidate is gone.")
+        return job  # it moved into the set while the verdict was on its way
     if "keep" in req:
         c["keep"] = bool(req["keep"])
     if isinstance(req.get("tags"), list):
         c["tags"] = [str(t).strip() for t in req["tags"] if str(t).strip()]
-    return save(job)
+    save(job)
+    _fill(job["id"])
+    return job
 
 
 def remove_accepted(req: dict) -> dict:
@@ -550,14 +746,18 @@ def start_training(req: dict) -> dict:
     job = load(req.get("id"))
     if job["phase"] != 3:
         raise ValueError("This job isn't ready to train.")
-    if any(c.get("keep") is None for c in job["dataset"]["batch"]):
-        raise ValueError("Keep or discard every picture first.")
-    _commit(job)
+    if len(job["dataset"]["accepted"]) + sum(bool(c.get("keep")) for c in job["dataset"]["batch"]) < MIN_SET:
+        raise ValueError(f"Needs {MIN_SET} accepted pictures.")
+    FILLING.discard(job["id"])  # undecided pictures go, kept ones stay
+    with DATA:
+        job = load(job["id"])
+        _commit(job)
+        save(job)
     if len(job["dataset"]["accepted"]) < MIN_SET:
         raise ValueError(f"Needs {MIN_SET} accepted pictures, you have {len(job['dataset']['accepted'])}.")
     if training_now():
         raise ValueError("Another LoRA is training.")
-    if not GPU.acquire(timeout=1):
+    if not GPU.acquire(timeout=180):  # the queue may be finishing its last picture
         raise ValueError("The GPU is rendering; try again when it's done.")
     try:
         d = ROOT / job["id"]
@@ -569,12 +769,17 @@ def start_training(req: dict) -> dict:
         for i, a in enumerate(job["dataset"]["accepted"]):
             shutil.copy(d / a["file"], data / f"{i:03}.png")
             tags = a["tags"] + (worn if "group" not in a else [])  # picked before outfits existed
-            (data / f"{i:03}.txt").write_text(", ".join([trigger] + [t.replace("_", " ") for t in tags]), encoding="utf-8")
-        steps = BIG_STEPS if len(job["dataset"]["accepted"]) > BIG_SET else STEPS
-        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8188/free", b'{"unload_models":true,"free_memory":true}',
-                                                       {"Content-Type": "application/json"}), timeout=10)
+            caption = a.get("caption") or ", ".join([trigger] + [t.replace("_", " ") for t in tags])  # autopilot sets write their own
+            (data / f"{i:03}.txt").write_text(caption, encoding="utf-8")
+        auto = bool(job.get("auto"))
+        steps = (3000 if len(job["dataset"]["accepted"]) > 60 else 2500) if auto else BIG_STEPS if len(job["dataset"]["accepted"]) > BIG_SET else STEPS
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8188/free", b'{"unload_models":true,"free_memory":true}',
+                                                           {"Content-Type": "application/json"}), timeout=10)
+        except OSError:
+            pass  # ComfyUI isn't running, so there is nothing on the GPU to free
         cmd = [str(TRAIN_PY), str(TRAINER), "--pretrained_model_name_or_path", str(CHECKPOINT), "--train_data_dir", str(d / "dataset"),
-               "--output_dir", str(d / "lora"), "--output_name", "lora", "--max_train_steps", str(steps), "--save_every_n_steps", "500"]
+               "--output_dir", str(d / "lora"), "--output_name", "lora", "--max_train_steps", str(steps), "--save_every_n_steps", "500"] + (["--text-encoders"] if auto else [])
         log = open(d / "train.log", "w", encoding="utf-8")
         p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT / "tools" / "sd-scripts",
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
@@ -623,7 +828,16 @@ def stop_training(job: dict) -> dict:
     return save(job)
 
 
+def stages_of_saved(job: dict) -> list:
+    """The stages actually on disk."""
+    return sorted(int(p.stem[-8:]) for p in (ROOT / job["id"] / "lora").glob("lora-step*.safetensors"))
+
+
 def stages_of(job: dict) -> list:
+    """The last three stages saved on disk. A full run gives total-1000, total-500 and total; a stopped run its newest three."""
+    saved = sorted(int(p.stem[-8:]) for p in (ROOT / job["id"] / "lora").glob("lora-step*.safetensors"))
+    if saved:
+        return saved[-3:]
     total = job["train"].get("total", STEPS)
     return [total - 1000, total - 500, total]
 
@@ -648,8 +862,9 @@ def compare_stages(req: dict) -> dict:
             j["busy"] = f"Testing stage {s}"
             save(j)
             name = f"stage_{s}.png"
-            render(j["agent"]["trigger_token"] + ", " + STYLES[j["style"]]["tags"] + ADULT + "1girl, solo, upper body, looking at viewer, smile, garden, daytime", None, 501,
-                   loras=[(_stage_file(j, s), 1.0)]).save(ROOT / j["id"] / name)
+            look = j.get("look") or {}
+            render(j["agent"]["trigger_token"] + ", " + style_tags(j) + (look["positive"] + ", " if look.get("positive") else "") + ADULT + "1girl, solo, upper body, looking at viewer, smile, garden, daytime", look.get("negative"), 501,
+                   loras=[(_stage_file(j, s), j["lora"]["strength"] if j.get("lora") else 1.0)]).save(ROOT / j["id"] / name)
             out[str(s)] = name
         j["stage_tests"] = out
         return j
@@ -688,9 +903,30 @@ def register_all() -> None:
                 register(json.loads((d / "job.json").read_text(encoding="utf-8")))
 
 
+def _without(text: str, tags: str) -> str:
+    drop = {t.strip() for t in tags.split(",") if t.strip()}
+    return ", ".join(t.strip() for t in text.split(",") if t.strip() and t.strip() not in drop)
+
+
+def trained_words(job: dict) -> list:
+    """The words her LoRA learned besides her name, offered as toggles in Use: the outfit trigger, plus any kept in her card."""
+    words = [t.strip() for t in str((job.get("look") or {}).get("positive") or "").split(",") if t.strip()]
+    a = job.get("auto")
+    if a and (job.get("lora") or {}).get("recipe") == "v2":
+        words.append(a.get("outfit_trigger") or job["agent"]["trigger_token"] + "_outfit")
+    return list(dict.fromkeys(words))
+
+
 def use_defaults(job: dict) -> dict:
     wf = morpheus.MODELS[MODEL]["workflow"]
-    return {"quality": ADULT + "1girl, solo, " + wf.prefix + STYLES[job["style"]]["tags"], "negative": "nude, " + wf.negative, "always_positive": job["agent"]["trigger_token"], "always_negative": NO_MINORS.rstrip(", ")}
+    look = job.get("look") or {}  # a character whose design needs spelling out at render time
+    # trained: words the LoRA learned besides her trigger (her outfit trigger), kept apart so they can be cleared for other clothes
+    # identity: the few tags the calibration found the trigger alone misses; Use adds them silently while the Identity pill is on
+    ident = ", ".join(x for x in [look.get("identity"), "not: " + look["identity_negative"] if look.get("identity_negative") else ""] if x)
+    return {"quality": ADULT + "1girl, solo, " + wf.prefix + style_tags(job), "trained": look.get("positive") or "", "trained_options": trained_words(job),
+            "pill_tags": {"identity": [look.get("identity") or "", look.get("identity_negative") or ""], "outfit": [look.get("outfit") or "", look.get("outfit_negative") or ""]},
+            "identity": ident, "outfit_tags": ", ".join(x for x in [look.get("outfit"), "not: " + look["outfit_negative"] if look.get("outfit_negative") else ""] if x),
+            "negative": NO_MARKS + _without(wf.negative, NO_NUDITY) + (", " + look["negative"] if look.get("negative") else ""), "always_positive": job["agent"]["trigger_token"], "always_negative": NO_MINORS.rstrip(", "), "nudity_block": NO_NUDITY.rstrip(", ")}
 
 
 def use(req: dict) -> dict:
@@ -702,7 +938,11 @@ def use(req: dict) -> dict:
         raise ValueError("Describe the picture.")
     d = use_defaults(job)
     quality = str(req["quality"]) if "quality" in req else d["quality"]
+    trained = str(req["trained"]).strip().strip(",").strip() if "trained" in req else d["trained"]
     negative = str(req["negative"]) if req.get("negative") is not None else d["negative"]
+    block = req.get("block_nudity") is not False  # on unless explicitly switched off
+    ident = ident_on = req.get("identity") is not False  # the Identity pill, on unless switched off
+    locked = NO_MINORS + (NO_NUDITY if block else NO_MINORS_OPEN)  # never in the editable fields, always sent
     strength = float(req.get("strength", job["lora"]["strength"]))
     size = (int(req.get("width", SIZE[0])), int(req.get("height", SIZE[1])))
     seed = int(req["seed"]) if str(req.get("seed", "")).strip() else random.randrange(2 ** 31)
@@ -710,10 +950,27 @@ def use(req: dict) -> dict:
 
     def work(j):
         name = f"use_{time.time_ns():x}.png"
-        positive = d["always_positive"] + ", " + quality + text
-        render(positive, negative, seed, size, [(j["lora"]["file"], strength)], prefix="", safe=NO_MINORS).save(ROOT / j["id"] / name)
+        look = j.get("look") or {}
+        # the page now writes the pill tags visibly into quality/negative (explicit), so nothing is added silently then
+        outfit_on = bool(look.get("positive")) and str(look["positive"]) in trained.split(", ") and not req.get("explicit")
+        ident = ident_on and not req.get("explicit")
+        silent = [look.get("identity") if ident else "", look.get("outfit") if outfit_on else ""]  # calibrated: the trigger alone drifts on these
+        silent_neg = [look.get("identity_negative") if ident else "", look.get("outfit_negative") if outfit_on else ""]
+        positive = ", ".join(x.strip(", ") for x in [d["always_positive"], trained, *silent] if x and x.strip(", ")) + ", " + ("" if block else ADULT) + quality + text  # adult forced in when unblocked
+        sent_negative = ", ".join(x.strip(", ") for x in [negative, *silent_neg] if x and x.strip(", "))
+        live = LIVE[j["id"]] = {"step": 0, "total": 0, "n": 0, "width": size[0], "height": size[1]}
+
+        def progress(step=None, total=None, preview=None):
+            if step is not None:
+                live["step"], live["total"] = step, total
+            if preview is not None:
+                live["frame"], live["n"] = preview, live["n"] + 1
+        try:
+            render(positive, sent_negative, seed, size, [(j["lora"]["file"], strength)], prefix="", safe=locked, progress=progress).save(ROOT / j["id"] / name)
+        finally:
+            LIVE.pop(j["id"], None)
         j["gallery"].insert(0, {"file": name, "prompt": text, "quality": quality, "negative": negative, "seed": seed, "strength": strength,
-                                "width": size[0], "height": size[1], "sent_positive": positive, "sent_negative": NO_MINORS + negative})
+                                "width": size[0], "height": size[1], "trained": trained, "identity": ident, "block_nudity": block, "sent_positive": positive, "sent_negative": locked + sent_negative})
         return j
     return _background(job, "Rendering", work)
 
@@ -890,9 +1147,29 @@ def state() -> dict:
             "min_set": MIN_SET, "training": training_now(), "trainer": TRAIN_PY.exists()}
 
 
-ACTIONS = {"outfits": set_outfits, "create": create, "delete": delete, "star": star, "previews": previews, "style": pick_style, "chat": chat, "approve": approve,
-           "phase2": phase2_render, "batch": batch, "decide": decide, "unaccept": remove_accepted, "train": start_training,
-           "stage_test": compare_stages, "stage": choose_stage, "use": use,
+def use_remove(req: dict) -> dict:
+    """Delete one rendered Use picture: its gallery entry and the file."""
+    job = load(req.get("id"))
+    name = str(req.get("file", ""))
+    entry = next((g for g in job["gallery"] if g["file"] == name), None)
+    if not entry:
+        raise ValueError("That picture is already gone.")
+    job["gallery"].remove(entry)
+    (ROOT / job["id"] / Path(name).name).unlink(missing_ok=True)
+    save(job)
+    return job
+
+
+def _locked(action):
+    def run(req: dict) -> dict:
+        with DATA:
+            return action(req)
+    return run
+
+
+ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": create, "delete": delete, "star": star, "previews": previews, "style": pick_style, "chat": chat, "approve": approve,
+           "phase2": phase2_render, "batch": batch, "decide": _locked(decide), "unaccept": _locked(remove_accepted), "train": start_training,
+           "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
            "stop": lambda r: stop_training(load(r.get("id"))),
            "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_mask": panel_mask,
            "panel_pass": panel_pass, "panel_delete": panel_delete}
@@ -905,5 +1182,10 @@ def job_view(job_id: str) -> dict:
     if job["phase"] == 3 and not job["dataset"].get("plan"):
         outfit_plan(job)
         save(job)
+    if job_id in LIVE:
+        job["live"] = {k: v for k, v in LIVE[job_id].items() if k != "frame"}
+    if job.get("auto"):
+        import yumeko_auto
+        yumeko_auto.view(job)
     wf = morpheus.MODELS[MODEL]["workflow"]
     return job | {"defaults": use_defaults(job), "sent": {"prefix": wf.prefix, "safe": SAFE, "sampler": "Euler a, normal", "steps": morpheus.MODELS[MODEL]["steps"], "cfg": 5.0, "checkpoint": CHECKPOINT.name}, "balance": {f: {e["tag"]: job["dataset"]["counts"].get(e["tag"], 0) for e in CATALOG["tags"] if e.get("facet") == f} for f in VARIED}}
