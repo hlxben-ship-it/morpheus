@@ -70,7 +70,7 @@ def start_comfy(video: bool, timeout: float) -> None:
     # The overcount swings with what the desktop maps (11.9 to 14.9 GB on one afternoon). At 11.9 every model ran
     # well (SDXL 13 s, Qwen-Edit 85 s); at 14.6 SDXL itself was offloaded (20 s); at 5 Qwen spilled (135 s a step)
     reserve = min(other_vram_gb() + 1.0, 12.0)
-    flags = (["--reserve-vram", "2", "--disable-smart-memory", "--cache-none"] if video else
+    flags = (["--reserve-vram", "1", "--disable-smart-memory", "--cache-none"] if video else
              ["--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"])
     # our route for the loaded models, refreshed every start so an update lands
     shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
@@ -805,6 +805,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes((WEB / "yumeko.html").read_bytes(), "text/html; charset=utf-8")
         if route == "/yumeko-head.png":
             return self.send_file(WEB / "yumeko-head.png", WEB)
+        if route == "/api/video_models":
+            return self.send_json(morpheus.video_models())
         if route == "/api/yumeko/state":
             return self.send_json(yumeko.state())
         if route == "/api/yumeko/tags":

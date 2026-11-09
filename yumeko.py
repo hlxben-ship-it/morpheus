@@ -1096,7 +1096,20 @@ def panel_new(req: dict) -> dict:
     base = {"tags": "2girls, indoors, wide shot, ", "prompt": PANEL_PROMPT, "negative": PANEL_NEGATIVE, "width": 1216, "height": 832, "characters": []}
     if prev:  # masks don't carry over: the characters stand somewhere else in a new composition
         base = {k: prev[k] for k in base} | {"characters": [{k: v for k, v in c.items() if k != "masked"} for c in prev["characters"]]}
-    return panel_save({"id": pid, "title": str(req.get("title") or "New panel"), **base, "versions": [], "composition": None, "busy": None, "error": None})
+    new = {"id": pid, "title": str(req.get("title") or "New panel"), **base, "versions": [], "composition": None, "busy": None, "error": None}
+    shown = prev and ((prev["versions"][0]["file"] if prev["versions"] else None) or prev.get("current"))  # the newest render
+    if req.get("from_last") and shown:
+        # start on the last panel's picture: it is the first version, the characters keep their masks, the composition
+        # and its pass tags stay locked as they were, so the next pass or fix goes straight on from there
+        src = panel_dir(prev["id"])
+        shutil.copy2(src / shown, panel_dir(pid) / shown)
+        new["characters"] = [dict(c) for c in prev["characters"]]
+        for c in prev["characters"]:
+            if (src / f"mask_{c['id']}.png").exists():
+                shutil.copy2(src / f"mask_{c['id']}.png", panel_dir(pid) / f"mask_{c['id']}.png")
+        new.update(versions=[{"file": shown, "label": "Composition · from " + prev.get("title", "the last panel")}], current=shown,
+                   composition=shown, locked=prev.get("locked", False), pass_tags=prev.get("pass_tags", ""), pass_negative=prev.get("pass_negative", ""))
+    return panel_save(new)
 
 
 def panel_edit(req: dict) -> dict:

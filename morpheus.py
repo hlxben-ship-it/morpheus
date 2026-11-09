@@ -787,7 +787,13 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
 VIDEO_DIR = OUTPUT / "videos"
 VIDEO_HIGH = "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q4_K_M-fix.gguf"
 VIDEO_LOW = "DaSiWa_Wan22_I2V_14B_LOW_v11_Q4_K_M-fix.gguf"
-VIDEO_PRESETS = {"low": {"label": "Low", "note": "576 × 1024 · about 3 min", "size": (576, 1024)},
+# The same DaSiWa v11 pair at two precisions. Its author rates Q4 "medium-good", Q6 "like FP8, very good" (finer hair,
+# hands, less background jitter); Q6 is 12 GB per expert instead of 9.7, still one expert on the card at a time.
+VIDEO_MODELS = {
+    "q4": {"label": "DaSiWa Q4 · faster", "high": VIDEO_HIGH, "low": VIDEO_LOW},
+    "q6": {"label": "DaSiWa Q6 · sharper", "high": "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q6_K-fix.gguf", "low": "DaSiWa_Wan22_I2V_14B_LOW_v11_Q6_K-fix.gguf"},
+}
+VIDEO_PRESETS = {"low": {"label": "Low", "note": "480 × 832 (480p) · about 2 min", "size": (480, 832)},
                  "high": {"label": "High", "note": "720 × 1280 · about 13 min", "size": (720, 1280)}}
 VIDEO_FRAMES, VIDEO_FPS = 33, 16  # 2 s
 VIDEO_NEGATIVE = ("vivid colors, overexposed, static, blurry details, subtitles, style, artwork, painting, still image, grey overall, "
@@ -797,7 +803,7 @@ VIDEO_MIN_RAM = 3 * 1024**3  # below this ComfyUI goes, not the desktop
 
 
 def video_workflow(image: str, prompt: str, negative: str, width: int, height: int, seed: int, prefix: str, end: str | None = None,
-                   frames: int = VIDEO_FRAMES) -> dict:
+                   frames: int = VIDEO_FRAMES, model: str = "q4", motion: str = "normal") -> dict:
     """The two-expert graph: HIGH for the first two steps, LOW for the last two. The speed-up is baked into both.
     With end, the clip must also arrive on that picture (a bridge between two shots)."""
     def expert(name):
@@ -809,11 +815,12 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
             "add_noise": "enable" if first else "disable", "noise_seed": seed if first else 0, "steps": 4, "cfg": 1.0,
             "sampler_name": "euler", "scheduler": "simple", "start_at_step": start, "end_at_step": end,
             "return_with_leftover_noise": "enable" if first else "disable"}}
+    mo = VIDEO_MOTION.get(motion, VIDEO_MOTION["normal"])
     graph = {
-        "1": expert(VIDEO_HIGH),
-        "2": expert(VIDEO_LOW),
-        "20": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": 5.0}},
-        "21": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": 5.0}},
+        "1": expert(VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])["high"]),
+        "2": expert(VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])["low"]),
+        "20": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": mo["shift"]}},
+        "21": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": mo["shift"]}},
         "7": {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
         "8": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
         "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["7", 0], "text": prompt}},
@@ -821,8 +828,8 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
         "12": {"class_type": "LoadImage", "inputs": {"image": image}},
         "13": {"class_type": "WanImageToVideo", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "vae": ["8", 0],
                "start_image": ["12", 0], "width": width, "height": height, "length": frames, "batch_size": 1}},
-        "14": sample(["20", 0], ["13", 2], 0, 2, True),
-        "15": sample(["21", 0], ["14", 0], 2, 10000, False),
+        "14": sample(["20", 0], ["13", 2], 0, mo["high"], True),
+        "15": sample(["21", 0], ["14", 0], mo["high"], 10000, False),
         "16": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["15", 0], "vae": ["8", 0], "tile_size": 256,
                "overlap": 64, "temporal_size": max(64, (frames + 16) // 16 * 16), "temporal_overlap": 4}},  # above the clip length: a split shows as a quality snap
         "17": {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": VIDEO_FPS}},
@@ -838,8 +845,24 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
     return graph
 
 
-def video_installed() -> bool:
-    return all((COMFY_MODELS / "unet" / f).is_file() for f in (VIDEO_HIGH, VIDEO_LOW))
+# Wan 2.2's HIGH expert makes the motion, LOW the details (DaSiWa guide): more of the 4 steps on HIGH means more motion,
+# a lower shift broader, more varied movement. Same render time either way.
+VIDEO_MOTION = {"normal": {"label": "Normal", "high": 2, "shift": 5.0},
+                "more": {"label": "More", "high": 3, "shift": 5.0},
+                "wild": {"label": "Wild", "high": 3, "shift": 4.0}}
+
+
+def shot_motion(board: dict, s: dict) -> str:
+    return s.get("motion") if s.get("motion") in VIDEO_MOTION else board.get("motion", "normal")
+
+
+def video_installed(model: str = "q4") -> bool:
+    m = VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])
+    return all((COMFY_MODELS / "unet" / f).is_file() for f in (m["high"], m["low"]))
+
+
+def video_models() -> list[dict]:
+    return [{"id": k, "label": m["label"]} for k, m in VIDEO_MODELS.items() if video_installed(k)]
 
 
 def stop_comfy() -> None:
@@ -854,8 +877,9 @@ def stop_comfy() -> None:
         time.sleep(0.25)
 
 
-def video_part(graph: dict, stopped, progress) -> tuple[Path, Path]:
-    """Render one graph, with the same stop and RAM guards throughout; returns ComfyUI's clip and last-frame PNG."""
+def video_part(graph: dict, stopped, progress, stats: dict | None = None) -> tuple[Path, Path]:
+    """Render one graph, with the same stop and RAM guards throughout; returns ComfyUI's clip and last-frame PNG.
+    stats, if given, gets the peaks: VRAM in use on the card (all processes) and system RAM in use, in GB."""
     import psutil
     client, done = uuid.uuid4().hex, threading.Event()
     if progress:
@@ -871,6 +895,15 @@ def video_part(graph: dict, stopped, progress) -> tuple[Path, Path]:
             if psutil.virtual_memory().available < VIDEO_MIN_RAM:
                 stop_comfy()
                 raise RuntimeError("Stopped to protect the PC: less than 3 GB RAM left.")
+            if stats is not None:
+                ram = psutil.virtual_memory()
+                stats["ram_peak_gb"] = max(stats.get("ram_peak_gb", 0), round((ram.total - ram.available) / 1024**3, 1))
+                try:
+                    dev = call("/system_stats")["devices"][0]
+                    stats["vram_peak_gb"] = max(stats.get("vram_peak_gb", 0), round((dev["vram_total"] - dev["vram_free"]) / 1024**3, 1))
+                    stats["vram_total_gb"] = round(dev["vram_total"] / 1024**3, 1)
+                except Exception:
+                    pass
             hist = call(f"/history/{prompt_id}").get(prompt_id)
             if hist and hist.get("status", {}).get("status_str") == "error":
                 raise RuntimeError(f"ComfyUI error: {json.dumps(hist['status'])[:1500]}")
@@ -947,8 +980,9 @@ def run_video(source: Path, source_name: str, sets: list[dict], preset: str, len
 # ---------- Storyboard: a scene of 2 s shots, kept as JSON in output/boards/<id>/board.json next to its renders ----------
 BOARD_DIR = OUTPUT / "boards"
 BOARD_LOCK = threading.RLock()
-SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length")  # what the page may change
-RENDER_FIELDS = ("clip", "last", "thumb", "seconds", "done", "bridge", "bridge_seconds", "bridge_done")  # what only a render writes
+SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length", "motion", "tempo")
+SHOT_TEMPOS = (1, 1.25, 1.5)  # up-casting (DaSiWa guide): render more frames, play them in the shot's length; against Wan's slow motion  # what the page may change
+RENDER_FIELDS = ("clip", "last", "thumb", "seconds", "done", "bridge", "bridge_seconds", "bridge_done", "stats")  # what only a render writes
 SHOT_LENGTHS = (2, 3, 4, 5)  # seconds; Wan takes 4n + 1 frames
 TRANSITIONS = ("cut", "fade", "flash", "bridge")
 FLASH_COLORS = {"violet": (150, 70, 255), "pink": (255, 60, 200), "cyan": (60, 230, 255), "white": (255, 255, 255), "black": (0, 0, 0)}
@@ -1010,13 +1044,22 @@ def board_write(board: dict) -> None:
     tmp.replace(path)
 
 
+def shot_current(s: dict, sig: str) -> bool:
+    """Rendered for these settings, or locked: a locked shot keeps its clip whatever changes around it."""
+    return s.get("done") == sig or bool(s.get("locked") and s.get("clip"))
+
+
 def board_sigs(board: dict) -> list[str]:
     """A fingerprint per shot of all that shapes its render; a continuing shot inherits the one before, so a change runs down the chain."""
     sigs, before = [], ""
     for i, s in enumerate(board["shots"]):
         chained = i > 0 and s["start"] == "continue"
         length = s.get("length", 2)  # a 2 s shot keeps the fingerprint it had before lengths existed
-        text = json.dumps([board.get("character", ""), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]] + ([length] if length != 2 else []))
+        model = board.get("model", "q4")
+        text = json.dumps([board.get("character", ""), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]]
+                          + ([length] if length != 2 else []) + ([model] if model != "q4" else [])
+                          + ([shot_motion(board, s)] if shot_motion(board, s) != "normal" else [])
+                          + ([s["tempo"]] if s.get("tempo", 1) != 1 else []))
         before = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
         sigs.append(before)
     return sigs
@@ -1026,7 +1069,7 @@ def board_view(board: dict) -> dict:
     """The board plus what is true right now: each shot's status, and whether the joined scene still matches."""
     view, sigs = json.loads(json.dumps(board)), board_sigs(board)
     for s, sig in zip(view["shots"], sigs):
-        s["status"] = "waiting" if not s.get("clip") else "rendered" if s.get("done") == sig else "outdated"
+        s["status"] = "waiting" if not s.get("clip") else "rendered" if shot_current(s, sig) else "outdated"
     for i, sig in bridge_sigs(board).items():
         s = view["shots"][i]
         s["bridge_status"] = "waiting" if not s.get("bridge") else "rendered" if s.get("bridge_done") == sig else "outdated"
@@ -1063,13 +1106,17 @@ def board_store(req: dict) -> dict:
             s["seed"] = s["seed"] if isinstance(s["seed"], int) else random.randrange(2**32)
             s["transition"] = transition_of(s["transition"])
             s["length"] = s["length"] if s["length"] in SHOT_LENGTHS else 2
+            s["motion"] = s["motion"] if s["motion"] in VIDEO_MOTION else old.get("motion", "normal")
+            s["tempo"] = s["tempo"] if s["tempo"] in SHOT_TEMPOS else 1
+            s["locked"] = bool(raw["locked"]) if "locked" in raw else bool(before.get(s["id"], {}).get("locked"))
             s.update({k: before[s["id"]][k] for k in RENDER_FIELDS if k in before.get(s["id"], {})})
             shots.append(s)
         for sid in set(before) - {s["id"] for s in shots}:
             for f in (before[sid].get("clip"), before[sid].get("last"), before[sid].get("thumb"), before[sid].get("bridge")):
                 if f:
                     (OUTPUT / f).unlink(missing_ok=True)
-        old.update(title=str(req.get("title") or "Untitled board").strip()[:80], character=str(req.get("character") or ""), shots=shots)
+        old.update(title=str(req.get("title") or "Untitled board").strip()[:80], character=str(req.get("character") or ""), shots=shots,
+                   model=req.get("model") if req.get("model") in VIDEO_MODELS else old.get("model", "q4"))
         board_write(old)
         return board_view(old)
 
@@ -1118,7 +1165,7 @@ def board_bridge(board: dict, i: int, sig: str, stopped, progress) -> None:
     began = time.time()
     try:
         graph = video_workflow(f"morpheus/{first.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["transition"]["seed"],
-                               f"morpheus/{tag}", f"morpheus/{last.name}")
+                               f"morpheus/{tag}", f"morpheus/{last.name}", model=board.get("model", "q4"), motion=shot_motion(board, s))
         made, end = video_part(graph, stopped, progress)
     finally:
         first.unlink(missing_ok=True)
@@ -1149,13 +1196,19 @@ def board_shot(board: dict, i: int, sig: str, stopped, progress) -> None:
     prompt = ". ".join(x.strip().rstrip(".") for x in (board.get("character", ""), s["prompt"]) if x.strip()) + "."
     began = time.time()
     try:
+        tempo = s.get("tempo", 1) if s.get("tempo", 1) in SHOT_TEMPOS else 1
+        keep_n = s.get("length", 2) * VIDEO_FPS + 1  # what the shot plays
+        frames_n = -(-round(s.get("length", 2) * VIDEO_FPS * tempo) // 4) * 4 + 1  # what Wan renders: 4n + 1
         graph = video_workflow(f"morpheus/{staged.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["seed"], f"morpheus/board_{s['id']}",
-                               frames=s.get("length", 2) * VIDEO_FPS + 1)
-        made, last = video_part(graph, stopped, progress)
+                               frames=frames_n, model=board.get("model", "q4"), motion=shot_motion(board, s))
+        stats = {"model": board.get("model", "q4"), "motion": shot_motion(board, s), "tempo": tempo, "frames": frames_n, "size": f"{width}x{height}"}
+        made, last = video_part(graph, stopped, progress, stats)
     finally:
         staged.unlink(missing_ok=True)
     frames = video_frames(made)
     made.unlink(missing_ok=True)
+    if len(frames) > keep_n:  # faster tempo: spread the shot's frames evenly over the render, first and last kept
+        frames = [frames[round(i * (len(frames) - 1) / (keep_n - 1))] for i in range(keep_n)]
     video_write(frames, folder / f"{s['id']}.mp4")
     shutil.move(str(last), folder / f"{s['id']}_last.png")
     frames[len(frames) // 2].resize((160, round(160 * height / width))).save(folder / f"{s['id']}_thumb.jpg", quality=85)
@@ -1164,15 +1217,19 @@ def board_shot(board: dict, i: int, sig: str, stopped, progress) -> None:
         now = board_load(board["id"])
         for x in now["shots"]:
             if x["id"] == s["id"]:
-                x.update(clip=f"{base}.mp4", last=f"{base}_last.png", thumb=f"{base}_thumb.jpg", seconds=round(time.time() - began), done=sig)
+                x.update(clip=f"{base}.mp4", last=f"{base}_last.png", thumb=f"{base}_thumb.jpg", seconds=round(time.time() - began), done=sig, locked=True,
+                         stats=stats | {"seconds": round(time.time() - began)})
         board_write(now)
+    with open(folder / "stats.jsonl", "a", encoding="utf-8") as f:  # every render, also the ones redone later
+        f.write(json.dumps({"shot": s["id"], "label": s.get("label"), "length": s.get("length", 2), "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                           | stats | {"seconds": round(time.time() - began)}) + "\n")
 
 
 def board_join(board_id: str) -> None:
     """All shots and bridges current: join them with their transitions. A fade overlaps the shots; a flash passes through a colour."""
     board = board_load(board_id)
     sigs, bridges = board_sigs(board), bridge_sigs(board)
-    if not board["shots"] or any(s.get("done") != sig for s, sig in zip(board["shots"], sigs)):
+    if not board["shots"] or any(not shot_current(s, sig) for s, sig in zip(board["shots"], sigs)):
         return
     if any(board["shots"][i].get("bridge_done") != sig for i, sig in bridges.items()):
         return
@@ -1212,7 +1269,7 @@ def board_render(board_id: str, shot: str | None, stopped, progress, on_part) ->
     def todo(board):
         sigs = board_sigs(board)
         upto = next((i for i, s in enumerate(board["shots"]) if s["id"] == shot), len(board["shots"]) - 1)
-        work = [(board_shot, i, sigs[i]) for i, s in enumerate(board["shots"][:upto + 1]) if s.get("done") != sigs[i]]
+        work = [(board_shot, i, sigs[i]) for i, s in enumerate(board["shots"][:upto + 1]) if not shot_current(s, sigs[i])]
         if not shot:
             work += [(board_bridge, i, sig) for i, sig in bridge_sigs(board).items() if board["shots"][i].get("bridge_done") != sig]
         return upto, work

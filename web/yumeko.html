@@ -332,6 +332,44 @@
   @media (max-width:760px) { .book { grid-template-columns:1fr; } .pages { flex-direction:row; position:static; overflow-x:auto; } .pages button { min-width:110px; } .paper { grid-template-columns:1fr; padding:12px; } }
   dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:12px; max-width:440px; }
   dialog::backdrop { background:rgba(5,3,20,.6); }
+  /* ── Product polish: one button system, a fixed app shell, no visible scrollbars ── */
+  *, *::before, *::after { scrollbar-width:none !important; } ::-webkit-scrollbar { display:none !important; width:0 !important; height:0 !important; }
+  html, body { height:100%; }
+  body { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  body > header { flex:none; position:relative; z-index:20; background:rgba(10,6,20,.85); backdrop-filter:blur(8px); }
+  body > main { flex:1; min-height:0; overflow-y:auto; width:100%; overscroll-behavior:contain; }
+  body.fixedpage main { overflow:hidden; }
+  /* the button family: same height, type and corners everywhere a control sits in a bar or a box */
+  :where(.phead, .pmid, .pside, .bookbar, .row, .lockhead, .boxhead, .frame.empty, .setacts, .tile .row, dialog, .gridbar, .jobtop, .head) :is(button, a.btnlike):not(.ico, .chip, .fold, .qref, .pic, .tile, .ratio, .vdel, .nav, .x, .check, .mini) {
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 14px; border-radius:8px;
+    font:500 13px/1 Inter, system-ui, sans-serif; letter-spacing:0; text-decoration:none; white-space:nowrap; }
+  button, .btnlike { transition:border-color .15s ease, background-color .15s ease, color .15s ease; }
+  button:hover:not(:disabled), .btnlike:hover { background-color:#241546; }
+  :where(.row, .boxhead, .lockhead, .pmid, .pside) button[aria-pressed="true"]:not(.chip, .ico) { border-color:var(--accent); background:rgba(177,77,255,.18); color:#fff; }
+  button.go, button.primary { background:linear-gradient(90deg, var(--accent), var(--pink)) !important; border:0 !important; color:#fff !important; font:600 13px/1 Inter, system-ui, sans-serif !important; letter-spacing:.01em !important; box-shadow:0 0 16px -4px var(--glow); }
+  button.go:hover:not(:disabled), button.primary:hover:not(:disabled) { filter:brightness(1.12); }
+  button.danger { background:transparent; border-color:rgba(255,120,150,.35); color:#ff94a8; }
+  button.danger:hover:not(:disabled) { background:rgba(255,42,109,.12); border-color:#ff6b8a; }
+  button.mini { display:inline-flex; align-items:center; height:28px; padding:0 10px; font:500 12px/1 Inter, system-ui, sans-serif; border-radius:7px; }
+  .chip { display:inline-flex; align-items:center; height:28px; padding:0 12px; font:500 12.5px/1 Inter, system-ui, sans-serif; }
+  button.ico { width:34px; height:34px; border-radius:8px; }
+  .fold { width:22px; height:22px; display:inline-grid; place-items:center; }
+  a.btnlike { color:var(--text); max-width:260px; overflow:hidden; text-overflow:ellipsis; }
+  /* panel editor: the bar stays, three columns scroll on their own */
+  .phead { position:static; flex:none; margin:0 0 14px; padding:0 0 12px; background:none; align-items:center; }
+  .phead input, .bookbar input, .bookbar select { height:38px; }
+  .lockhead h3, .boxhead h3 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .lockhead > .row { flex-wrap:nowrap; }
+  @media (min-width:1201px) {
+    body > main:has(.pedit) { display:flex; flex-direction:column; overflow:hidden; padding-bottom:0; }
+    main:has(.pedit) > :not(.pedit) { flex:none; }
+    .pedit { flex:1; min-height:0; align-items:stretch; }
+    .pvers, .pmid, .pedit > .pside { position:static; top:auto; max-height:none; height:100%; min-height:0; overflow-y:auto; padding-bottom:24px; }
+    .pvers .versions { overflow:visible; }
+  }
+  .frame figcaption button, .turn button { display:inline-grid; place-items:center; width:28px; height:28px; padding:0; border-radius:7px; font-size:14px; }
+  .turn button { width:36px; height:36px; font-size:18px; }
+  .tile .row button { height:32px; }
 </style>
 </head>
 <body>
@@ -959,7 +997,7 @@ async function manga() {
   $('newb').onclick = async () => { const b = await act('book_new', { title:'New manga' }); if (b) location.hash = 'book/' + b.id; };
   mangaData.books.forEach(b => { const first = byId[b.panels[0]], f = shownOf(first), el = document.createElement('button'); el.className = 'tile';
     const pages = Math.max(1, Math.ceil(b.panels.length / 4));
-    el.innerHTML = `${f ? `<img src="${file('_manga/' + first.id, f)}" alt="">` : '<span class="blank">▦</span>'}<span class="meta"><b>${esc(b.title)}</b><small>${b.panels.length} ${b.panels.length === 1 ? 'panel' : 'panels'},${pages} ${pages === 1 ? 'page' : 'pages'}</small></span>`;
+    el.innerHTML = `${f ? `<img src="${file('_manga/' + first.id, f)}" alt="">` : '<span class="blank">▦</span>'}<span class="meta"><b>${esc(b.title)}</b><small>${b.panels.length} ${b.panels.length === 1 ? 'panel' : 'panels'}, ${pages} ${pages === 1 ? 'page' : 'pages'}</small></span>`;
     el.onclick = () => location.hash = 'book/' + b.id; $('bs').append(el); });
 }
 async function openBook(id, page) {
@@ -977,7 +1015,7 @@ async function openBook(id, page) {
     <div class="reader"><div class="paper">${[0, 1, 2, 3].map(k => { const pid = slots[k], n = (at - 1) * 4 + k;
         if (pid) return `<figure class="frame"><button class="open" data-open="${pid}" title="Edit: ${esc(byId[pid].title)}">${img(pid)}</button>
           <figcaption><span>${n + 1}. ${esc(byId[pid].title)}</span><span><button data-move="${n}" data-by="-1" ${n === 0 ? 'disabled' : ''} aria-label="Move earlier">←</button><button data-move="${n}" data-by="1" ${n === ids.length - 1 ? 'disabled' : ''} aria-label="Move later">→</button></span></figcaption></figure>`;
-        if (n === ids.length) return `<div class="frame empty"><button class="go" id="newp">New panel</button>${others.length ? `<select id="take" aria-label="Move a panel from another manga here"><option value="">Or move a panel here …</option>${others.map(o => `<option value="${o.pid}">${esc(o.from)}: ${esc(byId[o.pid].title)}</option>`).join('')}</select>` : ''}</div>`;
+        if (n === ids.length) return `<div class="frame empty"><button class="go" id="newp">New panel</button>${ids.length ? '<button id="newlast" title="The new panel starts on the last panel&#39;s picture, with its characters, masks and locked composition">Start from the last panel</button>' : ''}${others.length ? `<select id="take" aria-label="Move a panel from another manga here"><option value="">Or move a panel here …</option>${others.map(o => `<option value="${o.pid}">${esc(o.from)}: ${esc(byId[o.pid].title)}</option>`).join('')}</select>` : ''}</div>`;
         return '<div class="frame none"></div>'; }).join('')}</div>
       <div class="turn"><button id="prev" ${at === 1 ? 'disabled' : ''} aria-label="Previous page">‹</button><span>Page ${at} of ${pages}</span><button id="next" ${at === pages ? 'disabled' : ''} aria-label="Next page">›</button></div></div></div>`;
   const go = n => { location.hash = `book/${id}/${n}`; };
@@ -990,6 +1028,7 @@ async function openBook(id, page) {
   app.querySelectorAll('[data-move]').forEach(x => x.onclick = async () => { const i = +x.dataset.move, j = i + +x.dataset.by, o = [...ids]; [o[i], o[j]] = [o[j], o[i]];
     await act('book_edit', { id, panels:[...o, ...b.panels.filter(pid => !byId[pid])] }); if (Math.floor(j / 4) + 1 === at) openBook(id, at); else go(Math.floor(j / 4) + 1); });
   if ($('newp')) $('newp').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}` }); if (p) location.hash = 'panel/' + p.id; };
+  if ($('newlast')) $('newlast').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}`, from_last:true }); if (p) location.hash = 'panel/' + p.id; };
   if ($('take')) $('take').onchange = async e => { if (e.target.value) { await act('book_edit', { id, add:e.target.value }); openBook(id, at); } };
   $('prev').onclick = () => go(at - 1); $('next').onclick = () => go(at + 1);
   onkeydown = e => { if (!location.hash.startsWith('#book/') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
@@ -1064,7 +1103,7 @@ function paintPanel() {
         <span class="chips row" style="margin:0">${QWEN_LORAS.map(([k, t]) => `<button class="chip" data-pqlora="${k}" aria-pressed="${tool.qwen.loras.includes(k)}">${t}</button>`).join('')}</span>
         <div class="row" style="margin:0"><button id="qbrush" aria-pressed="${tool.active === 'qwen'}">${tool.active === 'qwen' ? 'Painting the Qwen mask' : 'Paint mask'}</button><button id="qclear">Clear mask</button><button id="qrun" class="primary" ${p.busy || !top ? 'disabled' : ''}>Qwen edit</button></div>
       </section>
-      <div class="lockhead"><h3>Characters, first is painted first</h3><span class="row" style="margin:0;gap:6px"><button class="mini" data-foldall="1">Fold all</button><button class="mini" data-foldall="0">Unfold all</button></span></div><div id="chars"></div>
+      <div class="lockhead"><h3 title="The first character is painted first">Characters</h3><span class="row" style="margin:0;gap:6px"><button class="mini" data-foldall="1">Fold all</button><button class="mini" data-foldall="0">Unfold all</button></span></div><div id="chars"></div>
       <div class="row"><select id="add" aria-label="Add LoRA" style="flex:1"><option value="">Add LoRA …</option>${p._loras.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></div>
       ${p._loras.length ? '' : '<p class="note">Finish a set first; its LoRA appears here.</p>'}
       <div class="row"><button class="go" id="all" ${p.busy ? 'disabled' : ''}>Paint all characters</button></div>

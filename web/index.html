@@ -660,6 +660,9 @@
   .sb-num { font-size: 22px; font-weight: 700; color: var(--accent); }
   .sb .sb-name { flex: 1 1 180px; padding: 6px 8px; border-color: transparent; background: none; font-size: 18px; font-weight: 600; }
   .sb .sb-name:hover, .sb .sb-name:focus { border-color: var(--line); }
+  .sb .sb-lock { padding: 4px 8px; background: none; border: 1px solid transparent; font-size: 16px; opacity: .55; cursor: pointer; }
+  .sb .sb-lock[aria-pressed="true"] { opacity: 1; border-color: var(--line); }
+  .sb .sb-lockmark { font-style: normal; font-size: 11px; margin-right: 3px; }
   .sb-len { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
   .sb-foot { display: flex; flex-wrap: wrap; gap: 2px; margin: -4px 0 0 -10px; } .sb-foot .danger { margin-left: auto; }
   .sb-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -2855,7 +2858,8 @@
     wake.board.scene = fresh.scene;
     for (const s of wake.board.shots) {
       const f = fresh.shots.find(x => x.id === s.id);
-      if (f) for (const k of ['seed', 'clip', 'last', 'thumb', 'seconds', 'done', 'status', 'bridge', 'bridge_done', 'bridge_seconds', 'bridge_status']) s[k] = f[k];
+      if (f) for (const k of ['seed', 'clip', 'last', 'thumb', 'seconds', 'done', 'status', 'bridge', 'bridge_done', 'bridge_seconds', 'bridge_status', 'stats']) s[k] = f[k];
+      if (f && f.locked !== undefined && (f.done !== s._done || s.locked === undefined)) { s.locked = f.locked; s._done = f.done; }
       if (f && s.transition && f.transition) s.transition.seed = f.transition.seed;
     }
     paintStrip(); paintActions(); paintPicture();
@@ -2869,6 +2873,7 @@
     $('sb-board').innerHTML = `<div class="sb-settings" id="sb-settings" ${wake.settings ? '' : 'hidden'}>
         <label class="sb-f"><span>Title</span><input type="text" id="sb-title"></label>
         <label class="sb-f grow"><span>Character, added to every shot</span><input type="text" id="sb-char" placeholder="A woman with wavy chestnut hair, cream sweater, blue jeans"></label>
+        <label class="sb-f"><span>Video model</span><select id="sb-model"></select></label>
         <button type="button" class="sb-quiet danger" id="sb-del">Delete board</button></div>
       <section class="sb-reel" aria-label="Shots">
         <div class="sb-strip" id="sb-strip"></div><div class="sb-progress" id="sb-progress"></div></section>
@@ -2876,6 +2881,9 @@
     $('sb-title').value = b.title; $('sb-char').value = b.character;
     $('sb-title').oninput = e => { b.title = e.target.value; saveBoard(); };
     $('sb-char').oninput = e => { b.character = e.target.value; saveBoard(); };
+    fetch('/api/video_models').then(r => r.json()).then(ms => { const sel = $('sb-model'); if (!sel) return;
+      sel.innerHTML = ms.map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join(''); sel.value = b.model || 'q4'; });
+    $('sb-model').onchange = e => { b.model = e.target.value; saveBoard(); };
     $('sb-pick').onchange = e => openBoard(e.target.value);
     $('sb-new').onclick = () => openBoard(null);
     $('sb-set').onclick = () => { wake.settings = !wake.settings; $('sb-settings').hidden = !wake.settings; $('sb-set').setAttribute('aria-expanded', wake.settings); };
@@ -2900,7 +2908,7 @@
       c.dataset.shot = s.id;
       c.setAttribute('aria-pressed', !wake.gap && s.id === currentShot().id);
       c.innerHTML = `${pic ? `<img src="${pic}" alt="" loading="lazy">` : '<div class="sb-empty"></div>'}<b>${i + 1}</b>
-        <span>${esc(s.label || s.prompt || 'Empty shot')}</span><small class="${status}" title="${words[status]}">${s.length || 2} s</small>`;
+        <span>${s.locked ? '<i class="sb-lockmark" title="Locked">🔒</i>' : ''}${esc(s.label || s.prompt || 'Empty shot')}</span><small class="${status}" title="${words[status]}">${s.length || 2} s</small>`;
       c.onclick = () => { wake.shot = s.id; wake.gap = null; paintStrip(); paintShot(); };
       c.ondragstart = e => e.dataTransfer.setData('text/plain', s.id);
       c.ondragover = e => { e.preventDefault(); c.classList.add('drop'); };
@@ -2960,7 +2968,10 @@
         <input type="file" id="sb-file" accept="image/*" hidden></div>
       <div class="sb-main">
         <div class="sb-head"><b class="sb-num">${i + 1}</b><input type="text" id="sb-label" class="sb-name" aria-label="Shot name" placeholder="Name this shot">
+          ${s.clip ? `<button type="button" class="sb-lock" id="sb-lock" aria-pressed="${!!s.locked}" title="${s.locked ? 'Locked: Render shot and Render all leave this shot alone. Click to unlock' : 'Lock this shot so it is not rendered again'}">${s.locked ? '🔒' : '🔓'}</button>` : ''}
           <label class="sb-len">Length <select id="sb-length">${[2, 3, 4, 5].map(x => `<option value="${x}" ${x === (s.length || 2) ? 'selected' : ''}>${x} s</option>`).join('')}</select></label>
+          <label class="sb-len" title="More steps on Wan's motion expert: more action, slightly fewer fine details. Same render time.">Motion <select id="sb-motion">${[['normal', 'Normal · 2 + 2'], ['more', 'More · 3 + 1'], ['wild', 'Wild · 3 + 1, shift 4']].map(([k, t]) => `<option value="${k}" ${k === (s.motion || wake.board.motion || 'normal') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="sb-len" title="Against Wan's slow motion: renders more frames and plays them in the shot's length. 1.5× renders half as many frames again.">Tempo <select id="sb-tempo">${[1, 1.25, 1.5].map(x => `<option value="${x}" ${x === (s.tempo || 1) ? 'selected' : ''}>${x}×</option>`).join('')}</select></label>
           <button type="button" class="wake-go" id="sb-one">Render shot</button></div>
         <label class="sb-f"><span>Motion prompt</span><textarea id="sb-prompt" rows="6" placeholder="She blows a kiss to the camera and smiles. Static camera."></textarea></label>
         <div class="sb-foot"><button type="button" class="sb-quiet" id="sb-left" ${i ? '' : 'disabled'}>Move left</button>
@@ -2973,7 +2984,12 @@
     $('sb-label').value = s.label; $('sb-prompt').value = s.prompt;
     const text = (id, key) => { $(id).oninput = e => { s[key] = e.target.value; saveBoard(); }; };
     $('sb-length').onchange = e => { s.length = +e.target.value; saveBoard(); paintStrip(); paintActions(); };
+    $('sb-motion').onchange = e => { s.motion = e.target.value; saveBoard(); paintStrip(); paintActions(); };
+    $('sb-tempo').onchange = e => { s.tempo = +e.target.value; saveBoard(); paintStrip(); paintActions(); };
     text('sb-label', 'label'); text('sb-prompt', 'prompt');
+    if ($('sb-lock')) $('sb-lock').onclick = () => { s.locked = !s.locked; saveBoard(); paintStrip(); paintShot(); };
+    if (s.locked) ['sb-prompt', 'sb-length', 'sb-motion', 'sb-tempo', 'sb-seed', 'sb-change', 'sb-open'].forEach(id => { if ($(id)) $(id).disabled = true; });
+    if (s.locked) box.querySelectorAll('.sb-seg button').forEach(b => b.disabled = true);
     box.querySelectorAll('.sb-seg button').forEach(b => b.onclick = () => { s.start = b.dataset.s; shotChanged(); });
     const move = by => { const l = wake.board.shots; l.splice(i + by, 0, l.splice(i, 1)[0]); shotChanged(); };
     $('sb-left').onclick = () => move(-1);
@@ -3058,7 +3074,7 @@
     $('sb-sum').textContent = `${shots.length} ${shots.length === 1 ? 'shot' : 'shots'}, about ${seconds} s. ${n ? `${n} to render, about ${mins} min.` : stale ? 'Ready to join.' : 'All rendered.'}`;
     const blocked = wake.options.installed ? '' : 'The Wan 2.2 DaSiWa models are not installed.';
     const progress = $('sb-progress');
-    if ($('sb-one')) { $('sb-one').disabled = !!wake.job || !!blocked; $('sb-one').onclick = () => startRender(currentShot().id); }
+    if ($('sb-one')) { $('sb-one').disabled = !!wake.job || !!blocked || !!currentShot()?.locked; $('sb-one').title = currentShot()?.locked ? 'Locked: unlock it to render again' : ''; $('sb-one').onclick = () => startRender(currentShot().id); }
     if (wake.job) {
       box.innerHTML = '<button type="button" class="sb-quiet" id="wake-stop">Stop</button>';
       progress.innerHTML = `<div class="wake-run"><span class="bar"><i id="wake-bar" style="width:${r.total ? 100 * r.step / r.total : 0}%"></i></span><p class="hint" id="wake-phase" aria-live="polite"></p></div>`;
