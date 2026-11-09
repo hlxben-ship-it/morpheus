@@ -1005,23 +1005,124 @@ def finished() -> list:
             if (d / "job.json").exists():
                 j = json.loads((d / "job.json").read_text(encoding="utf-8"))
                 if j.get("lora"):
-                    out.append({"id": j["id"], "name": j["agent"]["name"], "trigger": j["lora"]["trigger"], "file": j["lora"]["file"], "strength": j["lora"]["strength"]})
+                    # the composition has no LoRA: the full card describes her best; prose summaries are no tags
+                    look = (j.get("auto") or {}).get("permanent") or (j.get("look") or {}).get("identity") or j["agent"].get("identity_summary") or ""
+                    look = "" if ". " in look else look
+                    lk = j.get("look") or {}
+                    look = ", ".join(t.strip() for t in look.split(",") if t.strip() and t.strip() not in ("1girl", "solo"))
+                    b0 = (j.get("bases") or [{}])[0].get("file")
+                    out.append({"base": f"{d.name}/{b0}" if b0 else None, "id": j["id"], "name": j["agent"]["name"], "trigger": j["lora"]["trigger"], "file": j["lora"]["file"], "strength": j["lora"]["strength"], "look": look,
+                                "pills": {"identity": ["", lk.get("identity_negative") or ""],  # her look is already in the description
+                                          "outfit": [", ".join(x for x in [lk.get("positive"), lk.get("outfit")] if x), lk.get("outfit_negative") or ""]}})
     return out
 
 
+# ---------- mangas: ordered panels, read as pages of four ----------
+BOOKS = MANGA / "books.json"
+
+
+def books() -> list:
+    """Every manga with its panel order. Panels from before mangas existed land in "Loose panels" once."""
+    data = json.loads(BOOKS.read_text(encoding="utf-8")) if BOOKS.exists() else []
+    placed = {pid for b in data for pid in b["panels"]}
+    loose = [p["id"] for p in sorted(panels(), key=lambda p: p.get("updated", 0)) if p["id"] not in placed]
+    if loose:
+        data.append({"id": f"{time.time_ns():x}", "title": "Loose panels", "panels": loose})
+        _books_save(data)
+    return data
+
+
+def _books_save(data: list) -> None:
+    MANGA.mkdir(parents=True, exist_ok=True)
+    BOOKS.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def book_new(req: dict) -> dict:
+    data = books()
+    b = {"id": f"{time.time_ns():x}", "title": str(req.get("title") or "New manga").strip() or "New manga", "panels": []}
+    data.append(b)
+    _books_save(data)
+    return b
+
+
+def book_edit(req: dict) -> dict:
+    """Rename, reorder (panels: the full new order), or move one panel here (add: panel id, taken out of any other manga)."""
+    data = books()
+    b = next((x for x in data if x["id"] == req.get("id")), None)
+    if not b:
+        raise ValueError("Unknown manga.")
+    if "title" in req:
+        b["title"] = str(req["title"]).strip() or b["title"]
+    if isinstance(req.get("panels"), list) and sorted(req["panels"]) == sorted(b["panels"]):
+        b["panels"] = req["panels"]
+    if req.get("add"):
+        for x in data:
+            if req["add"] in x["panels"]:
+                x["panels"].remove(req["add"])
+        b["panels"].append(req["add"])
+    _books_save(data)
+    return b
+
+
+def book_delete(req: dict) -> dict:
+    """Delete a manga; its panels move to Loose panels, nothing is lost."""
+    data = [b for b in books() if b["id"] != req.get("id")]
+    _books_save(data)
+    books()
+    return {"ok": True}
+
+
+PANEL_NEGATIVE = "nsfw, nude, nipples, see-through, lingerie, cleavage, text, speech bubble, watermark, signature, extra person"  # loli, child are locked anyway
+PANEL_PROMPT = "manga panel. On the left: (her hair, eyes, outfit). On the right: (her hair, eyes, outfit). Scene: (place, time of day, light)."
+
+
 def panel_new(req: dict) -> dict:
+    """A new panel continues the manga: scene, characters and format come from the panel before it. The first one gets defaults."""
     pid = f"{time.time_ns():x}"
+    prev = None
+    if req.get("book"):
+        data = books()
+        b = next((x for x in data if x["id"] == req["book"]), None)
+        if b:
+            for x in reversed(b["panels"]):
+                try:
+                    prev = panel_load(x)
+                    break
+                except (OSError, ValueError):
+                    continue
+            b["panels"].append(pid)
+            _books_save(data)
     panel_dir(pid).mkdir(parents=True)
-    return panel_save({"id": pid, "title": str(req.get("title") or "New panel"), "tags": "", "prompt": "", "negative": "", "width": 1024, "height": 1024,
-                       "characters": [], "versions": [], "composition": None, "busy": None, "error": None})
+    base = {"tags": "2girls, indoors, wide shot, ", "prompt": PANEL_PROMPT, "negative": PANEL_NEGATIVE, "width": 1216, "height": 832, "characters": []}
+    if prev:  # masks don't carry over: the characters stand somewhere else in a new composition
+        base = {k: prev[k] for k in base} | {"characters": [{k: v for k, v in c.items() if k != "masked"} for c in prev["characters"]]}
+    return panel_save({"id": pid, "title": str(req.get("title") or "New panel"), **base, "versions": [], "composition": None, "busy": None, "error": None})
 
 
 def panel_edit(req: dict) -> dict:
     p = panel_load(req.get("id"))
-    for k in ("title", "tags", "prompt", "negative", "characters", "width", "height"):
+    for k in ("title", "tags", "prompt", "negative", "characters", "width", "height", "locked", "pass_tags", "pass_negative"):
+        if k == "characters" and k in req:  # a reference is set by panel_ref only; a save from the page keeps it
+            old = {x["id"]: x.get("ref") for x in p.get("characters", [])}
+            for x in req[k]:
+                if old.get(x.get("id")):
+                    x["ref"] = old[x["id"]]
+                else:
+                    x.pop("ref", None)
         if k in req:
             p[k] = req[k]
+    if req.get("current") in [v["file"] for v in p["versions"]]:
+        p["current"] = req["current"]  # the version shown in the manga and painted on next; the list itself stays in order
     return panel_save(p)
+
+
+PANEL_LIVE: dict[str, dict] = {}  # panel id -> sampler step and total of the render running on it
+_PANEL_NOW = {"id": None}  # one render at a time (GPU lock), so one panel
+
+
+def _panel_progress(step=None, total=None, preview=None):
+    if _PANEL_NOW["id"] and step is not None:
+        PANEL_LIVE[_PANEL_NOW["id"]] = {"step": step, "total": total}
 
 
 def _panel_background(p: dict, label: str, work) -> dict:
@@ -1036,9 +1137,12 @@ def _panel_background(p: dict, label: str, work) -> dict:
         try:
             with GPU:
                 ensure_comfy()
+                _PANEL_NOW["id"] = p["id"]
                 work(p)
         except Exception as e:
             p["error"] = str(e)
+        _PANEL_NOW["id"] = None
+        PANEL_LIVE.pop(p["id"], None)
         p["busy"] = None
         panel_save(p)
     threading.Thread(target=run, daemon=True).start()
@@ -1056,39 +1160,93 @@ def panel_compose(req: dict) -> dict:
         size = (int(q["width"]), int(q["height"]))
         name = f"comp_{time.time_ns():x}.png"
         seed = random.randrange(2 ** 31)
-        render(positive, q["negative"] or None, seed, size, loras).save(panel_dir(q["id"]) / name)
+        render(positive, q["negative"] or None, seed, size, loras, progress=_panel_progress).save(panel_dir(q["id"]) / name)
         q["composition"] = name
         q["versions"] = [{"file": name, "label": "Composition", "seed": seed}] + q["versions"]
+        q["current"] = name
     return _panel_background(p, "Rendering composition", work)
 
 
-def _inpaint(source: Image.Image, mask: Image.Image, positive: str, negative: str | None, lora: str, strength: float, denoise: float, seed: int) -> Image.Image:
+def _inpaint(source: Image.Image, mask: Image.Image, positive: str, negative: str | None, lora: str | None, strength: float, denoise: float, seed: int,
+             wash: bool = False, context: float = 0.0) -> Image.Image:
     """One character's pass: crop around her mask, redo the crop large with her LoRA, paste back through a soft mask."""
     W, H = source.size
     mask = mask.convert("L").resize((W, H)).filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
     box = mask.getbbox()
     if not box:
         raise ValueError("That character's mask is empty; paint her first.")
-    pad = 48
+    pad = max(48, int(context * max(box[2] - box[0], box[3] - box[1])))  # a fix sees more of her around the spot, so it continues her body
     box = (max(0, box[0] - pad), max(0, box[1] - pad), min(W, box[2] + pad), min(H, box[3] + pad))
     cw, ch = box[2] - box[0], box[3] - box[1]
     scale = 1216 / max(cw, ch)
     rw, rh = int(cw * scale) // 8 * 8, int(ch * scale) // 8 * 8
     folder = morpheus.COMFY_INPUT / "yumeko"
     folder.mkdir(parents=True, exist_ok=True)
-    source.crop(box).resize((rw, rh), Image.LANCZOS).save(folder / "crop.png")
-    mask.crop(box).resize((rw, rh), Image.LANCZOS).convert("RGB").save(folder / "mask.png")
+    crop, mcrop = source.crop(box).resize((rw, rh), Image.LANCZOS), mask.crop(box).resize((rw, rh), Image.LANCZOS)
+    if wash:  # the old colours and shapes under the mask fade to a soft grey, so the tags decide them, not the picture
+        # colours go, shapes stay: grey, flattened toward mid-grey, so folds and the body pose remain and the tags pick colours
+        # (only the colours: the brightness stays, so a light wall doesn't turn into a grey patch; soft mask edges are left alone)
+        washed = crop.convert("L").convert("RGB")
+        crop = Image.composite(washed, crop, mcrop.point(lambda v: 255 if v > 200 else 0).filter(ImageFilter.GaussianBlur(3)))
+    crop.save(folder / "crop.png")
+    mcrop.convert("RGB").save(folder / "mask.png")
     m = morpheus.MODELS[MODEL]
-    g = m["workflow"](positive, rw, rh, seed, m["steps"], negative=SAFE + (negative or m["workflow"].negative), prefix=m["workflow"].prefix)
+    g = m["workflow"](positive, rw, rh, seed, m["steps"], negative=_dedupe(PASS_LOCKED + (negative + ", " if negative else "") + _no_nsfw(m["workflow"].negative)), prefix=m["workflow"].prefix)
     g["21"] = {"class_type": "LoadImage", "inputs": {"image": "yumeko/crop.png"}}
     g["22"] = {"class_type": "LoadImageMask", "inputs": {"image": "yumeko/mask.png", "channel": "red"}}
     g["23"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["1", 2]}}
     g["24"] = {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["23", 0], "mask": ["22", 0]}}
     g["8"]["inputs"]["latent_image"], g["8"]["inputs"]["denoise"] = ["24", 0], denoise
-    result = morpheus.generate(_with_loras(g, [(lora, strength)])).resize((cw, ch), Image.LANCZOS)
+    result = morpheus.generate(_with_loras(g, [(lora, strength)] if lora else []), progress=_panel_progress).resize((cw, ch), Image.LANCZOS)
     out = source.copy()
     out.paste(result, box[:2], mask.crop(box))
     return out
+
+
+HEADCOUNT = re.compile(r"^(\d\+?|multiple|solo)[ _]?(girls?|boys?|others?)$|^solo$|^(group|crowd)$")
+
+
+def pass_fixed() -> dict:
+    """What every character pass sends on top of the panel's and her own tags, for the page to show."""
+    w = morpheus.MODELS[MODEL]["workflow"]
+    return {"positive": w.prefix + "(her trigger), " + ADULT + "1girl", "negative": _dedupe(PASS_LOCKED + _no_nsfw(w.negative))}
+
+
+# Character passes: only loli and child are locked; nsfw and nude sit in the editable pass negative instead.
+PASS_LOCKED = "loli, child, " + NO_MARKS
+
+
+def _no_nsfw(tags: str) -> str:
+    return ", ".join(t.strip() for t in tags.split(",") if t.strip() and t.strip().lower() not in ("nsfw", "nude"))
+
+
+def _tidy(tags: str) -> str:
+    """A typed prompt made safe: a stray "(" or ")" would weight everything after it, so unmatched ones are dropped; empty tags go."""
+    out, open_ = [], []
+    for ch in tags:
+        if ch == "(":
+            open_.append(len(out))
+        elif ch == ")":
+            if not open_:
+                continue
+            open_.pop()
+        out.append(ch)
+    for i in reversed(open_):
+        del out[i]
+    return ", ".join(t.strip() for t in "".join(out).split(",") if t.strip())
+
+
+def _dedupe(tags: str) -> str:
+    seen = []
+    for t in (x.strip() for x in tags.split(",")):
+        if t and t.lower() not in [s.lower() for s in seen]:
+            seen.append(t)
+    return ", ".join(seen)
+
+
+def pass_tags(tags: str) -> str:
+    """The scene tags a character pass gets: without head counts, since each pass paints one girl."""
+    return ", ".join(t.strip() for t in (tags or "").split(",") if t.strip() and not HEADCOUNT.match(t.strip().lower()))
 
 
 def panel_mask(req: dict) -> dict:
@@ -1108,7 +1266,7 @@ def panel_mask(req: dict) -> dict:
 def panel_pass(req: dict) -> dict:
     """Run the character's pass on the chosen version; all=true runs every masked character in order, on the composition."""
     p = panel_load(req.get("id"))
-    start = str(req.get("from") or (p["versions"][0]["file"] if p["versions"] else ""))
+    start = str(req.get("from") or p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
     if not start:
         raise ValueError("Render a composition first.")
     chosen = [c for c in p["characters"] if c.get("masked")] if req.get("all") else [c for c in p["characters"] if c["id"] == req.get("character")]
@@ -1117,21 +1275,253 @@ def panel_pass(req: dict) -> dict:
 
     def work(q):
         d = panel_dir(q["id"])
-        im = Image.open(d / start).convert("RGB")
+        base = start
+        im = Image.open(d / base).convert("RGB")
         for c in chosen:
             q["busy"] = f"Painting {c['name']}"
             panel_save(q)
             seed = random.randrange(2 ** 31)
-            positive = c["trigger"] + ", " + ADULT + "1girl, fully clothed, " + (c.get("action") or "") + ", " + q["tags"].replace("_", " ")
-            im = _inpaint(im, Image.open(d / f"mask_{c['id']}.png"), positive, q["negative"] or None, c["file"], float(c.get("strength", 1.0)), float(c.get("denoise", 0.62)), seed)
+            # a locked composition sends its own pass tags and negative; unlocked, the scene tags without the head count
+            # (a "3girls" in a pass that paints one girl inside her mask invites extra people)
+            scene = q.get("pass_tags") if q.get("locked") else pass_tags(q["tags"])
+            positive = _tidy(c["trigger"] + ", " + ADULT + "1girl, " + (c.get("action") or "") + ", " + (scene or "").replace("_", " "))
+            base_neg = q.get("pass_negative") if q.get("locked") else q["negative"]
+            neg = ", ".join(x.strip(", ") for x in [base_neg or "", c.get("negative") or ""] if x and x.strip(", ")) or None
+            im = _inpaint(im, Image.open(d / f"mask_{c['id']}.png"), positive, neg, c["file"], float(c.get("strength", 1.0)), float(c.get("denoise", 0.62)), seed)
             name = f"pass_{time.time_ns():x}.png"
             im.save(d / name)
-            q["versions"].insert(0, {"file": name, "label": c["name"], "seed": seed, "denoise": c.get("denoise", 0.62)})
+            q["versions"].insert(0, {"file": name, "label": c["name"], "seed": seed, "denoise": c.get("denoise", 0.62), "from": base})
+            q["current"] = base = name  # the next character paints on this one
     return _panel_background(p, "Painting", work)
+
+
+FIX_PRESETS = {"small": (0.5, False), "outfit": (0.85, True), "pose": (0.9, True), "qwen": (1.0, False), "sharp": (0.35, False)}
+SHARP_TAGS = "detailed face, detailed eyes, detailed hair, detailed clothes, detailed body, sharp focus"  # default Change, wash
+QWEN_LORAS = ("qwen-lightning", "qwen-anything2real", "qwen-multiple-angles", "qwen-sfw")
+
+
+def _data_image(url: str) -> Image.Image:
+    import base64
+    import io
+    try:
+        return Image.open(io.BytesIO(base64.b64decode(str(url or "").split(",", 1)[-1])))
+    except Exception:
+        raise ValueError("That is no picture.")
+
+
+def _base_of(c: dict) -> Path | None:
+    """Her first base image, the picture her set was built from."""
+    for d in ROOT.iterdir() if ROOT.exists() else []:
+        f = d / "job.json"
+        if f.exists():
+            j = json.loads(f.read_text(encoding="utf-8"))
+            if j.get("id") == c.get("lora") or (j.get("lora") or {}).get("file") == c.get("file"):
+                b = (j.get("bases") or [{}])[0].get("file")
+                return d / b if b and (d / b).exists() else None
+    return None
+
+
+def panel_ref(req: dict) -> dict:
+    """A character's own Qwen reference for this panel (an outfit, an object); empty clears it back to her base image."""
+    p = panel_load(req.get("id"))
+    c = next((x for x in p["characters"] if x["id"] == req.get("character")), None)
+    if not c:
+        raise ValueError("Add that character first.")
+    f = panel_dir(p["id"]) / f"ref_{c['id']}.png"
+    if req.get("image"):
+        im = _data_image(req["image"]).convert("RGB")
+        im.thumbnail((1024, 1024))
+        im.save(f)
+        c["ref"] = f.name
+    else:
+        f.unlink(missing_ok=True)
+        c.pop("ref", None)
+    return panel_save(p)
+
+
+def _qwen_spot(source: Image.Image, mask: Image.Image, sentence: str, ref: Path | None, loras: list, seed: int) -> Image.Image:
+    """Qwen-Image-Edit on the whole panel, so she keeps her pose, size and place; the sentence names where she stands
+    (from her mask), and only her mask is pasted back, so whatever Qwen did elsewhere is thrown away."""
+    W, H = source.size
+    if mask is not None:
+        mask = mask.convert("L").resize((W, H)).filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
+        box = mask.getbbox()
+        x = (box[0] + box[2]) / 2 / W
+        where = "on the left" if x < 0.38 else "on the right" if x > 0.62 else "in the middle"
+        sentence = f"Edit only the woman {where} of image 1; leave the other people unchanged. " + sentence
+    s = (1024 * 1024 / (W * H)) ** 0.5
+    rw, rh = int(W * s) // 16 * 16, int(H * s) // 16 * 16
+    folder = morpheus.COMFY_INPUT / "yumeko"
+    folder.mkdir(parents=True, exist_ok=True)
+    source.save(folder / "qcrop.png")
+    g = morpheus.qwen_edit_workflow(sentence, "yumeko/qcrop.png", rw, rh, seed, 4, loras=loras)
+    if ref:
+        Image.open(ref).convert("RGB").save(folder / "qref.png")
+        g["30"] = {"class_type": "LoadImage", "inputs": {"image": "yumeko/qref.png"}}
+        g["31"] = {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["30", 0], "upscale_method": "lanczos", "megapixels": 0.5, "resolution_steps": 16}}
+        for k in ("5", "6"):
+            g[k]["inputs"]["image2"] = ["31", 0]
+    result = morpheus.generate(g, progress=_panel_progress).convert("RGB").resize((W, H), Image.LANCZOS)
+    if mask is None:
+        return result
+    out = source.copy()
+    out.paste(result, (0, 0), mask)
+    return out
+
+
+def panel_fix(req: dict) -> dict:
+    """Repaint one spot of the shown version: a painted mask, a few words, optionally a character (her LoRA and look).
+    small: light, keeps the shapes (a smile); outfit: her outfit tags, old colours washed out; pose: strong, washed."""
+    import base64
+    import io
+    p = panel_load(req.get("id"))
+    preset = req.get("preset") if req.get("preset") in FIX_PRESETS else "small"
+    denoise = max(0.2, min(1.0, float(req.get("denoise") or FIX_PRESETS[preset][0])))
+    text = str(req.get("text") or "").strip(" ,")
+    c = next((x for x in p["characters"] if x["id"] == req.get("character")), None)
+    l = next((x for x in finished() if x["id"] == c.get("lora") or x["file"] == c.get("file")), None) if c else None
+    if preset == "qwen":
+        return _panel_fix_qwen(p, req, c)
+    if preset == "outfit" and not (l and l["pills"]["outfit"][0]):
+        raise ValueError("Her outfit needs a character with a signature outfit.")
+    if preset == "sharp":  # resharpen: fixed detail tags, her words optional, the spot repainted larger and lightly
+        text = ", ".join(x for x in [SHARP_TAGS, text] if x)
+    if not text and preset != "outfit":
+        raise ValueError("Write what should be there.")
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a composition first.")
+    try:
+        mask = Image.open(io.BytesIO(base64.b64decode(str(req.get("mask") or "").split(",", 1)[-1]))).convert("L")
+    except Exception:
+        raise ValueError("Paint over the spot first.")
+    if not mask.getbbox():
+        raise ValueError("Paint over the spot first.")
+    # her card as it is set (description with pills, her negative) does the work; the fix words go first.
+    # The outfit preset only adds her outfit tags when the card doesn't already carry them (the pill is off).
+    card = (c.get("action") or "") if c else ""
+    outfit = l["pills"]["outfit"][0] if preset == "outfit" and c and not c.get("outfit") else ""
+    pos = ([c["trigger"], ADULT + "1girl"] if c else []) + [outfit, text, card]
+    positive = _tidy(", ".join(x.strip(" ,") for x in pos if x and x.strip(" ,")))
+    neg = [p.get("pass_negative") if p.get("locked") else p.get("negative"), c and c.get("negative"), l["pills"]["outfit"][1] if outfit else ""]
+    negative = ", ".join(x.strip(" ,") for x in neg if x and x.strip(" ,")) or None
+    label = (c["name"] if c else "Background") + " · " + {"small": "small change", "outfit": "outfit", "pose": "pose", "sharp": "resharpen"}[preset]
+
+    def work(q):
+        d = panel_dir(q["id"])
+        seed = random.randrange(2 ** 31)
+        q["busy"] = "Fixing " + label
+        panel_save(q)
+        im = _inpaint(Image.open(d / start).convert("RGB"), mask, positive, negative, c["file"] if c else None,
+                      float(c.get("strength", 1.0)) if c else 1.0, denoise, seed, wash=FIX_PRESETS[preset][1], context=0.5)
+        name = f"fix_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": label, "kind": "fix", "text": text, "seed": seed, "denoise": denoise, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Fixing", work)
+
+
+def panel_qwen(req: dict) -> dict:
+    """The panel's own Qwen edit: a sentence, LoRAs, an optional reference; with a painted mask only that area is pasted
+    back, without one the whole picture is Qwen's."""
+    p = panel_load(req.get("id"))
+    text = str(req.get("text") or "").strip()
+    if not text:
+        raise ValueError("Write in a sentence what should change.")
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a composition first.")
+    mask = _data_image(req["mask"]).convert("L") if req.get("mask") else None
+    if mask is not None and not mask.getbbox():
+        mask = None
+    loras = [k for k in (req.get("loras") or []) if k in QWEN_LORAS]
+    ref = panel_dir(p["id"]) / p["qwen_ref"] if p.get("qwen_ref") else None
+    sentence = (text + (" Use image 2 as the reference." if ref else "")
+                + " All people are adult women."
+                + " Keep everything else in image 1 exactly as it is, in the same art style.")
+
+    def work(q):
+        d = panel_dir(q["id"])
+        seed = random.randrange(2 ** 31)
+        q["busy"] = "Qwen edit" + (" (masked)" if mask is not None else " (whole picture)")
+        panel_save(q)
+        im = _qwen_spot(Image.open(d / start).convert("RGB"), mask, sentence, ref, loras, seed)
+        name = f"qwen_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": "Qwen edit" + (" · masked" if mask is not None else ""), "kind": "fix",
+                                 "text": text, "seed": seed, "loras": loras, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Qwen edit", work)
+
+
+def panel_qwen_ref(req: dict) -> dict:
+    """The panel Qwen edit's reference picture; empty clears it."""
+    p = panel_load(req.get("id"))
+    f = panel_dir(p["id"]) / "ref_qwen.png"
+    if req.get("image"):
+        im = _data_image(req["image"]).convert("RGB")
+        im.thumbnail((1024, 1024))
+        im.save(f)
+        p["qwen_ref"] = f.name
+    else:
+        f.unlink(missing_ok=True)
+        p.pop("qwen_ref", None)
+    return panel_save(p)
+
+
+def _panel_fix_qwen(p: dict, req: dict, c: dict | None) -> dict:
+    text = str(req.get("text") or "").strip()
+    if not text:
+        raise ValueError("Write in a sentence what should change.")
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a composition first.")
+    mask = _data_image(req.get("mask")).convert("L")
+    if not mask.getbbox():
+        raise ValueError("Paint over the spot first.")
+    loras = [k for k in (req.get("loras") or []) if k in QWEN_LORAS]
+    ref = (panel_dir(p["id"]) / c["ref"]) if c and c.get("ref") else (_base_of(c) if c else None)
+    sentence = (text + (" Use image 2 only as the reference for the look, not for her pose." if ref else "")
+                + " She is an adult woman: keep her pose, position, body size and adult proportions in image 1 exactly."
+                + " Keep everything else in image 1 exactly as it is, in the same art style.")
+    label = (c["name"] if c else "Background") + " · Qwen edit"
+
+    def work(q):
+        d = panel_dir(q["id"])
+        seed = random.randrange(2 ** 31)
+        q["busy"] = "Qwen edit: " + (c["name"] if c else "background")
+        panel_save(q)
+        im = _qwen_spot(Image.open(d / start).convert("RGB"), mask, sentence, ref, loras, seed)
+        name = f"qwen_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": label, "kind": "fix", "text": text, "seed": seed, "loras": loras, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Qwen edit", work)
+
+
+def panel_version_delete(req: dict) -> dict:
+    """Drop one version from the list. Its file moves to the panel's trash folder, so a slip can be undone by hand."""
+    p = panel_load(req.get("id"))
+    if p.get("busy"):
+        raise ValueError("A render is running on this panel; delete after it finishes.")
+    v = next((x for x in p["versions"] if x["file"] == req.get("file")), None)
+    if not v:  # only names from the list, never a path from the request
+        raise ValueError("No such version.")
+    d = panel_dir(p["id"]); (d / "trash").mkdir(exist_ok=True)
+    if (d / v["file"]).exists():
+        shutil.move(str(d / v["file"]), str(d / "trash" / v["file"]))
+    p["versions"] = [x for x in p["versions"] if x is not v]
+    if p.get("current") == v["file"]:
+        p["current"] = None  # falls back to the newest
+    if p.get("composition") == v["file"]:
+        p["composition"] = None
+    return panel_save(p)
 
 
 def panel_delete(req: dict) -> dict:
     shutil.rmtree(panel_dir(req.get("id")), ignore_errors=True)
+    if BOOKS.exists():
+        _books_save([dict(b, panels=[x for x in b["panels"] if x != req.get("id")]) for b in json.loads(BOOKS.read_text(encoding="utf-8"))])
     return {"ok": True}
 
 
@@ -1172,7 +1562,7 @@ ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": 
            "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
            "stop": lambda r: stop_training(load(r.get("id"))),
            "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_mask": panel_mask,
-           "panel_pass": panel_pass, "panel_delete": panel_delete}
+           "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_qwen_ref": panel_qwen_ref, "book_new": book_new, "book_edit": book_edit, "book_delete": book_delete}
 
 
 def job_view(job_id: str) -> dict:

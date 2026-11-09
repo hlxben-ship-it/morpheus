@@ -12,6 +12,7 @@ renders the same scenes with every stage on the trigger alone, so stages are jud
 All state lives in job["auto"]; a server restart leaves the build paused, and Resume carries on where it stopped.
 """
 import random
+import re
 import shutil
 import threading
 import time
@@ -270,6 +271,76 @@ def _protect(a: dict) -> None:
     a["negative"] = ", ".join(t.strip() for t in a["negative"].split(",") if t.strip() and t.strip() not in keep)
 
 
+# ---------- real Danbooru tags only ----------
+REPAIR_SCHEMA = {"type": "object", "properties": {"replacements": {"type": "array", "items": {"type": "object", "properties": {
+    "bad": {"type": "string"}, "good": {"type": "string"}}, "required": ["bad", "good"]}}}, "required": ["replacements"]}
+REPAIR_SYSTEM = """Some tags on a character card are not Danbooru tags, so the image model barely knows them. For each one, give
+its replacement: one or two real Danbooru tags that say the same, chosen from the candidates when one fits (spaces, no
+underscores), or an empty string to drop it. A colour plus garment that is no tag splits into the garment tag and the colour
+tag (e.g. "khaki cargo shorts" -> "cargo shorts, khaki shorts"). Keep the meaning; never add anything new."""
+CARD_KEYS = ("permanent", "signature", "negative")
+
+
+def _tag_index():
+    if not hasattr(_tag_index, "names"):
+        rows = y._load_tags()
+        _tag_index.names = {n for n, _, _, _ in rows}
+        _tag_index.alias = {a: n for n, _, _, al in rows for a in al}
+    return _tag_index.names, _tag_index.alias
+
+
+def _bare(t: str) -> str:
+    """A tag as the database spells it: no weight syntax, underscores."""
+    return re.sub(r"^\(+|(:[\d.]+)?\)+$", "", t.strip()).strip().lower().replace(" ", "_")
+
+
+def _real_tags(job: dict, ask: bool = True) -> list:
+    """Aliases become their Danbooru tag (rolled sleeves -> sleeves rolled up); with ask, Claude replaces the rest of the
+    unknown tags from search candidates. Protected (keep) tags only get the alias step: the user tested those. Trigger words
+    are left alone. Returns the tags still unknown."""
+    a, names, alias = job["auto"], *_tag_index()
+    trig = job["agent"]["trigger_token"]
+
+    def canon(text: str, unknown: list) -> str:
+        out = []
+        for t in (x.strip() for x in (text or "").split(",")):
+            if not t:
+                continue
+            b = _bare(t)
+            if trig in b or b in names:
+                out.append(t)
+            elif b in alias:
+                out.append(t.replace(t.strip("()").split(":")[0], alias[b].replace("_", " ")))
+            else:
+                out.append(t)
+                unknown.append(t)
+        return ", ".join(dict.fromkeys(out))
+    a["keep"] = canon(a.get("keep"), [])
+    unknown = []
+    for k in CARD_KEYS:
+        a[k] = canon(a[k], unknown)
+    keep = {_bare(t) for t in (a.get("keep") or "").split(",") if t.strip()}
+    unknown = [t for t in dict.fromkeys(unknown) if _bare(t) not in keep]
+    if not unknown or not ask:
+        return unknown
+    cands = {t: [h["tag"].replace("_", " ") for w in _bare(t).split("_") if len(w) > 2 for h in y.search_tags(w, limit=4)] for t in unknown}
+    msg = "\n".join(f"- {t}: candidates {', '.join(dict.fromkeys(c))[:300]}" for t, c in cands.items())
+    try:
+        answer, _ = y.ask_claude("[Not Danbooru tags, with search candidates:\n" + msg + "]", None, ghost=True, see=False, system=REPAIR_SYSTEM, schema=REPAIR_SCHEMA)
+    except Exception as e:  # the card stays as it was; the build still runs
+        _log(a, f"Tag check skipped: {e}")
+        return unknown
+    swap = {r["bad"].strip(): r["good"].strip() for r in answer["replacements"]}
+    for k in CARD_KEYS:
+        a[k] = ", ".join(dict.fromkeys(x for t in a[k].split(",") if t.strip() for x in [swap.get(t.strip(), t.strip())] if x))
+    left = []
+    for k in CARD_KEYS:
+        a[k] = canon(a[k], left)
+    if swap:
+        _log(a, "Real Danbooru tags: " + "; ".join(f"{b} -> {g or 'dropped'}" for b, g in swap.items()))
+    return left
+
+
 def _fix(job: dict, failures: list) -> str:
     a = job["auto"]
     history = "\n".join(f"Round {r['round']}: {r['passed']} of {r['of']} passed" + (f", then changed: {r['changes']}" if r.get("changes") else "") for r in a["rounds"])
@@ -281,6 +352,7 @@ def _fix(job: dict, failures: list) -> str:
     answer, _ = y.ask_claude(msg, None, ghost=True, see=False, system=FIX_SYSTEM, schema=FIX_SCHEMA)
     a["permanent"], a["signature"], a["negative"] = answer["permanent"], answer["signature"], answer["negative"]
     _protect(a)
+    _real_tags(job)
     return answer["reply"]
 
 
@@ -298,6 +370,7 @@ def open_card(req: dict) -> dict:
         answer = _card_turn(j, "Look at her and set up the card.")
         a = j["auto"]
         a.update({k: answer[k] for k in ("checklist", "permanent", "signature", "negative", "keep")})
+        _real_tags(j)
         a["chat"].append({"role": "yumeko", "text": answer["reply"]})
         return j
     return y._background(job, "Yumeko is studying her", work)
@@ -317,6 +390,7 @@ def card_chat(req: dict) -> dict:
         answer = _card_turn(j, text)
         b = j["auto"]
         b.update({k: answer[k] for k in ("checklist", "permanent", "signature", "negative", "keep")})
+        _real_tags(j)
         b["chat"].append({"role": "yumeko", "text": answer["reply"]})
         return j
     return y._background(job, "Yumeko is thinking", work)
@@ -333,6 +407,7 @@ def card_edit(req: dict) -> dict:
         for k in ("permanent", "signature", "negative", "keep"):
             if k in req:
                 a[k] = str(req[k]).strip()
+        _real_tags(j, ask=False)  # the user's own words: aliases only, nothing replaced behind their back
         if req.get("budget") in ("quick", "full"):
             a["budget"] = req["budget"]
     return _update(req.get("id"), change)

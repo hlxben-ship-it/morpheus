@@ -112,7 +112,7 @@
   .chat > :first-child { margin-top:auto; }
   .openfull { position:absolute; top:8px; left:8px; width:30px; height:30px; display:grid; place-items:center; border:2px solid #fff; border-radius:6px; background:rgba(10,6,20,.6); color:#fff; font-size:17px; line-height:1; text-decoration:none; }
   .openfull:hover { background:var(--accent); }
-  html, body { overflow-x:hidden; }
+  html, body { overflow-x:clip; }  /* clip, not hidden: hidden makes body a scroll box and breaks sticky headers */
   body.fixedpage { height:100vh; overflow:hidden; } body.fixedpage main { padding-top:12px; padding-bottom:0; }
   .gridthree { max-width:calc((100vh - 400px) * 2 + 24px); } .promptlist[open] { max-height:150px; overflow-y:auto; }
   body.fixedpage .stylemini:has(+ .design.has) { max-width:52%; margin-bottom:12px; } body.fixedpage .design.has { margin-top:0; }
@@ -144,12 +144,17 @@
   .note { color:var(--muted); font-size:12.5px; }
   .err { color:#ff9aa8; margin:8px 0; }
   .busy { color:var(--accent); margin:8px 0; }
+  .stagebusy { position:absolute; left:0; right:0; bottom:0; padding:18px 22px 16px; background:linear-gradient(transparent, rgba(8,4,16,.85) 35%); color:#fff; line-height:1.3; display:flex; flex-direction:column; gap:8px; pointer-events:none; z-index:3; }
+  .stagebusy b { font-size:16px; } .stagebusy small { color:#cfc6e6; font-size:12px; }
+  .stagebusy .bar { height:10px; border-radius:999px; background:rgba(255,255,255,.15); overflow:hidden; } .stagebusy .bar i { display:block; height:100%; width:0; border-radius:999px; background:linear-gradient(90deg, var(--accent), var(--cyan)); transition:width .8s ease; }
+  .stagebusy .bar.wait i { width:100% !important; opacity:.5; animation:busyPulse 1.4s ease-in-out infinite; } @keyframes busyPulse { 50% { opacity:.15; } }
+  @media (prefers-reduced-motion:reduce) { .stagebusy .bar i { transition:none; } .stagebusy .bar.wait i { animation:none; } }
   .meter { height:10px; border-radius:6px; background:var(--raised); overflow:hidden; margin:8px 0; }
   .meter i { display:block; height:100%; background:var(--accent); }
   .bal { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:2px 14px; font-size:12px; color:var(--muted); }
-  .sugg { position:relative; }
-  .sugg ul { position:absolute; z-index:4; left:0; right:0; margin:2px 0 0; padding:4px; list-style:none; background:var(--raised); border:1px solid var(--line); border-radius:8px; max-height:220px; overflow:auto; }
-  .sugg li { padding:4px 8px; cursor:pointer; border-radius:6px; } .sugg li:hover { background:var(--panel); }
+  .sugg { position:relative; } .sugg:focus-within { z-index:40; }
+  .sugg > ul { position:absolute; z-index:30; left:0; right:0; margin:2px 0 0; padding:4px; list-style:none; background:var(--raised); border:1px solid var(--line); border-radius:8px; max-height:220px; overflow:auto; }
+  .sugg > ul li { padding:4px 8px; cursor:pointer; border-radius:6px; } .sugg > ul li:hover { background:var(--panel); }
   .jobtop { display:flex; gap:14px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
   .jobtop img { width:52px; height:52px; border-radius:50%; object-fit:cover; object-position:top; border:2px solid var(--accent); flex:none; }
   .jobtop .dlg { flex:1 1 300px; min-width:0; }
@@ -242,14 +247,89 @@
   h2 { font-size:18px; margin:0 0 12px; }
   h3 { font-size:14px; margin:16px 0 8px; }
   .stage { position:relative; display:inline-block; max-width:100%; line-height:0; }
-  .stage img { max-width:100%; display:block; max-height:72vh; }
+  .stage img { max-width:100%; display:block; max-height:58vh; }
+  .pmid .stage img { max-height:80vh; } /* the mask canvas sits on the image box, so no object-fit tricks */
+  main:has(.pedit) { max-width:none; padding-left:20px; padding-right:20px; }
+  .pedit { display:grid; grid-template-columns:150px minmax(0,1.9fr) minmax(400px,1fr); gap:20px; align-items:start; }
+  .pvers { position:sticky; top:84px; max-height:calc(100vh - 100px); display:flex; flex-direction:column; min-height:0; }
+  .pvers .versions { flex-direction:column; overflow-y:auto; overflow-x:hidden; padding:2px 0 8px; scrollbar-width:none; } .pvers .versions::-webkit-scrollbar { display:none; }
+  .pvers .versions button { width:100%; }
+  @media (min-width:1201px) { .pmid, .pedit > .pside { position:sticky; top:84px; max-height:calc(100vh - 100px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; padding-right:6px; } }
+  .pmid > section.box { margin-top:14px; border:1px solid var(--accent); border-radius:10px; padding:10px 12px 12px; background:var(--panel); display:flex; flex-direction:column; gap:6px; }
+  @media (max-width:1200px) { .pedit { grid-template-columns:minmax(0,1fr) minmax(380px,1fr); } .pvers { grid-column:1 / -1; grid-row:2; position:static; max-height:none; }
+    .pvers .versions { flex-direction:row; overflow-x:auto; } .pvers .versions button { width:124px; } }
+  @media (max-width:860px) { .pedit { grid-template-columns:1fr; } }
+  .phead:has(+ * + .pedit), main:has(.pedit) .phead { grid-template-columns:calc(150px + 20px + (100% - 190px) * 1.9 / 2.9) minmax(400px,1fr); }
+  .pedit h3 { margin:18px 0 8px; } .pedit h3:first-child { margin-top:4px; }
+  .pside { display:flex; flex-direction:column; gap:6px; } .pside .row { margin:6px 0 0; } .pside label.note { margin-top:6px; }
+  .pside textarea { resize:vertical; } .pside .tagsearch { margin-top:6px; } .pside .tagsearch > label { color:var(--muted); font-size:13px; } .char textarea { margin:6px 0; font-size:13px; }
+  .howto { margin:0; padding:18px 18px 18px 38px; background:var(--panel); border:1px dashed var(--line); border-radius:12px; line-height:1.6; color:var(--muted); } .howto li { margin:4px 0; } .howto b { color:var(--text); font-weight:600; }
+  .phead { position:sticky; top:0; z-index:50; display:grid; grid-template-columns:minmax(0,1.25fr) minmax(400px,1fr); gap:24px; align-items:start; margin:0 0 12px; padding:10px 0; background:var(--bg); border-bottom:1px solid var(--line); }
+  .pleft { display:flex; gap:8px; align-items:center; min-width:0; } .pleft input { flex:1; min-width:0; width:auto; }
+  .tagsearch.hdr { position:relative; } .tagsearch.hdr .tsdrop { display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; padding:8px; background:var(--raised); border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.5); }
+  .tagsearch.hdr:focus-within .tsdrop, .tagsearch.hdr:has(#tr li) .tsdrop { display:block; } .tagsearch.hdr #tr { height:auto; max-height:min(340px, 50vh); margin-top:6px; }
+  .dropmark { position:fixed; z-index:60; width:3px; background:var(--cyan); border-radius:2px; box-shadow:0 0 8px var(--cyan); pointer-events:none; }
+  .tagsearch.hdr.dragging .tsdrop { display:none !important; }
+  .tagsearch li button[draggable="true"] { cursor:grab; } .droptarget { outline:2px dashed var(--cyan); outline-offset:2px; background:rgba(45,226,230,.06); }
+  @media (max-width:980px) { .phead { grid-template-columns:1fr; } }
+  .cpills { margin:8px 0 2px; }
+  .pside .box { border:1px solid var(--line); border-radius:10px; padding:10px 12px 12px; background:var(--panel); display:flex; flex-direction:column; gap:6px; }
+  .pside section.box { border-color:var(--accent); }
+  .box.min > :not(.boxhead) { display:none !important; } .box.min { padding-bottom:10px; }
+  .boxhead { display:flex; align-items:center; gap:8px; } .boxhead h3 { margin:2px 0 !important; flex:1; }
+  .fold { background:none; border:0; padding:0 4px; font-size:14px; color:var(--muted); line-height:1; } .fold:hover { color:var(--text); }
+  button.mini { padding:3px 10px; font-size:12px; }
+  .icons { display:flex; gap:4px; } button.ico { width:32px; height:32px; padding:0; display:grid; place-items:center; }
+  button.ico svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  button.ico[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+  .pside > section.box { margin-bottom:14px; }
+  .lockhead { display:flex; justify-content:space-between; align-items:center; gap:10px; } .lockhead h3 { margin:4px 0 !important; } .lockhead button { padding:4px 12px; }
+  .fixed { font-size:12.5px; color:var(--muted); margin-top:4px; } .fixed summary { cursor:pointer; } .fixed p { margin:4px 0 0; line-height:1.45; } .fixed b { color:var(--text); font-weight:600; }
+  .brushbar { margin:10px 0 4px; }
+  .fixcard { border-top:1px solid var(--line); padding-top:8px; margin-top:4px; display:flex; flex-direction:column; gap:6px; }
+  .fixcard:not([open]) { gap:0; } .fixcard summary { cursor:pointer; color:var(--muted); font-size:13px; } .fixcard[open] summary { color:var(--text); margin-bottom:4px; }
+  .fixcard textarea { width:100%; }
+  .qbox { margin-bottom:14px; }
+  .qrow { display:grid; grid-template-columns:minmax(0,1fr) 72px; gap:8px; align-items:stretch; }
+  .qref { position:relative; padding:0; width:72px; height:72px; overflow:hidden; border-radius:8px; } .qref img { width:100%; height:100%; object-fit:cover; display:block; }
+  .qref span { font-size:12px; color:var(--muted); } .qref i { position:absolute; top:2px; right:2px; width:18px; height:18px; display:grid; place-items:center; font-style:normal; font-size:10px; border-radius:50%; background:rgba(0,0,0,.7); color:#fff; }
+  @media (max-width:980px) { .pedit { grid-template-columns:1fr; } }
+  .brushring { position:absolute; pointer-events:none; border:2px solid; border-radius:50%; transform:translate(-50%, -50%); box-shadow:0 0 0 1px rgba(0,0,0,.6); z-index:2; }
+  .maskeye { position:absolute; top:8px; right:8px; z-index:3; background:rgba(10,6,20,.7); backdrop-filter:blur(4px); line-height:normal; }
+  .stage.nomask canvas { visibility:hidden; }
   .stage canvas { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; touch-action:none; opacity:.55; }
   .char { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; }
   .char.on { border-color:var(--accent); }
   .dot { width:14px; height:14px; border-radius:50%; display:inline-block; }
   .versions { display:flex; gap:8px; overflow-x:auto; padding:6px 0; }
-  .versions button { padding:0; width:92px; flex:none; overflow:hidden; font-size:11px; }
+  .versions button { position:relative; padding:0; width:124px; flex:none; overflow:hidden; font-size:11px; text-align:left; }
+  .versions button span { display:block; padding:4px 6px; } .versions button small { color:var(--muted); }
+  .versions button[aria-pressed="true"] { border:2px solid var(--accent); box-shadow:0 0 12px var(--glow); cursor:default; }
+  .versions button em { position:absolute; top:4px; left:4px; font-style:normal; font-size:10px; background:var(--accent); color:#fff; padding:1px 6px; border-radius:999px; }
   .versions img { width:100%; display:block; }
+  .versions .vdel { position:absolute; top:4px; right:4px; width:20px; height:20px; display:grid; place-items:center; font-style:normal; font-size:11px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; opacity:0; cursor:pointer; }
+  .versions button:hover .vdel, .versions .vdel:focus { opacity:1; } .versions .vdel:hover { background:#c0392b; }
+  .ico.armed { background:#c0392b !important; color:#fff; }
+  .versions .vdel.armed { width:auto; padding:0 8px; border-radius:999px; background:#c0392b; opacity:1; font-size:11px; }
+  .bookbar { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; } .bookbar select { width:auto; min-width:180px; } .bookbar input { flex:1; min-width:160px; width:auto; }
+  .book { display:grid; grid-template-columns:150px 1fr; gap:18px; align-items:start; }
+  .pages { display:flex; flex-direction:column; gap:10px; position:sticky; top:12px; max-height:calc(100vh - 140px); overflow:auto; padding-right:4px; }
+  .pages button { display:flex; flex-direction:column; gap:5px; padding:6px; font-size:12.5px; text-align:center; color:var(--muted); }
+  .pages button[aria-current="true"] { border-color:var(--accent); color:var(--text); box-shadow:0 0 12px var(--glow); }
+  .pages .mini { display:grid; grid-template-columns:1fr 1fr; gap:3px; padding:4px; background:transparent; border-radius:3px; }
+  .pages .mini i { aspect-ratio:1216/832; background:var(--raised); border:1px dashed var(--line); box-sizing:border-box; overflow:hidden; } .pages .mini img { width:100%; height:100%; object-fit:cover; display:block; }
+  .reader { min-width:0; } .paper { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0; background:transparent; max-width:min(1200px, calc((100vh - 190px) * 1.33)); margin:0 auto; }
+  .frame { margin:0; display:flex; flex-direction:column; gap:4px; }
+  .frame .open { box-sizing:border-box; width:100%;  padding:0; border:3px solid #111; border-radius:0; background:#111; display:block; aspect-ratio:1216/832; overflow:hidden; }
+  .pages .mini .startp { display:none; }
+  .frame .open .startp { display:grid; place-items:center; height:100%; color:#cfc6e6; font-size:14px; line-height:1.4; text-align:center; padding:12px; }
+  .frame .open img { width:100%; height:100%; object-fit:cover; display:block; } .frame .open:hover:not(:disabled) { border-color:var(--accent); }
+  .frame figcaption { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:12px; gap:6px; }
+  .frame figcaption button { background:transparent; border:1px solid var(--line); color:var(--muted); padding:0 7px; border-radius:4px; } .frame figcaption button:disabled { opacity:.3; }
+  .frame.empty { box-sizing:border-box; min-width:0; aspect-ratio:1216/832; border:2px dashed var(--line); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:14px; }
+  .frame.empty select { width:auto; max-width:100%; } .frame.none { aspect-ratio:1216/832; }
+  .turn { display:flex; justify-content:center; align-items:center; gap:14px; margin-top:12px; color:var(--muted); } .turn button { font-size:20px; padding:2px 14px; }
+  @media (max-width:760px) { .book { grid-template-columns:1fr; } .pages { flex-direction:row; position:static; overflow-x:auto; } .pages button { min-width:110px; } .paper { grid-template-columns:1fr; padding:12px; } }
   dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:12px; max-width:440px; }
   dialog::backdrop { background:rgba(5,3,20,.6); }
 </style>
@@ -269,7 +349,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&l
 const file = (dir, f) => `/yumeko-file/${dir}/${encodeURIComponent(f)}`;
 const get = async u => { const r = await fetch(u), j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Request failed'); return j; };
 const post = async (a, b) => { const r = await fetch('/api/yumeko/' + a, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Request failed'); return j; };
-let timer, catalog, S, job, panel, tool = { active:null, size:36, erase:false }, drawn = {};
+let timer, catalog, S, job, panel, tool = { qwen:{ text:'', loras:['qwen-lightning'], refv:0 }, active:null, size:36, erase:false, fix:{ who:null, open:new Set(), by:{} } }, drawn = {};
 const PHASES = ['Base image', 'Second base', 'Training set', 'Training', 'Use', ];
 const COLORS = ['#ff4060', '#40a0ff', '#50e090', '#ffc040'];
 function fail(e) { const n = document.createElement('p'); n.className = 'err'; n.textContent = e.message; app.prepend(n); setTimeout(() => n.remove(), 7000); }
@@ -408,29 +488,82 @@ function outfitLine(tags) {
 }
 let tagKinds = ['general'];
 function autocomplete(input) {
-  const wrap = input.parentElement; let ul;
-  input.addEventListener('input', () => { ul?.remove(); const word = input.value.split(/[,\n]/).pop().trim().replace(/ /g, '_').toLowerCase(); if (word.length < 2) return;
-    const hits = catalog.tags.filter(t => t.tag.includes(word)).slice(0, 8); if (!hits.length) return;
-    ul = document.createElement('ul'); hits.forEach(h => { const li = document.createElement('li'); li.textContent = `${h.tag}  (${h.yumeko_category})`;
-      li.onclick = () => { const v = input.value.split(','); v[v.length - 1] = ' ' + h.tag; input.value = v.join(',').replace(/^ /, '') + ', '; ul.remove(); input.focus(); }; ul.append(li); }); wrap.append(ul); });
+  if (!input || input._ac) return; input._ac = true;
+  // the list hangs under its own field: a field that shares its parent gets a wrapper, or the dropdown style leaks onto siblings
+  let wrap = input.parentElement;
+  if (!wrap.classList.contains('sugg')) { if (wrap.children.length > 1) { const w = document.createElement('div'); input.replaceWith(w); w.append(input); wrap = w; } wrap.classList.add('sugg'); }
+  let ul, wait;
+  const close = () => { ul?.remove(); ul = null; };
+  input.addEventListener('blur', () => setTimeout(close, 150));
+  input.addEventListener('input', () => { clearTimeout(wait); close(); const word = input.value.split(/[,\n]/).pop().trim().replace(/^\(+/, ''); if (word.length < 2) return;
+    wait = setTimeout(async () => { let hits = [];
+      try { hits = (await get('/api/yumeko/tags?q=' + encodeURIComponent(word) + '&kinds=general,character')).tags.slice(0, 8); } catch { return; }
+      if (!hits.length || document.activeElement !== input) return; close();
+      ul = document.createElement('ul'); hits.forEach(h => { const li = document.createElement('li'), name = h.tag.replace(/_/g, ' ');
+        li.innerHTML = `${esc(name)} <small class="note">${h.kind === 'general' ? '' : esc(h.kind) + ', '}${h.count.toLocaleString('en')}</small>`;
+        li.onmousedown = e => { e.preventDefault(); const v = input.value.split(','); v[v.length - 1] = (v.length > 1 ? ' ' : '') + name; input.value = v.join(',') + ', ';
+          close(); input.focus(); input.dispatchEvent(new Event('input')); input.dispatchEvent(new Event('change')); };
+        ul.append(li); }); wrap.append(ul); }, 160); });
 }
-function tagBox() { return `<div class="tagsearch"><label for="ts">Danbooru tags</label><input id="ts" type="search" placeholder="Search, click to add" value="${esc(job.tagQuery || '')}"><div class="kinds" id="tk"></div><ul id="tr"></ul></div>`; }
+// Every field that holds tags gets the suggestions, wherever it is drawn: one observer instead of a call per view.
+const TAG_FIELDS = '#p, #q, #n, #tags, #neg, #ptags, #pneg, #ck, #ng, #pm, #pos, #rpm, #rsg, #sg, [data-action], [data-cneg]';
+new MutationObserver(() => document.querySelectorAll(TAG_FIELDS).forEach(autocomplete)).observe(document.body, { childList:true, subtree:true });
+// Where a dragged tag lands in a field: between the two tags nearest the pointer. A hidden copy of the field, laid out
+// the same, tells where each tag sits on screen; the left half of a tag means before it, the right half after it.
+function tagSlot(el, x, y) {
+  const r = el.getBoundingClientRect(), cs = getComputedStyle(el), m = document.createElement('div');
+  ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+   'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'boxSizing', 'tabSize'].forEach(k => m.style[k] = cs[k]);
+  Object.assign(m.style, { position:'fixed', left:r.left + 'px', top:r.top + 'px', width:r.width + 'px', height:r.height + 'px', overflow:'hidden',
+    whiteSpace:'pre-wrap', overflowWrap:'break-word', visibility:'hidden', borderStyle:'solid', pointerEvents:'none' });
+  const v = el.value, items = [], re = /[^,]+/g; let mt, last = 0;
+  while ((mt = re.exec(v))) { const lead = mt[0].length - mt[0].trimStart().length, text = mt[0].trim(); if (!text) continue;
+    const start = mt.index + lead, end = start + text.length;
+    m.append(document.createTextNode(v.slice(last, start))); const sp = document.createElement('span'); sp.textContent = text; m.append(sp);
+    items.push({ start, end, sp }); last = end; }
+  m.append(document.createTextNode(v.slice(last) + '\u200b')); document.body.append(m); m.scrollTop = el.scrollTop;
+  let best = null;
+  items.forEach(it => [...it.sp.getClientRects()].forEach(rc => {
+    const dy = y < rc.top ? rc.top - y : y > rc.bottom ? y - rc.bottom : 0, dx = x < rc.left ? rc.left - x : x > rc.right ? x - rc.right : 0, d = dy * 1000 + dx;
+    if (!best || d < best.d) best = { d, it, rc }; }));
+  m.remove();
+  if (!best) return { at:v.length, mark:null };
+  const after = x > best.rc.left + best.rc.width / 2;
+  return { at:after ? best.it.end : best.it.start, mark:{ x:after ? best.rc.right + 2 : best.rc.left - 3, y:best.rc.top, h:best.rc.height } };
+}
+function insertTag(v, at, tag) {
+  const before = v.slice(0, at).replace(/[,\s]*$/, ''), after = v.slice(at).replace(/^[,\s]*/, '');
+  return (before ? before + ', ' : '') + tag + ', ' + after;
+}
+let dropMark;
+function showMark(mk) { dropMark ||= Object.assign(document.createElement('i'), { className:'dropmark' }); if (!mk) { dropMark.remove(); return; }
+  Object.assign(dropMark.style, { left:mk.x + 'px', top:mk.y + 'px', height:mk.h + 'px' }); document.body.append(dropMark); }
+let tagQ = '';
+function tagBox() { return `<div class="tagsearch"><label for="ts">Danbooru tags</label><input id="ts" type="search" autocomplete="off" placeholder="Search, click to add" value="${esc(tagQ)}"><div class="kinds" id="tk"></div><ul id="tr"></ul></div>`; }
 function tagSearch(fields, onAdd) {
-  let target = Object.keys(fields)[0], wait;
-  Object.keys(fields).forEach(id => $(id).addEventListener('focus', () => target = id));  // a tag lands in the field used last
-  const used = () => Object.keys(fields).flatMap(id => $(id).value.split(',').map(t => t.trim().toLowerCase()));
-  const show = tags => { $('tr').innerHTML = ''; const taken = used(); tags.filter(t => !taken.includes(t.tag.replace(/_/g, ' '))).forEach(t => { const li = document.createElement('li'), b = document.createElement('button');
+  let target = Object.keys(fields)[0], wait, dragged;
+  Object.keys(fields).forEach(id => { const el = $(id); if (!el) return;
+    el.addEventListener('dragover', e => { if (!e.dataTransfer.types.includes('text/x-tag')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; el.classList.add('droptarget');
+      showMark(tagSlot(el, e.clientX, e.clientY).mark); });
+    el.addEventListener('dragleave', () => { el.classList.remove('droptarget'); showMark(null); });
+    el.addEventListener('drop', e => { const tag = e.dataTransfer.getData('text/x-tag'); if (!tag) return; e.preventDefault(); el.classList.remove('droptarget'); showMark(null);
+      const next = insertTag(el.value, tagSlot(el, e.clientX, e.clientY).at, tag); el.value = next; target = id; onAdd?.(fields[id], next);
+      tagQ = $('ts').value = ''; if (job) job.tagQuery = ''; $('tr').innerHTML = ''; $('ts').blur(); }); });  // dropped: the search is done
+  Object.keys(fields).forEach(id => $(id)?.addEventListener('focus', () => target = id));  // a tag lands in the field used last
+  const show = tags => { $('tr').innerHTML = ''; tags.forEach(t => { const li = document.createElement('li'), b = document.createElement('button');
     b.type = 'button'; b.innerHTML = `<span>${esc(t.tag.replace(/_/g, ' '))}</span><small>${t.kind === 'general' ? '' : esc(t.kind) + ', '}${t.count.toLocaleString('en')}</small>`;
+    b.draggable = true; b.ondragstart = e => { e.dataTransfer.setData('text/x-tag', t.tag.replace(/_/g, ' ')); e.dataTransfer.effectAllowed = 'copy'; dragged = li; const box = b.closest('.tagsearch'); setTimeout(() => box?.classList.add('dragging')); };
+    b.ondragend = () => { showMark(null); document.querySelectorAll('.droptarget').forEach(x => x.classList.remove('droptarget')); document.querySelectorAll('.tagsearch.dragging').forEach(x => x.classList.remove('dragging')); };
     b.onclick = () => { const v = $(target).value.trim().replace(/,$/, ''), next = (v ? v + ', ' : '') + t.tag.replace(/_/g, ' ') + ', ';
-      $(target).value = next; onAdd?.(fields[target], next); li.remove(); };
+      $(target).value = next; onAdd?.(fields[target], next); };
     li.append(b); $('tr').append(li); }); };
-  const find = async () => { job.tagQuery = $('ts').value; try { show((await get('/api/yumeko/tags?q=' + encodeURIComponent(job.tagQuery) + '&kinds=' + tagKinds.join(','))).tags); } catch { show([]); } };
+  const find = async () => { tagQ = $('ts').value; if (job) job.tagQuery = tagQ; try { show((await get('/api/yumeko/tags?q=' + encodeURIComponent(tagQ) + '&kinds=' + tagKinds.join(','))).tags); } catch { show([]); } };
   [['general', 'General'], ['character', 'Character'], ['series', 'Series'], ['artist', 'Artist'], ['meta', 'Meta']].forEach(([k, label]) => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', tagKinds.includes(k));
     b.onclick = () => { tagKinds = tagKinds.includes(k) ? tagKinds.filter(x => x !== k) : [...tagKinds, k]; b.setAttribute('aria-pressed', tagKinds.includes(k)); find(); };
     $('tk').append(b); });
   $('ts').oninput = () => { clearTimeout(wait); wait = setTimeout(find, 180); };
-  if (job.tagQuery) find();
+  if (tagQ) find();
 }
 function copyBtn(text) { const b = document.createElement('button'); b.textContent = 'Copy'; b.onclick = async () => { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1200); }; return b; }
 function review(el, i) {
@@ -728,13 +861,13 @@ function p5(el) {
 }
 
 // Pills write their tags visibly: [positive, negative] go into / come out of the Quality and Negative fields.
-function pillTags(f, pair, on) {
+function pillTags(f, pair, on, keys = ['quality', 'negative'], first = false) {
   if (!pair) return;
   const split = s => (s || '').split(',').map(t => t.trim()).filter(Boolean);
-  [['quality', pair[0]], ['negative', pair[1]]].forEach(([key, tags]) => {
+  [[keys[0], pair[0]], [keys[1], pair[1]]].forEach(([key, tags]) => {
     const add = split(tags); if (!add.length) return;
     const have = split(f[key]).filter(t => !add.includes(t));
-    f[key] = (on ? [...have, ...add] : have).join(', ');
+    f[key] = (on ? (first && key === keys[0] ? [...add, ...have] : [...have, ...add]) : have).join(', ');
   });
 }
 // Fresh form (or Default button: only = 0 quality, 1 negative): add the tags of every pill that is on.
@@ -814,63 +947,219 @@ function picModal(j, g, variant) {
 }
 
 // ---------- Create Manga ----------
+// The version a panel shows (in the manga) and paints on next: the one picked, else the newest.
+const shownOf = p => p?.current || p?.versions?.[0]?.file;
+// Mangas: an overview of all of them, then one read like a book, four panels to a page, in order.
+let mangaData, bookAt = {};
 async function manga() {
-  clearTimeout(timer); const m = await get('/api/yumeko/manga');
-  app.innerHTML = `<div class="row" style="justify-content:space-between"><h2>Create Manga</h2><button class="go" id="new">New panel</button></div><div class="grid" id="ps"></div>
-    ${m.panels.length ? '' : '<p class="note">No panels yet. Start one; characters come from finished sets.</p>'}`;
-  $('new').onclick = async () => { const p = await act('panel_new', {}); if (p) location.hash = 'panel/' + p.id; };
-  m.panels.forEach(p => { const b = document.createElement('button'); b.className = 'tile'; const f = p.versions[0]?.file;
-    b.innerHTML = `${f ? `<img src="${file('_manga/' + p.id, f)}" alt="">` : '<span class="blank">▦</span>'}<span class="meta"><b>${esc(p.title)}</b></span>`; b.onclick = () => location.hash = 'panel/' + p.id; $('ps').append(b); });
+  clearTimeout(timer); mangaData = await get('/api/yumeko/manga');
+  const byId = Object.fromEntries(mangaData.panels.map(p => [p.id, p]));
+  app.innerHTML = `<div class="row" style="justify-content:space-between"><h2>Create Manga</h2><button class="go" id="newb">New manga</button></div>
+    <div class="grid" id="bs"></div>${mangaData.books.length ? '' : '<p class="note">No manga yet. Start one; its characters come from finished sets.</p>'}`;
+  $('newb').onclick = async () => { const b = await act('book_new', { title:'New manga' }); if (b) location.hash = 'book/' + b.id; };
+  mangaData.books.forEach(b => { const first = byId[b.panels[0]], f = shownOf(first), el = document.createElement('button'); el.className = 'tile';
+    const pages = Math.max(1, Math.ceil(b.panels.length / 4));
+    el.innerHTML = `${f ? `<img src="${file('_manga/' + first.id, f)}" alt="">` : '<span class="blank">▦</span>'}<span class="meta"><b>${esc(b.title)}</b><small>${b.panels.length} ${b.panels.length === 1 ? 'panel' : 'panels'},${pages} ${pages === 1 ? 'page' : 'pages'}</small></span>`;
+    el.onclick = () => location.hash = 'book/' + b.id; $('bs').append(el); });
 }
-async function openPanel(id) { clearTimeout(timer); const m = await get('/api/yumeko/manga'); panel = await get('/api/yumeko/panel/' + id); panel._loras = m.loras; drawn = {}; tool.active = panel.characters[0]?.id ?? null; paintPanel(); pollPanel(); }
+async function openBook(id, page) {
+  clearTimeout(timer); mangaData = await get('/api/yumeko/manga');
+  const b = mangaData.books.find(x => x.id === id); if (!b) { location.hash = 'manga'; return; }
+  const byId = Object.fromEntries(mangaData.panels.map(p => [p.id, p])), ids = b.panels.filter(x => byId[x]);
+  const pages = Math.max(1, Math.ceil((ids.length + 1) / 4));  // +1: the last page always has room for a new panel
+  const at = Math.min(Math.max(1, page || bookAt[id] || 1), pages); bookAt[id] = at;
+  const img = pid => { const p = byId[pid], f = shownOf(p); return f ? `<img src="${file('_manga/' + pid, f)}" alt="${esc(p.title)}">` : '<span class="startp">Empty panel<br>Open it to write the scene</span>'; };
+  const others = mangaData.books.filter(x => x.id !== id).flatMap(x => x.panels.filter(pid => byId[pid]).map(pid => ({ pid, from:x.title })));
+  const slots = ids.slice((at - 1) * 4, at * 4);
+  app.innerHTML = `<div class="bookbar"><select id="bsel" aria-label="Pick a manga">${mangaData.books.map(x => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}</select>
+      <input id="btitle" value="${esc(b.title)}" aria-label="Manga title"><button id="newb">New manga</button><button class="danger" id="delb" title="Its panels move to Loose panels">Delete manga</button></div>
+    <div class="book"><nav class="pages" aria-label="Pages">${Array.from({ length:pages }, (_, i) => `<button data-page="${i + 1}" aria-current="${i + 1 === at}"><span class="mini">${[0, 1, 2, 3].map(k => { const pid = ids[i * 4 + k]; return `<i>${pid ? img(pid) : ''}</i>`; }).join('')}</span>Page ${i + 1}</button>`).join('')}</nav>
+    <div class="reader"><div class="paper">${[0, 1, 2, 3].map(k => { const pid = slots[k], n = (at - 1) * 4 + k;
+        if (pid) return `<figure class="frame"><button class="open" data-open="${pid}" title="Edit: ${esc(byId[pid].title)}">${img(pid)}</button>
+          <figcaption><span>${n + 1}. ${esc(byId[pid].title)}</span><span><button data-move="${n}" data-by="-1" ${n === 0 ? 'disabled' : ''} aria-label="Move earlier">←</button><button data-move="${n}" data-by="1" ${n === ids.length - 1 ? 'disabled' : ''} aria-label="Move later">→</button></span></figcaption></figure>`;
+        if (n === ids.length) return `<div class="frame empty"><button class="go" id="newp">New panel</button>${others.length ? `<select id="take" aria-label="Move a panel from another manga here"><option value="">Or move a panel here …</option>${others.map(o => `<option value="${o.pid}">${esc(o.from)}: ${esc(byId[o.pid].title)}</option>`).join('')}</select>` : ''}</div>`;
+        return '<div class="frame none"></div>'; }).join('')}</div>
+      <div class="turn"><button id="prev" ${at === 1 ? 'disabled' : ''} aria-label="Previous page">‹</button><span>Page ${at} of ${pages}</span><button id="next" ${at === pages ? 'disabled' : ''} aria-label="Next page">›</button></div></div></div>`;
+  const go = n => { location.hash = `book/${id}/${n}`; };
+  $('bsel').onchange = e => location.hash = 'book/' + e.target.value;
+  $('btitle').onchange = e => act('book_edit', { id, title:e.target.value });
+  $('newb').onclick = async () => { const nb = await act('book_new', { title:'New manga' }); if (nb) location.hash = 'book/' + nb.id; };
+  $('delb').onclick = async () => { if (confirm(`Delete "${b.title}"? Its panels move to Loose panels.`)) { await act('book_delete', { id }); location.hash = 'manga'; } };
+  app.querySelectorAll('[data-page]').forEach(x => x.onclick = () => go(+x.dataset.page));
+  app.querySelectorAll('[data-open]').forEach(x => x.onclick = () => location.hash = 'panel/' + x.dataset.open);
+  app.querySelectorAll('[data-move]').forEach(x => x.onclick = async () => { const i = +x.dataset.move, j = i + +x.dataset.by, o = [...ids]; [o[i], o[j]] = [o[j], o[i]];
+    await act('book_edit', { id, panels:[...o, ...b.panels.filter(pid => !byId[pid])] }); if (Math.floor(j / 4) + 1 === at) openBook(id, at); else go(Math.floor(j / 4) + 1); });
+  if ($('newp')) $('newp').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}` }); if (p) location.hash = 'panel/' + p.id; };
+  if ($('take')) $('take').onchange = async e => { if (e.target.value) { await act('book_edit', { id, add:e.target.value }); openBook(id, at); } };
+  $('prev').onclick = () => go(at - 1); $('next').onclick = () => go(at + 1);
+  onkeydown = e => { if (!location.hash.startsWith('#book/') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+    if (e.key === 'ArrowLeft' && at > 1) go(at - 1); if (e.key === 'ArrowRight' && at < pages) go(at + 1); };
+}
+async function openPanel(id) { clearTimeout(timer); const m = mangaData = await get('/api/yumeko/manga'); panel = await get('/api/yumeko/panel/' + id); panel._loras = m.loras; drawn = {}; tool.active = panel.characters[0]?.id ?? null; paintPanel(); pollPanel(); }
 function pollPanel() { clearTimeout(timer); timer = setTimeout(async () => { if (!location.hash.includes(panel?.id)) return; const b = panel.busy, n = panel.versions.length, l = panel._loras;
-  panel = await get('/api/yumeko/panel/' + panel.id); panel._loras = l; if (b !== panel.busy || n !== panel.versions.length) { const keep = captureMasks(); paintPanel(); restoreMasks(keep); } pollPanel(); }, 2000); }
+  // only the render state comes from the server: replacing the whole object made edits land on a stale copy
+  const fresh = await get('/api/yumeko/panel/' + panel.id); ['busy', 'error', 'versions', 'current', 'composition', 'progress'].forEach(k => panel[k] = fresh[k]); panel._loras = l; if (b !== panel.busy || n !== panel.versions.length) { const keep = captureMasks(); paintPanel(); restoreMasks(keep); } else showBusy(); pollPanel(); }, panel.busy ? 1000 : 2000); }
+/* the running render over the big picture: what runs, a wide bar, steps */
+function showBusy() { const st = $('stage'); if (!st) return; let o = st.querySelector('.stagebusy'); if (!panel.busy) { o?.remove(); return; }
+  if (!o) { o = document.createElement('div'); o.className = 'stagebusy'; o.innerHTML = '<b></b><div class="bar"><i></i></div><small></small>'; st.append(o); }
+  const pr = panel.progress, pct = pr?.total ? Math.round(100 * pr.step / pr.total) : null;
+  o.querySelector('b').textContent = panel.busy + ' …'; o.querySelector('.bar').classList.toggle('wait', pct === null);
+  o.querySelector('i').style.width = (pct ?? 100) + '%'; o.querySelector('small').textContent = pct === null ? 'loading the model …' : `step ${pr.step} of ${pr.total} · ${pct}%`; }
 const dir = () => '_manga/' + panel.id;
-async function savePanel() { const { _loras, ...p } = panel; const r = await act('panel_edit', { id:p.id, title:p.title, tags:p.tags, prompt:p.prompt, negative:p.negative, characters:p.characters, width:p.width, height:p.height }); return r; }
+async function savePanel() { const { _loras, ...p } = panel; const r = await act('panel_edit', { id:p.id, title:p.title, tags:p.tags, prompt:p.prompt, negative:p.negative, characters:p.characters, width:p.width, height:p.height, locked:!!p.locked, pass_tags:p.pass_tags ?? '', pass_negative:p.pass_negative ?? '' }); return r; }
+// Take what is typed but not yet saved (a textarea saves on blur, which can lose the race against a button click).
+// The pill tags of a character's LoRA (from her finished set); older cards find it by file or name.
+function fx(c) { return tool.fix.by[c.id] ||= { preset:'small', text:'', denoise:0.5, loras:['qwen-lightning'] }; }
+const QWEN_LORAS = [['qwen-lightning', 'Lightning'], ['qwen-anything2real', 'Anything2Real'], ['qwen-multiple-angles', 'Multiple angles'], ['qwen-sfw', 'SFW']];
+/* her Qwen reference: her own upload for this panel, else her base image */
+function refOf(c) { if (c.ref) return file(dir(), c.ref) + '?' + (c._refv || ''); const l = panel?._loras?.find(x => x.id === c.lora || x.file === c.file); return l?.base ? `/yumeko-file/${l.base.split('/').map(encodeURIComponent).join('/')}` : null; }
+function pillsOf(c) { const l = panel?._loras?.find(x => x.id === c.lora || x.file === c.file || x.name === c.name); return l?.pills; }
+// Folded boxes (scene, locked composition, each character), remembered per browser.
+let folds; try { folds = new Set(JSON.parse(localStorage.getItem('yumekoFolds') || '[]')); } catch { folds = new Set(); }
+const folded = k => folds.has(k) ? ' min' : '';
+const foldBtn = k => `<button class="fold" data-fold="${k}" aria-expanded="${!folds.has(k)}" aria-label="${folds.has(k) ? 'Unfold' : 'Fold'}">${folds.has(k) ? '▸' : '▾'}</button>`;
+function setFold(k, on) { on ? folds.add(k) : folds.delete(k); try { localStorage.setItem('yumekoFolds', JSON.stringify([...folds])); } catch {}
+  const box = document.querySelector(`[data-box="${CSS.escape(k)}"]`), b = box?.querySelector('[data-fold]'); box?.classList.toggle('min', on);
+  if (b) { b.textContent = on ? '▸' : '▾'; b.setAttribute('aria-expanded', !on); b.setAttribute('aria-label', on ? 'Unfold' : 'Fold'); } }
+/* one character open at a time: opening (or clicking the head of) a card closes the others and makes her the brush, painting */
+function openChar(id) { panel.characters.forEach(c => setFold('char:' + c.id, c.id !== id)); tool.erase = false;
+  if (tool.active !== id) { tool.active = id; syncPanel(); const keep = captureMasks(); paintPanel(); restoreMasks(keep); }
+  else if ($('erase')) { $('erase').textContent = 'Erase'; $('erase').setAttribute('aria-pressed', false); } }
+document.addEventListener('click', e => { const f = e.target.closest('[data-fold]');
+  if (f && f.dataset.fold.startsWith('char:') && folds.has(f.dataset.fold)) { openChar(f.dataset.fold.slice(5)); return; }
+  if (f) { setFold(f.dataset.fold, !folds.has(f.dataset.fold)); return; }
+  const head = e.target.closest('#chars .boxhead'); if (head && !e.target.closest('button, input, select, textarea, a')) { openChar(head.closest('[data-box]').dataset.box.slice(5)); return; }
+  const a = e.target.closest('[data-foldall]'); if (a) document.querySelectorAll('.pedit [data-box]').forEach(x => setFold(x.dataset.box, a.dataset.foldall === '1')); });
+function syncPanel() { if ($('tags')) { panel.tags = $('tags').value; panel.prompt = $('prompt').value; panel.negative = $('neg').value; }
+  if ($('ptags')) { panel.pass_tags = $('ptags').value; panel.pass_negative = $('pneg').value; }
+  document.querySelectorAll('#chars .char').forEach((w, i) => { const c = panel.characters[i], t = w.querySelector('[data-action]'), n = w.querySelector('[data-cneg]'); if (c && t) c.action = t.value; if (c && n) c.negative = n.value; }); }
 function captureMasks() { return drawn; } function restoreMasks() { showMask(); }
 function paintPanel() {
-  const p = panel, top = p.versions[0];
-  app.innerHTML = `<div class="row" style="margin-bottom:10px"><input id="title" value="${esc(p.title)}" aria-label="Panel title" style="flex:1"><button class="danger" id="delp">Delete panel</button></div>
+  const p = panel, top = p.versions.find(v => v.file === shownOf(p));
+  const book = mangaData?.books?.find(b => b.panels.includes(p.id));
+  app.innerHTML = `<div class="phead"><div class="pleft">${book ? `<a class="btnlike" href="#book/${book.id}/${Math.floor(book.panels.indexOf(p.id) / 4) + 1}">← ${esc(book.title)}</a>` : ''}<input id="title" value="${esc(p.title)}" aria-label="Panel title"><button class="danger" id="delp">Delete panel</button></div>
+      <div class="tagsearch hdr"><input id="ts" type="search" autocomplete="off" aria-label="Search Danbooru tags" placeholder="Danbooru tags: search, then click or drag a hit onto a field" value="${esc(tagQ)}"><div class="tsdrop"><div class="kinds" id="tk"></div><ul id="tr"></ul></div></div></div>
     ${p.busy ? `<p class="busy">${esc(p.busy)} …</p>` : ''}${p.error ? `<p class="err">${esc(p.error)}</p>` : ''}
-    <div class="two"><div>${top ? `<div class="stage" id="stage"><img id="pic" src="${file(dir(), top.file)}" alt="Panel"><canvas id="cv"></canvas></div>
-      <div class="row" style="margin:8px 0"><label class="note">Brush</label><input id="size" type="range" min="6" max="140" value="${tool.size}" style="width:140px;padding:0"><button id="erase" aria-pressed="${tool.erase}">${tool.erase ? 'Erasing' : 'Erase'}</button><button id="clear">Clear mask</button><button id="savem">Save masks</button></div>
-      <h3>Versions</h3><div class="versions" id="vs"></div>` : '<p class="note">Write the scene, then render a composition. Describe each person in words: hair and outfit colours help her mask pass a lot.</p>'}</div>
-    <div><h3>Scene</h3><label class="note">Tags, canonical spelling</label><div class="sugg"><textarea id="tags" rows="2" placeholder="2girls, sitting, indoors, night, wide_shot">${esc(p.tags)}</textarea></div>
-      <label class="note">Prompt, natural language</label><textarea id="prompt" rows="4" placeholder="manga panel, cyber cafe. On the left a woman with black hair, on the right a woman with white hair.">${esc(p.prompt)}</textarea>
-      <label class="note">Negative</label><input id="neg" value="${esc(p.negative)}" placeholder="text, letters, speech_bubble, watermark, signature">
-      <div class="row" style="margin-top:8px"><select id="size-p" aria-label="Size" style="width:auto"><option value="1024,1024">Square</option><option value="1216,832">Wide</option><option value="832,1216">Tall</option></select>
-      <button class="go" id="comp" ${p.busy ? 'disabled' : ''}>Render composition</button><button id="tog" ${p.busy || p.characters.length < 1 ? 'disabled' : ''} title="Experimental: LoRAs together often mix identities">With LoRAs</button></div>
-      <h3>Characters, first is painted first</h3><div id="chars"></div>
+    <div class="pedit"><aside class="pvers">${top ? `<h3>Versions</h3><div class="versions" id="vs"></div>` : ''}</aside>
+    <div class="pmid">${top ? `<div class="stage${tool.hide ? ' nomask' : ''}" id="stage"><button class="ico maskeye" id="eye" aria-pressed="${!!tool.hide}" title="${tool.hide ? 'Show the masks' : 'Hide the masks'}" aria-label="Hide masks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button><img id="pic" src="${file(dir(), top.file)}" alt="Panel"><canvas id="cv"></canvas></div>
+      <div class="row brushbar"><label class="note">Brush</label><input id="size" type="range" min="6" max="140" value="${tool.size}" style="width:140px;padding:0"><button id="erase" aria-pressed="${tool.erase}">${tool.erase ? 'Erasing' : 'Erase'}</button><button id="clear">Clear mask</button><button id="savem">Save masks</button></div>` : `<ol class="howto"><li><b>Write the scene</b> on the right. Describe each person in words, with hair and outfit colours: the composition has no LoRA yet.</li>
+        <li><b>Add the characters</b> below it. Each one's look is filled in from her set; add what she does in this panel.</li>
+        <li><b>Render composition.</b> It sets the staging, poses and place.</li>
+        <li><b>Paint a mask</b> over each character, then <b>Paint all characters</b>: her LoRA repaints her inside the mask.</li>
+        <li>Fix one character with her own <b>Redo this pass</b>; pick the version for the manga under Versions.</li></ol>`}
+    ${p.locked ? `<section class="box${folded('lock')}" data-box="lock"><div class="lockhead boxhead">${foldBtn('lock')}<h3>Composition locked</h3><button id="unlock" ${p.busy ? 'disabled' : ''} title="Back to the scene to render a new composition">Unlock</button></div>
+      <label class="note" for="ptags">Pass tags, with every character</label><textarea id="ptags" rows="2" placeholder="indoors, night, bedroom">${esc(p.pass_tags || '')}</textarea>
+      <label class="note" for="pneg">Pass negative, plus each character's own</label><textarea id="pneg" rows="2">${esc(p.pass_negative || '')}</textarea>
+      ${mangaData?.pass_fixed ? `<details class="fixed"><summary>Always added to every pass</summary><p><b>Positive</b> ${esc(mangaData.pass_fixed.positive)}, her description, the pass tags</p><p><b>Negative</b> the pass negative, hers, ${esc(mangaData.pass_fixed.negative)}</p></details>` : ''}</section>
+` : `<section class="box${folded('scene')}" data-box="scene"><div class="lockhead boxhead">${foldBtn('scene')}<h3>Scene</h3></div><label class="note" for="tags">Tags, canonical spelling</label><div class="sugg"><textarea id="tags" rows="4" placeholder="2girls, sitting, indoors, night, wide_shot">${esc(p.tags)}</textarea></div>
+      <label class="note" for="prompt">Prompt, natural language</label><textarea id="prompt" rows="8" placeholder="manga panel, cyber cafe. On the left a woman with black hair, on the right a woman with white hair.">${esc(p.prompt)}</textarea>
+      <label class="note" for="neg">Negative</label><textarea id="neg" rows="2" placeholder="text, letters, speech_bubble, watermark, signature">${esc(p.negative)}</textarea>
+      <div class="row"><select id="size-p" aria-label="Size" style="width:auto"><option value="1024,1024">Square</option><option value="1216,832">Wide</option><option value="832,1216">Tall</option></select>
+      <button class="go" id="comp" ${p.busy ? 'disabled' : ''}>Render composition</button>${top ? '<button id="lock" title="Keep this composition; character passes then use the pass tags and negative below">Lock composition</button>' : ''}<button id="tog" ${p.busy || p.characters.length < 1 ? 'disabled' : ''} title="Experimental: LoRAs together often mix identities">With LoRAs</button></div>
+</section>`}</div>
+    <div class="pside">      <section class="box qbox${folded('qwen')}" data-box="qwen"><div class="lockhead boxhead">${foldBtn('qwen')}<h3>Qwen edit</h3></div>
+        <p class="note">One sentence for the whole panel. Paint its own mask to edit only that area; without a mask Qwen gets the whole picture.</p>
+        <div class="qrow"><textarea id="qtext" rows="3" placeholder="The three women laugh, a pillow flies through the air.">${esc(tool.qwen.text)}</textarea>
+          <button class="qref" id="qref" title="${p.qwen_ref ? 'Your reference: click to change' : 'Optional: a reference picture, e.g. an outfit or an object'}" aria-label="Reference picture">${p.qwen_ref ? `<img src="${file(dir(), p.qwen_ref)}?${tool.qwen.refv || ''}" alt=""><i id="qrefx" title="Remove the reference" role="button">✕</i>` : '<span>+ ref</span>'}</button><input type="file" accept="image/*" id="qfile" hidden></div>
+        <span class="chips row" style="margin:0">${QWEN_LORAS.map(([k, t]) => `<button class="chip" data-pqlora="${k}" aria-pressed="${tool.qwen.loras.includes(k)}">${t}</button>`).join('')}</span>
+        <div class="row" style="margin:0"><button id="qbrush" aria-pressed="${tool.active === 'qwen'}">${tool.active === 'qwen' ? 'Painting the Qwen mask' : 'Paint mask'}</button><button id="qclear">Clear mask</button><button id="qrun" class="primary" ${p.busy || !top ? 'disabled' : ''}>Qwen edit</button></div>
+      </section>
+      <div class="lockhead"><h3>Characters, first is painted first</h3><span class="row" style="margin:0;gap:6px"><button class="mini" data-foldall="1">Fold all</button><button class="mini" data-foldall="0">Unfold all</button></span></div><div id="chars"></div>
       <div class="row"><select id="add" aria-label="Add LoRA" style="flex:1"><option value="">Add LoRA …</option>${p._loras.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></div>
       ${p._loras.length ? '' : '<p class="note">Finish a set first; its LoRA appears here.</p>'}
-      <div class="row" style="margin-top:10px"><button class="go" id="all" ${p.busy ? 'disabled' : ''}>Paint all characters</button></div>
+      <div class="row"><button class="go" id="all" ${p.busy ? 'disabled' : ''}>Paint all characters</button></div>
       <p class="note">Strength 0.6 keeps the pose, 0.8 brings back marks and outfits but can break anatomy. Put the character underneath first.</p></div></div>`;
   $('title').onchange = e => { p.title = e.target.value; savePanel(); };
-  $('delp').onclick = async () => { if (confirm('Delete this panel and its versions?')) { await act('panel_delete', { id:p.id }); location.hash = 'manga'; } };
-  ['tags', 'prompt'].forEach(k => $(k).onchange = e => { p[k] = e.target.value; savePanel(); }); $('neg').onchange = e => { p.negative = e.target.value; savePanel(); };
-  autocomplete($('tags'));
-  $('size-p').value = `${p.width},${p.height}`; $('size-p').onchange = e => { [p.width, p.height] = e.target.value.split(',').map(Number); savePanel(); };
+  /* the panel's Qwen edit */
+  const Q = tool.qwen;
+  $('qtext').oninput = e => { Q.text = e.target.value; };
+  document.querySelectorAll('[data-pqlora]').forEach(b => b.onclick = () => { const k = b.dataset.pqlora; Q.loras = Q.loras.includes(k) ? Q.loras.filter(x => x !== k) : [...Q.loras, k]; b.setAttribute('aria-pressed', Q.loras.includes(k)); });
+  $('qbrush').onclick = () => { tool.erase = false; tool.active = tool.active === 'qwen' ? panel.characters[0]?.id ?? null : 'qwen'; syncPanel(); const keep = captureMasks(); paintPanel(); restoreMasks(keep); };
+  $('qclear').onclick = () => { drawn.qwen?.getContext('2d').clearRect(0, 0, drawn.qwen.width, drawn.qwen.height); showMask(); };
+  $('qref').onclick = e => { if (e.target.closest('#qrefx')) return; $('qfile').click(); };
+  $('qfile').onchange = () => { const f0 = $('qfile').files[0]; if (!f0) return; const rd = new FileReader();
+    rd.onload = async () => { const r = await act('panel_qwen_ref', { id:p.id, image:rd.result }); if (r) { p.qwen_ref = r.qwen_ref; Q.refv = Date.now(); paintPanel(); } }; rd.readAsDataURL(f0); };
+  if ($('qrefx')) $('qrefx').onclick = async e => { e.stopPropagation(); const r = await act('panel_qwen_ref', { id:p.id }); if (r) { delete p.qwen_ref; paintPanel(); } };
+  $('qrun').onclick = async () => { Q.text = $('qtext').value; if (!Q.text.trim()) return alert('Write in a sentence what should change.');
+    const m = drawn.qwen, has = m && m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v); let mask = null;
+    if (has) { const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0); mask = t.toDataURL('image/png'); }
+    syncPanel(); await savePanel(); const r = await act('panel_qwen', { id:p.id, text:Q.text, loras:Q.loras, mask });
+    if (r) { panel.busy = r.busy; paintPanel(); pollPanel(); } };
+  $('delp').onclick = async () => { if (confirm('Delete this panel and its versions?')) { await act('panel_delete', { id:p.id }); location.hash = book ? 'book/' + book.id : 'manga'; } };
+  if (!p.locked) { ['tags', 'prompt'].forEach(k => $(k).onchange = e => { p[k] = e.target.value; savePanel(); }); $('neg').onchange = e => { p.negative = e.target.value; savePanel(); }; }
+  else { $('ptags').onchange = e => { p.pass_tags = e.target.value; savePanel(); }; $('pneg').onchange = e => { p.pass_negative = e.target.value; savePanel(); }; }
+  const HEADCOUNT = /^(\d\+?|multiple|solo)[ _]?(girls?|boys?|others?)$|^solo$|^(group|crowd)$/;
+  if ($('lock')) $('lock').onclick = async () => { syncPanel(); Object.assign(p, { locked:true, pass_tags:p.pass_tags || p.tags.split(',').map(t => t.trim()).filter(t => t && !HEADCOUNT.test(t.toLowerCase())).join(', '),
+    pass_negative:p.pass_negative || ['nsfw', 'nude', ...p.negative.split(',').map(t => t.trim()).filter(t => t && !['loli', 'child', 'nsfw', 'nude'].includes(t.toLowerCase()))].join(', ') }); /* loli, child are locked; nsfw, nude editable */ await act('panel_edit', { id:p.id, locked:true, pass_tags:p.pass_tags, pass_negative:p.pass_negative }); paintPanel(); };
+  if ($('unlock')) $('unlock').onclick = async () => { syncPanel(); p.locked = false; await act('panel_edit', { id:p.id, locked:false, pass_tags:p.pass_tags, pass_negative:p.pass_negative }); paintPanel(); };
+  if (!p.locked) { $('size-p').value = `${p.width},${p.height}`; $('size-p').onchange = e => { [p.width, p.height] = e.target.value.split(',').map(Number); savePanel(); };
   const compose = t => async () => { p.tags = $('tags').value; p.prompt = $('prompt').value; p.negative = $('neg').value; await savePanel(); const r = await act('panel_compose', { id:p.id, together:t }); if (r) { Object.assign(panel, r); paintPanel(); } };
-  $('comp').onclick = compose(false); $('tog').onclick = compose(true);
-  $('add').onchange = e => { const l = p._loras.find(x => x.id === e.target.value); if (!l) return; p.characters.push({ id:`c${Date.now()}`, name:l.name, trigger:l.trigger, file:l.file, strength:l.strength, denoise:.62, action:'' }); tool.active = p.characters.at(-1).id; savePanel(); paintPanel(); };
+  $('comp').onclick = compose(false); $('tog').onclick = compose(true); }
+  $('add').onchange = e => { const l = p._loras.find(x => x.id === e.target.value); if (!l) return; const c = { id:`c${Date.now()}`, lora:l.id, name:l.name, trigger:l.trigger, file:l.file, strength:l.strength, denoise:.62, action:l.look ? l.look + ', ' : '', negative:'', identity:true, outfit:false };
+    pillTags(c, l.pills?.identity, true, ['action', 'negative']); p.characters.push(c); tool.active = p.characters.at(-1).id; savePanel(); paintPanel(); };
   p.characters.forEach((c, i) => { const w = document.createElement('div'); w.className = 'char' + (tool.active === c.id ? ' on' : '');
-    w.innerHTML = `<div class="row"><span class="dot" style="background:${COLORS[i % 4]}"></span><b style="flex:1">${esc(c.name)}</b><span class="note">${c.masked ? 'mask saved' : 'no mask'}</span><button data-r>Remove</button></div>
-      <input data-action placeholder="What she does here" value="${esc(c.action)}" style="margin:6px 0">
+    w.classList.add('box'); if (folds.has('char:' + c.id)) w.classList.add('min'); w.dataset.box = 'char:' + c.id;
+    w.innerHTML = `<div class="row boxhead">${foldBtn('char:' + c.id)}<span class="dot" style="background:${COLORS[i % 4]}"></span><b style="flex:1">${esc(c.name)}</b><span class="note">${c.masked ? 'mask saved' : 'no mask'}</span><span class="icons"><button class="ico" data-p aria-pressed="${tool.active === c.id}" title="Paint her mask" aria-label="Paint mask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21c3 0 5-1.5 5-4a3 3 0 0 0-3-3c-1.5 0-2.5 1-2.5 2.5 0 2-1 3-1.5 4.5zM8.5 14.5 20 3l1 1-11.5 11.5"/></svg></button><button class="ico" data-pass ${p.busy ? 'disabled' : ''} title="Redo her pass" aria-label="Redo this pass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button><button class="ico" data-reset title="Reset description and negative to her defaults (click twice)" aria-label="Reset to defaults"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg></button><button class="ico danger" data-r title="Remove her from this panel" aria-label="Remove"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>
+      ${pillsOf(c) ? `<div class="row chips cpills"><button class="chip" data-pill="identity" aria-pressed="${c.identity === true}" title="Her calibrated negatives go into her negative below">Identity</button><button class="chip" data-pill="outfit" aria-pressed="${!!c.outfit}" title="Her signature outfit and its trigger go into her description, its negatives into hers">Her outfit</button></div>` : ''}
+      <textarea data-action id="act-${c.id}" rows="3" placeholder="Her look and what she does here">${esc(c.action)}</textarea>
+      <label class="note" for="cneg-${c.id}">Her negative, added to the panel's in her pass</label><textarea data-cneg id="cneg-${c.id}" rows="2" placeholder="e.g. black hair, long sleeves">${esc(c.negative || '')}</textarea>
       <label class="note">LoRA ${c.strength}</label><input data-str type="range" min=".3" max="1.3" step=".05" value="${c.strength}" style="padding:0">
       <label class="note">Change ${c.denoise}</label><input data-den type="range" min=".3" max=".95" step=".01" value="${c.denoise}" style="padding:0">
-      <div class="row" style="margin-top:6px"><button data-p>Paint mask</button><button data-pass ${p.busy ? 'disabled' : ''}>Redo this pass</button></div>`;
-    w.querySelector('[data-p]').onclick = () => { tool.active = c.id; paintPanel(); };
+      <details class="fixcard" data-fixd ${tool.fix.open.has(c.id) ? 'open' : ''}><summary>Fix a spot on her</summary>
+        <p class="note">Uses her card as set above. Paint her mask over just the spot, add a few words, Fix: only that spot of the shown version is repainted.</p>
+        <span class="chips row" style="margin:0">${[['small', 'Small change', 'Face, smile, a detail: light, keeps the shapes'], ['sharp', 'Resharpen', 'Blurry face, hair or outfit: repainted larger and lightly with detail tags; shapes and expression stay'], ['outfit', 'Her outfit', 'Washes the old colours out first; adds her outfit tags if the pill is off'], ['pose', 'Pose', 'An arm, a hand, posture: strong; mask the old and the new place'], ['qwen', 'Qwen edit', 'A plain sentence; Qwen-Image-Edit repaints the masked spot, with a reference picture']].map(([k, t, d]) => `<button class="chip" data-preset="${k}" aria-pressed="${fx(c).preset === k}" title="${d}">${t}</button>`).join('')}</span>
+        ${fx(c).preset === 'qwen' ? `<div class="qrow"><textarea data-ftext rows="3" placeholder="She wears the orange cropped jacket from the reference.">${esc(fx(c).text)}</textarea>
+          <button class="qref" data-qref title="${c.ref ? 'Your reference: click to change' : 'Her base image: click to use your own picture, e.g. an outfit or an object'}" aria-label="Reference picture">${refOf(c) ? `<img src="${refOf(c)}" alt="">` : '<span>+ ref</span>'}${c.ref ? '<i data-qrefx title="Back to her base image" role="button">✕</i>' : ''}</button><input type="file" accept="image/*" data-qfile hidden></div>
+        <span class="chips row" style="margin:0">${QWEN_LORAS.map(([k, t]) => `<button class="chip" data-qlora="${k}" aria-pressed="${fx(c).loras.includes(k)}">${t}</button>`).join('')}</span>`
+        : `<textarea data-ftext rows="2" placeholder="${fx(c).preset === 'outfit' ? 'Optional: extra outfit tags' : fx(c).preset === 'pose' ? 'arm up, hand on own head, stretching' : fx(c).preset === 'sharp' ? 'Optional: adds to detailed face, eyes, hair, clothes, body, sharp focus' : 'smile, open mouth'}">${esc(fx(c).text)}</textarea>
+        <label class="note">Fix change ${fx(c).denoise}</label><input data-fden type="range" min="0.2" max="1" step="0.05" value="${fx(c).denoise}" style="padding:0">`}
+        <div class="row" style="margin:0"><button data-fbrush aria-pressed="${tool.active === c.id}">${tool.active === c.id ? 'Painting her mask' : 'Paint mask'}</button><button data-fclear>Clear mask</button><button data-frun class="primary" ${p.busy ? 'disabled' : ''}>Fix</button></div>
+      </details>
+`;
+    w.querySelector('[data-p]').onclick = () => openChar(c.id);
+    /* fix a spot on her: her own mask, painted over just the spot; preset, words and Change per character */
+    const F = fx(c), d = w.querySelector('[data-fixd]');
+    d.ontoggle = () => { d.open ? tool.fix.open.add(c.id) : tool.fix.open.delete(c.id); };
+    w.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { F.text = w.querySelector('[data-ftext]').value; F.preset = b.dataset.preset; F.denoise = { small:0.5, sharp:0.35, outfit:0.85, pose:0.9, qwen:1 }[F.preset]; paintPanel(); });
+    w.querySelectorAll('[data-qlora]').forEach(b => b.onclick = () => { const k = b.dataset.qlora; F.text = w.querySelector('[data-ftext]').value; F.loras = F.loras.includes(k) ? F.loras.filter(x => x !== k) : [...F.loras, k]; paintPanel(); });
+    const qf = w.querySelector('[data-qfile]');
+    if (qf) { w.querySelector('[data-qref]').onclick = e => { if (e.target.closest('[data-qrefx]')) return; qf.click(); };
+      qf.onchange = () => { const f0 = qf.files[0]; if (!f0) return; const rd = new FileReader(); rd.onload = async () => { F.text = w.querySelector('[data-ftext]').value; syncPanel(); await savePanel();
+        const r = await act('panel_ref', { id:panel.id, character:c.id, image:rd.result }); if (r) { c.ref = r.characters.find(x => x.id === c.id)?.ref; c._refv = Date.now(); paintPanel(); } }; rd.readAsDataURL(f0); };
+      const x = w.querySelector('[data-qrefx]'); if (x) x.onclick = async e => { e.stopPropagation(); const r = await act('panel_ref', { id:panel.id, character:c.id }); if (r) { delete c.ref; paintPanel(); } }; }
+    w.querySelector('[data-ftext]').oninput = e => { F.text = e.target.value; };
+    w.querySelector('[data-fden]') && (w.querySelector('[data-fden]').oninput = e => { F.denoise = +e.target.value; e.target.previousElementSibling.textContent = 'Fix change ' + F.denoise; });
+    w.querySelector('[data-fbrush]').onclick = () => openChar(c.id);
+    w.querySelector('[data-fclear]').onclick = () => { const m = maskOf(c.id); m?.getContext('2d').clearRect(0, 0, m.width, m.height); showMask(); };
+    w.querySelector('[data-frun]').onclick = () => run();
+    const run = async (over) => { const m = maskOf(c.id); if (!m || !m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v)) return alert('Paint the spot on her first.');
+      const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0);
+      F.text = w.querySelector('[data-ftext]').value; syncPanel(); await savePanel();
+      const r = await act('panel_fix', { id:panel.id, character:c.id, preset:F.preset, text:F.text, denoise:F.denoise, loras:F.loras, ...over, mask:t.toDataURL('image/png') });
+      if (r) { panel.busy = r.busy; paintPanel(); pollPanel(); } };
+    /* reset: what she gets when added (her look, identity pill on, outfit off); first click arms, second within 3 s resets */
+    w.querySelector('[data-reset]').onclick = e => { const x = e.currentTarget;
+      if (!x.classList.contains('armed')) { x.classList.add('armed'); x.title = 'Click again to reset'; clearTimeout(x._t); x._t = setTimeout(() => { x.classList.remove('armed'); x.title = 'Reset description and negative to her defaults (click twice)'; }, 3000); return; }
+      clearTimeout(x._t); const l = p._loras?.find(y => y.id === c.lora || y.file === c.file || y.name === c.name);
+      Object.assign(c, { action:l?.look ? l.look + ', ' : '', negative:'', identity:true, outfit:false }); pillTags(c, l?.pills?.identity, true, ['action', 'negative']); savePanel(); paintPanel(); };
     w.querySelector('[data-r]').onclick = () => { p.characters.splice(i, 1); savePanel(); paintPanel(); };
     w.querySelector('[data-action]').onchange = e => { c.action = e.target.value; savePanel(); };
+    w.querySelector('[data-cneg]').onchange = e => { c.negative = e.target.value; savePanel(); };
+    w.querySelectorAll('[data-pill]').forEach(b => b.onclick = () => { const k = b.dataset.pill, on = !c[k];  // cards from before the pills have neither flag: both start off
+      c.action = w.querySelector('[data-action]').value; c.negative = w.querySelector('[data-cneg]').value;
+      pillTags(c, pillsOf(c)?.[k], on, ['action', 'negative'], k === 'outfit'); c[k] = on; savePanel(); paintPanel(); });
     w.querySelector('[data-str]').onchange = e => { c.strength = +e.target.value; savePanel(); paintPanel(); };
     w.querySelector('[data-den]').onchange = e => { c.denoise = +e.target.value; savePanel(); paintPanel(); };
-    w.querySelector('[data-pass]').onclick = async () => { await saveMasks(); const r = await act('panel_pass', { id:p.id, character:c.id, from:p.versions[0].file }); if (r) { Object.assign(panel, r); paintPanel(); } };
+    w.querySelector('[data-pass]').onclick = async () => { syncPanel(); await savePanel(); await saveMasks(); const r = await act('panel_pass', { id:p.id, character:c.id, from:shownOf(p) }); if (r) { Object.assign(panel, r); paintPanel(); } };
     $('chars').append(w); });
-  $('all').onclick = async () => { await saveMasks(); const comp = p.composition; const r = await act('panel_pass', { id:p.id, all:true, from:comp }); if (r) { Object.assign(panel, r); paintPanel(); } };
+  tagSearch(Object.fromEntries([['tags', 'tags'], ['prompt', 'prompt'], ['neg', 'negative'], ['ptags', 'pass_tags'], ['pneg', 'pass_negative'], ...p.characters.map(c => ['act-' + c.id, c.id]), ...p.characters.map(c => ['cneg-' + c.id, 'neg:' + c.id])]), (key, value) => {
+    const cn = key.startsWith('neg:') && p.characters.find(x => x.id === key.slice(4)), c = p.characters.find(x => x.id === key); if (cn) cn.negative = value; else if (c) c.action = value; else p[key] = value; savePanel(); });
+  $('all').onclick = async () => { syncPanel(); await savePanel(); await saveMasks(); const comp = p.composition; const r = await act('panel_pass', { id:p.id, all:true, from:comp }); if (r) { Object.assign(panel, r); paintPanel(); } };
   if (top) setupPainter();
 }
 function setupPainter() {
   const img = $('pic'), cv = $('cv');
+  showBusy();
   const ready = () => { cv.width = img.naturalWidth; cv.height = img.naturalHeight; showMask(); };
   img.complete ? ready() : img.onload = ready;
   let down = false, last = null;
@@ -878,27 +1167,47 @@ function setupPainter() {
   const stroke = e => { const m = maskOf(tool.active); if (!m) return; const c = m.getContext('2d'), [x, y] = at(e); c.globalCompositeOperation = tool.erase ? 'destination-out' : 'source-over'; c.strokeStyle = c.fillStyle = '#fff'; c.lineCap = 'round'; c.lineWidth = tool.size * cv.width / cv.getBoundingClientRect().width;
     c.beginPath(); c.moveTo(...(last || [x, y])); c.lineTo(x, y); c.stroke(); last = [x, y]; showMask(); };
   cv.onpointerdown = e => { if (!tool.active) return; down = true; last = null; cv.setPointerCapture(e.pointerId); stroke(e); };
-  cv.onpointermove = e => { if (down) stroke(e); };
+  // the brush itself as the cursor: its real size, in the colour of the character being painted (dashed when erasing)
+  const ring = document.createElement('i'); ring.className = 'brushring'; cv.parentElement.append(ring);
+  const showRing = e => { const i = panel.characters.findIndex(x => x.id === tool.active), qw = tool.active === 'qwen'; if (i < 0 && !qw) { ring.hidden = true; cv.style.cursor = 'not-allowed'; return; }
+    const r = cv.getBoundingClientRect(), col = qw ? '#e8e0ff' : COLORS[i % 4]; cv.style.cursor = 'none'; ring.hidden = false;
+    Object.assign(ring.style, { width:tool.size + 'px', height:tool.size + 'px', left:(e.clientX - r.left) + 'px', top:(e.clientY - r.top) + 'px',
+      borderColor:tool.erase ? '#fff' : col, borderStyle:tool.erase ? 'dashed' : 'solid', background:tool.erase ? 'transparent' : col + '40' }); };
+  cv.onpointermove = e => { showRing(e); if (down) stroke(e); };
+  cv.onpointerleave = () => { ring.hidden = true; };
   cv.onpointerup = () => { down = false; };
   $('size').oninput = e => tool.size = +e.target.value;
+  $('eye').onclick = () => { tool.hide = !tool.hide; $('stage').classList.toggle('nomask', tool.hide); $('eye').setAttribute('aria-pressed', tool.hide);
+    $('eye').title = tool.hide ? 'Show the masks' : 'Hide the masks'; };  // hidden masks can't be painted on; show them to paint again
   $('erase').onclick = () => { tool.erase = !tool.erase; $('erase').textContent = tool.erase ? 'Erasing' : 'Erase'; $('erase').setAttribute('aria-pressed', tool.erase); };
   $('clear').onclick = () => { const m = maskOf(tool.active); m?.getContext('2d').clearRect(0, 0, m.width, m.height); showMask(); };
   $('savem').onclick = saveMasks;
-  const vs = $('vs'); panel.versions.forEach(v => { const b = document.createElement('button'); b.title = 'Make this the newest version to paint on'; b.innerHTML = `<img src="${file(dir(), v.file)}" alt=""><span>${esc(v.label)}</span>`; b.onclick = () => { panel.versions = [v, ...panel.versions.filter(x => x !== v)]; savePanel(); paintPanel(); }; vs.append(b); });
+  // newest first, numbered from the oldest; the shown one is framed. Clicking only picks, the order never changes.
+  const vs = $('vs'), order = [...panel.versions].reverse(), num = Object.fromEntries(order.map((v, i) => [v.file, i + 1]));
+  panel.versions.forEach(v => { const b = document.createElement('button'), on = v.file === shownOf(panel); b.setAttribute('aria-pressed', on);
+    b.title = on ? 'Shown in the manga; the next pass paints on this one' : 'Use this version in the manga and paint on it next';
+    b.innerHTML = `<img src="${file(dir(), v.file)}" alt=""><span>${num[v.file]}. ${esc(v.label === 'Composition' || v.kind === 'fix' ? v.label : v.label + ' pass')}${v.denoise ? `, ${v.denoise}` : ''}${v.from && num[v.from] ? ` <small>on ${num[v.from]}</small>` : ''}</span>${on ? '<em>In the manga</em>' : ''}<i class="vdel" role="button" tabindex="0" title="Delete this version" aria-label="Delete version ${num[v.file]}">✕</i>`;
+    /* two clicks: the first arms the cross (red, "Delete?"), a second within 3 s deletes */
+    b.querySelector('.vdel').onclick = async e => { e.stopPropagation(); const x = e.currentTarget; if (panel.busy) return;
+      if (!x.classList.contains('armed')) { x.classList.add('armed'); x.textContent = 'Delete?'; x.title = 'Click again to delete; the file goes to the panel trash folder';
+        clearTimeout(x._t); x._t = setTimeout(() => { x.classList.remove('armed'); x.textContent = '✕'; x.title = 'Delete this version'; }, 3000); return; }
+      clearTimeout(x._t);
+      const r = await act('panel_version_delete', { id:panel.id, file:v.file }); if (r) { panel.versions = r.versions; panel.current = r.current; panel.composition = r.composition; paintPanel(); } };
+    b.onclick = async () => { if (on) return; const r = await act('panel_edit', { id:panel.id, current:v.file }); if (r) { panel.current = r.current; paintPanel(); } }; vs.append(b); });
 }
 function maskOf(id) { if (!id || !$('cv')) return null; if (!drawn[id]) { const c = document.createElement('canvas'); c.width = $('cv').width; c.height = $('cv').height; drawn[id] = c;
     const c0 = panel.characters.find(x => x.id === id); if (c0?.masked) { const im = new Image(); im.onload = () => { const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const g = t.getContext('2d'); g.drawImage(im, 0, 0, c.width, c.height); const d = g.getImageData(0, 0, c.width, c.height); for (let i = 0; i < d.data.length; i += 4) { d.data[i + 3] = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; } c.getContext('2d').putImageData(d, 0, 0); showMask(); }; im.src = file(dir(), `mask_${id}.png`) + '?' + Date.now(); } }
   return drawn[id]; }
 function showMask() { const cv = $('cv'); if (!cv) return; const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
-  panel.characters.forEach((ch, i) => { const m = maskOf(ch.id); if (!m) return; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g = t.getContext('2d'); g.drawImage(m, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = COLORS[i % 4]; g.fillRect(0, 0, t.width, t.height); c.drawImage(t, 0, 0); }); }
+  [...panel.characters, { id:'qwen' }].forEach((ch, i) => { const q = ch.id === 'qwen', m = q ? drawn.qwen : maskOf(ch.id); if (!m) return; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g = t.getContext('2d'); g.drawImage(m, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = q ? '#e8e0ff' : COLORS[i % 4]; g.fillRect(0, 0, t.width, t.height); c.drawImage(t, 0, 0); }); }
 async function saveMasks() { for (const ch of panel.characters) { const m = drawn[ch.id]; if (!m) continue; const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0); if (!m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v)) continue;
     const r = await act('panel_mask', { id:panel.id, character:ch.id, mask:t.toDataURL('image/png') }); if (r) ch.masked = true; } }
 
 // ---------- routes ----------
 if (parent !== window) document.body.classList.add('embedded');  // inside Morpheus the top bar carries this navigation
-async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel'));
+async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel') && !h.startsWith('book')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book'));
   catalog ||= await get('/api/yumeko/catalog');
-  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else await home(); }
+  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else if (h.startsWith('book/')) { const [, bid, pg] = h.split('/'); await openBook(bid, +pg || 0); } else await home(); }
   catch (e) { app.innerHTML = ''; fail(e); } }
 addEventListener('hashchange', route); route();
 </script>

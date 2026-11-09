@@ -813,7 +813,7 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/yumeko/catalog":
             return self.send_json(yumeko.CATALOG)
         if route == "/api/yumeko/manga":
-            return self.send_json({"panels": yumeko.panels(), "loras": yumeko.finished()})
+            return self.send_json({"panels": yumeko.panels(), "books": yumeko.books(), "loras": yumeko.finished(), "pass_fixed": yumeko.pass_fixed()})
         if route.startswith("/api/yumeko/live/"):  # the newest preview frame of a Use render
             frame = yumeko.LIVE.get(route.rsplit("/", 1)[1], {}).get("frame")
             if not frame:
@@ -822,7 +822,8 @@ class Handler(BaseHTTPRequestHandler):
         if route.startswith("/api/yumeko/job/"):
             return self.send_json(yumeko.job_view(route.rsplit("/", 1)[1]))
         if route.startswith("/api/yumeko/panel/"):
-            return self.send_json(yumeko.panel_load(route.rsplit("/", 1)[1]))
+            pid = route.rsplit("/", 1)[1]
+            return self.send_json(yumeko.panel_load(pid) | {"progress": yumeko.PANEL_LIVE.get(pid)})
         if route.startswith("/yumeko-file/"):
             return self.send_file(yumeko.ROOT / urllib.parse.unquote(route[len("/yumeko-file/"):]), yumeko.ROOT)
         if route == "/api/options":
