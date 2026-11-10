@@ -639,6 +639,12 @@
   .sb-card.running img, .sb-card.running .sb-empty { opacity: .5; }
   .sb-card.running::before { content: attr(data-p); position: absolute; left: 0; right: 0; top: calc(var(--card) * 8 / 9 - 10px); z-index: 1; color: #fff; font-size: 15px; font-weight: 700; text-align: center; }
   .sb-card.running::after { content: ''; position: absolute; left: 0; top: calc(var(--card) * 16 / 9 - 5px); width: var(--p, 0%); height: 5px; border-radius: 3px; background: var(--accent); transition: width .4s; }
+  .sb-card .sb-ok { position: absolute; right: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-style: normal; font-weight: 700; line-height: 20px; text-align: center; }
+  .sb-card.running { outline-color: var(--accent); box-shadow: 0 0 14px var(--glow); }
+  .sb-card.queued img, .sb-card.queued .sb-empty { opacity: .35; filter: grayscale(.6); }
+  .sb-card.queued:not([aria-pressed="true"]) { outline: 2px dashed var(--line); }
+  .sb-card.queued::before { content: attr(data-q); position: absolute; left: 0; right: 0; top: calc(var(--card) * 8 / 9 - 10px); z-index: 1; color: #fff; font-size: 13px; font-weight: 600; text-align: center; text-shadow: 0 1px 3px #000; }
+  .sb-gap.queued .sb-gap-t { opacity: 1; border-style: dashed; }
   .sb-gap.running .sb-gap-t { opacity: 1; border-color: var(--accent); box-shadow: 0 0 10px var(--glow); }
   .sb-add { flex: 0 0 auto; width: var(--card); margin-left: 14px; aspect-ratio: 9 / 16; align-self: flex-start; border: 1px dashed var(--line); border-radius: 6px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 20px; }
   .sb-add:hover { border-color: var(--accent); color: var(--text); }
@@ -2786,13 +2792,19 @@
 
   // ---------- Wake your dream: a storyboard of 2 s shots, saved as JSON on the server; finished clips in their own view ----------
   const wake = { view: store.get('wake.view', 'board'), boards: [], board: null, shot: null, job: store.get('wake.job', null), options: null, clips: [], error: '' };
+  if (wake.job && !wake.job.board) wake.job.board = store.get('wake.board', null);  // jobs from before carried no board: best guess is the one that was open
+  const renderingHere = () => !!wake.job && wake.job.board === wake.board?.id;
   const post = async (path, body) => {
     const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const out = await r.json();
     if (!r.ok) throw new Error(out.error || 'Unknown error');
     return out;
   };
-  const newShot = start => ({ id: `s${Date.now().toString(36)}`, label: '', start, source: null, prompt: '', negative: wake.options.negative, seed: null, length: 2 });
+  // a new shot takes model and character from the shot before it, so a cast or model change carries forward
+  const newShot = (start, prev) => ({ id: `s${Date.now().toString(36)}`, label: '', start, source: null, prompt: '', negative: wake.options.negative, seed: null, length: 2,
+    model: prev?.model || 'q4', character: prev?.character || '' });
+  const modelOptions = (value, same) => (same ? `<option value="">${esc(same)}</option>` : '')
+    + (wake.models || []).map(m => `<option value="${esc(m.id)}" ${m.id === value ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
   const currentShot = () => wake.board.shots.find(s => s.id === wake.shot) || wake.board.shots[0];
   const shotIndex = () => wake.board.shots.indexOf(currentShot());
   const versioned = (file, s) => `${url(file)}?v=${s.done || ''}`;
@@ -2832,11 +2844,14 @@
     }
   }
   async function openBoard(id) {
+    wake.models ??= await (await fetch('/api/video_models')).json();
     if (id) wake.board = await (await fetch('/api/board/' + id)).json();
     else {
-      wake.board = await post('/api/board/save', { title: 'New board', character: '', shots: [newShot('picture')] });
+      wake.board = await post('/api/board/save', { title: 'New board', shots: [newShot('picture')] });
       await listBoards();
     }
+    // older boards kept model and character board-wide: hand them down to every shot
+    for (const s of wake.board.shots) { s.model ||= wake.board.model || 'q4'; s.character ??= wake.board.character || ''; }
     wake.shot = wake.board.shots[0]?.id;
     store.set('wake.board', wake.board.id);
     paintBoard();
@@ -2871,19 +2886,13 @@
       <button type="button" class="sb-quiet" id="sb-set" aria-expanded="${!!wake.settings}">Board settings</button>
       <p class="sb-sum" id="sb-sum"></p><div class="sb-go" id="sb-go"></div>`;
     $('sb-board').innerHTML = `<div class="sb-settings" id="sb-settings" ${wake.settings ? '' : 'hidden'}>
-        <label class="sb-f"><span>Title</span><input type="text" id="sb-title"></label>
-        <label class="sb-f grow"><span>Character, added to every shot</span><input type="text" id="sb-char" placeholder="A woman with wavy chestnut hair, cream sweater, blue jeans"></label>
-        <label class="sb-f"><span>Video model</span><select id="sb-model"></select></label>
+        <label class="sb-f grow"><span>Title</span><input type="text" id="sb-title"></label>
         <button type="button" class="sb-quiet danger" id="sb-del">Delete board</button></div>
       <section class="sb-reel" aria-label="Shots">
         <div class="sb-strip" id="sb-strip"></div><div class="sb-progress" id="sb-progress"></div></section>
       <section class="sb-edit" id="sb-edit" aria-label="Selected shot"></section>`;
-    $('sb-title').value = b.title; $('sb-char').value = b.character;
+    $('sb-title').value = b.title;
     $('sb-title').oninput = e => { b.title = e.target.value; saveBoard(); };
-    $('sb-char').oninput = e => { b.character = e.target.value; saveBoard(); };
-    fetch('/api/video_models').then(r => r.json()).then(ms => { const sel = $('sb-model'); if (!sel) return;
-      sel.innerHTML = ms.map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join(''); sel.value = b.model || 'q4'; });
-    $('sb-model').onchange = e => { b.model = e.target.value; saveBoard(); };
     $('sb-pick').onchange = e => openBoard(e.target.value);
     $('sb-new').onclick = () => openBoard(null);
     $('sb-set').onclick = () => { wake.settings = !wake.settings; $('sb-settings').hidden = !wake.settings; $('sb-set').setAttribute('aria-expanded', wake.settings); };
@@ -2908,6 +2917,7 @@
       c.dataset.shot = s.id;
       c.setAttribute('aria-pressed', !wake.gap && s.id === currentShot().id);
       c.innerHTML = `${pic ? `<img src="${pic}" alt="" loading="lazy">` : '<div class="sb-empty"></div>'}<b>${i + 1}</b>
+        ${status === 'rendered' ? '<i class="sb-ok" title="Rendered">✓</i>' : ''}
         <span>${s.locked ? '<i class="sb-lockmark" title="Locked">🔒</i>' : ''}${esc(s.label || s.prompt || 'Empty shot')}</span><small class="${status}" title="${words[status]}">${s.length || 2} s</small>`;
       c.onclick = () => { wake.shot = s.id; wake.gap = null; paintStrip(); paintShot(); };
       c.ondragstart = e => e.dataTransfer.setData('text/plain', s.id);
@@ -2932,7 +2942,7 @@
       return [gap, c];
     }).flat(), Object.assign(document.createElement('button'), {
       type: 'button', className: 'sb-add', textContent: '+', title: 'Add a shot',
-      onclick: () => { const s = newShot('continue'); wake.board.shots.push(s); wake.shot = s.id; shotChanged(); },
+      onclick: () => { const s = newShot('continue', wake.board.shots.at(-1)); wake.board.shots.push(s); wake.shot = s.id; shotChanged(); },
     }));
   }
   function paintPicture() {
@@ -2970,9 +2980,11 @@
         <div class="sb-head"><b class="sb-num">${i + 1}</b><input type="text" id="sb-label" class="sb-name" aria-label="Shot name" placeholder="Name this shot">
           ${s.clip ? `<button type="button" class="sb-lock" id="sb-lock" aria-pressed="${!!s.locked}" title="${s.locked ? 'Locked: Render shot and Render all leave this shot alone. Click to unlock' : 'Lock this shot so it is not rendered again'}">${s.locked ? '🔒' : '🔓'}</button>` : ''}
           <label class="sb-len">Length <select id="sb-length">${[2, 3, 4, 5].map(x => `<option value="${x}" ${x === (s.length || 2) ? 'selected' : ''}>${x} s</option>`).join('')}</select></label>
-          <label class="sb-len" title="More steps on Wan's motion expert: more action, slightly fewer fine details. Same render time.">Motion <select id="sb-motion">${[['normal', 'Normal · 2 + 2'], ['more', 'More · 3 + 1'], ['wild', 'Wild · 3 + 1, shift 4']].map(([k, t]) => `<option value="${k}" ${k === (s.motion || wake.board.motion || 'normal') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          ${(s.model || wake.board.model) === 'ltx' ? '' : `<label class="sb-len" title="More steps on Wan's motion expert: more action, slightly fewer fine details. Same render time.">Motion <select id="sb-motion">${[['normal', 'Normal · 2 + 2'], ['more', 'More · 3 + 1'], ['wild', 'Wild · 3 + 1, shift 4']].map(([k, t]) => `<option value="${k}" ${k === (s.motion || wake.board.motion || 'normal') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`}
           <label class="sb-len" title="Against Wan's slow motion: renders more frames and plays them in the shot's length. 1.5× renders half as many frames again.">Tempo <select id="sb-tempo">${[1, 1.25, 1.5].map(x => `<option value="${x}" ${x === (s.tempo || 1) ? 'selected' : ''}>${x}×</option>`).join('')}</select></label>
+          <label class="sb-len">Model <select id="sb-model">${modelOptions(s.model)}</select></label>
           <button type="button" class="wake-go" id="sb-one">Render shot</button></div>
+        <label class="sb-f"><span>Character, added to this shot's prompt</span><input type="text" id="sb-char" placeholder="A woman with wavy chestnut hair, cream sweater, blue jeans"></label>
         <label class="sb-f"><span>Motion prompt</span><textarea id="sb-prompt" rows="6" placeholder="She blows a kiss to the camera and smiles. Static camera."></textarea></label>
         <div class="sb-foot"><button type="button" class="sb-quiet" id="sb-left" ${i ? '' : 'disabled'}>Move left</button>
           <button type="button" class="sb-quiet" id="sb-right" ${i < wake.board.shots.length - 1 ? '' : 'disabled'}>Move right</button>
@@ -2981,21 +2993,23 @@
           <button type="button" class="sb-quiet danger" id="sb-remove">Delete shot</button></div></div>`;
     paintPicture();
     paintActions();
-    $('sb-label').value = s.label; $('sb-prompt').value = s.prompt;
+    $('sb-label').value = s.label; $('sb-prompt').value = s.prompt; $('sb-char').value = s.character || '';
+    $('sb-char').oninput = e => { s.character = e.target.value; saveBoard(); };
+    $('sb-model').onchange = e => { s.model = e.target.value; saveBoard(); paintStrip(); paintShot(); };  // paintShot: Motion shows only for Wan
     const text = (id, key) => { $(id).oninput = e => { s[key] = e.target.value; saveBoard(); }; };
     $('sb-length').onchange = e => { s.length = +e.target.value; saveBoard(); paintStrip(); paintActions(); };
-    $('sb-motion').onchange = e => { s.motion = e.target.value; saveBoard(); paintStrip(); paintActions(); };
+    if ($('sb-motion')) $('sb-motion').onchange = e => { s.motion = e.target.value; saveBoard(); paintStrip(); paintActions(); };
     $('sb-tempo').onchange = e => { s.tempo = +e.target.value; saveBoard(); paintStrip(); paintActions(); };
     text('sb-label', 'label'); text('sb-prompt', 'prompt');
     if ($('sb-lock')) $('sb-lock').onclick = () => { s.locked = !s.locked; saveBoard(); paintStrip(); paintShot(); };
-    if (s.locked) ['sb-prompt', 'sb-length', 'sb-motion', 'sb-tempo', 'sb-seed', 'sb-change', 'sb-open'].forEach(id => { if ($(id)) $(id).disabled = true; });
+    if (s.locked) ['sb-prompt', 'sb-char', 'sb-model', 'sb-length', 'sb-motion', 'sb-tempo', 'sb-seed', 'sb-change', 'sb-open'].forEach(id => { if ($(id)) $(id).disabled = true; });
     if (s.locked) box.querySelectorAll('.sb-seg button').forEach(b => b.disabled = true);
     box.querySelectorAll('.sb-seg button').forEach(b => b.onclick = () => { s.start = b.dataset.s; shotChanged(); });
     const move = by => { const l = wake.board.shots; l.splice(i + by, 0, l.splice(i, 1)[0]); shotChanged(); };
     $('sb-left').onclick = () => move(-1);
     $('sb-right').onclick = () => move(1);
     $('sb-copy').onclick = () => {
-      const c = { ...newShot(s.start), label: s.label, source: s.source, prompt: s.prompt, negative: s.negative, length: s.length };
+      const c = { ...newShot(s.start, s), label: s.label, source: s.source, prompt: s.prompt, negative: s.negative, length: s.length };
       wake.board.shots.splice(i + 1, 0, c); wake.shot = c.id; shotChanged();
     };
     $('sb-seed').onclick = () => { s.seed = null; saveBoard(); };
@@ -3018,7 +3032,7 @@
     };
   }
   const insertShot = (i, start) => {
-    const n = newShot(start);
+    const n = newShot(start, wake.board.shots[i - 1] || wake.board.shots[i]);
     wake.board.shots.splice(i, 0, n); wake.shot = n.id; wake.gap = null; shotChanged();
     if (start === 'picture') openPicker();
   };
@@ -3043,17 +3057,19 @@
   function paintTransition() {
     const s = currentShot(), box = $('sb-trans-more');
     if (!box) return;
-    s.transition ??= { type: 'cut', seconds: 0.5, color: 'violet', prompt: '', seed: null };
+    s.transition ??= { type: 'cut', seconds: 0.5, color: 'violet', prompt: '', seed: null, model: '' };
     const t = s.transition, change = () => { saveBoard(); paintStrip(); paintActions(); };
     document.querySelectorAll('#sb-trans .sb-seg button').forEach(b => {
       b.setAttribute('aria-pressed', b.dataset.t === t.type);
       b.onclick = () => { t.type = b.dataset.t; paintTransition(); change(); };
     });
     box.innerHTML = t.type === 'bridge' ? `<label class="sb-f"><span>Bridge motion, a new 2 s clip between the shots</span><textarea id="sb-t-prompt" rows="2" placeholder="The camera pushes in to her face as she turns."></textarea></label>
+        <label class="sb-f"><span>Bridge model</span><select id="sb-t-model">${modelOptions(t.model || '', `Same as shot ${shotIndex() + 1}`)}</select></label>
         <div class="sb-row"><button type="button" class="sb-quiet" id="sb-t-take">New bridge take</button>${s.bridge ? `<a class="hint" href="${url(s.bridge)}?v=${s.bridge_done || ''}" target="_blank">Open the bridge clip</a>` : ''}</div>`
       : t.type === 'cut' ? '' : `<div class="sb-row"><label class="hint">Length <select id="sb-t-sec">${[0.25, 0.5, 0.75, 1, 1.5].map(x => `<option value="${x}" ${x === t.seconds ? 'selected' : ''}>${x} s</option>`).join('')}</select></label>
         ${t.type === 'flash' ? `<label class="hint">Colour <select id="sb-t-col">${['violet', 'pink', 'cyan', 'white', 'black'].map(x => `<option ${x === t.color ? 'selected' : ''}>${x}</option>`).join('')}</select></label>` : ''}</div>`;
     if ($('sb-t-prompt')) { $('sb-t-prompt').value = t.prompt; $('sb-t-prompt').oninput = e => { t.prompt = e.target.value; saveBoard(); }; }
+    if ($('sb-t-model')) $('sb-t-model').onchange = e => { t.model = e.target.value; change(); };
     if ($('sb-t-take')) $('sb-t-take').onclick = () => { t.seed = null; change(); };
     if ($('sb-t-sec')) $('sb-t-sec').onchange = e => { t.seconds = +e.target.value; change(); };
     if ($('sb-t-col')) $('sb-t-col').onchange = e => { t.color = e.target.value; change(); };
@@ -3075,18 +3091,53 @@
     const blocked = wake.options.installed ? '' : 'The Wan 2.2 DaSiWa models are not installed.';
     const progress = $('sb-progress');
     if ($('sb-one')) { $('sb-one').disabled = !!wake.job || !!blocked || !!currentShot()?.locked; $('sb-one').title = currentShot()?.locked ? 'Locked: unlock it to render again' : ''; $('sb-one').onclick = () => startRender(currentShot().id); }
+    if (wake.job && !renderingHere()) {
+      // one GPU: another board is rendering, so this one waits, without that board's progress
+      const other = wake.boards.find(x => x.id === wake.job.board);
+      box.innerHTML = `<button type="button" class="sb-quiet" id="sb-other">Show ${esc(other?.title || 'the rendering board')}</button>`;
+      progress.innerHTML = `<p class="hint">Another board is rendering${other ? `: ${esc(other.title)}` : ''}. Render this one when it is done.</p>`;
+      $('sb-other').onclick = () => openBoard(wake.job.board);
+      return;
+    }
     if (wake.job) {
-      box.innerHTML = '<button type="button" class="sb-quiet" id="wake-stop">Stop</button>';
+      box.innerHTML = `${previewParts(b).length ? '<button type="button" class="sb-quiet" id="sb-preview">Preview</button>' : ''}<button type="button" class="sb-quiet" id="wake-stop">Stop</button>`;
+      if ($('sb-preview')) $('sb-preview').onclick = () => previewScene(b);
       progress.innerHTML = `<div class="wake-run"><span class="bar"><i id="wake-bar" style="width:${r.total ? 100 * r.step / r.total : 0}%"></i></span><p class="hint" id="wake-phase" aria-live="polite"></p></div>`;
       $('wake-stop').onclick = stopWake;
       return paintWakePhase();
     }
     progress.innerHTML = blocked || wake.error ? `<p class="wake-err" role="alert">${esc(blocked || wake.error)}</p>` : '';
     const watch = b.scene && !b.scene.outdated;
-    box.innerHTML = `${watch ? `<button type="button" class="${n ? 'sb-quiet' : 'wake-go'}" id="sb-watch">Watch scene</button>` : ''}
+    const pv = previewParts(b).length && (n || !watch);  // once the scene is joined, Watch scene says it all
+    box.innerHTML = `${pv ? '<button type="button" class="sb-quiet" id="sb-preview">Preview</button>' : ''}${watch ? `<button type="button" class="${n ? 'sb-quiet' : 'wake-go'}" id="sb-watch">Watch scene</button>` : ''}
       ${n || !watch ? `<button type="button" class="wake-go" id="sb-all">Render all</button>` : ''}`;
     if ($('sb-all')) { $('sb-all').disabled = !!blocked || !shots.length; $('sb-all').onclick = () => startRender(null); }
     if ($('sb-watch')) $('sb-watch').onclick = () => watchScene(b);
+    if ($('sb-preview')) $('sb-preview').onclick = () => previewScene(b);
+  }
+  // what is rendered so far, in timeline order; plays the clip files only, never renders or joins
+  const previewParts = b => b.shots.flatMap((s, i) => [
+    ...(i && s.start === 'picture' && s.transition?.type === 'bridge' && s.bridge ? [{ src: s.bridge, v: s.bridge_done, name: `Bridge into shot ${i + 1}` }] : []),
+    ...(s.clip ? [{ src: s.clip, v: s.done, name: `Shot ${i + 1}${s.label ? ` · ${s.label}` : ''}${s.status === 'outdated' ? ' (older render)' : ''}` }] : [])]);
+  function previewScene(b) {
+    const parts = previewParts(b), dlg = $('wake-dialog');
+    if (!parts.length) return;
+    dlg.innerHTML = `<div class="gal-head"><h2 class="h">${esc(b.title)} · rendered so far</h2><button type="button" class="wake-open" id="wake-close">Close</button></div>
+      <video class="sb-watch" id="sb-pv" autoplay playsinline controls aria-label="Preview"></video>
+      <div class="sb-row" id="sb-pv-chips"></div>`;
+    let at = 0;
+    const play = n => {
+      at = n; const p = parts[n], v = $('sb-pv');
+      v.src = `${url(p.src)}?v=${encodeURIComponent(p.v || '')}`; v.play().catch(() => {});
+      $('sb-pv-chips').querySelectorAll('button').forEach((c, k) => c.setAttribute('aria-pressed', k === n));
+    };
+    $('sb-pv-chips').append(...parts.map((p, k) => Object.assign(document.createElement('button'), { type: 'button', className: 'sb-quiet', textContent: p.name, onclick: () => play(k) })));
+    $('sb-pv').onended = () => play((at + 1) % parts.length);
+    dlg.classList.add('watching');
+    dlg.addEventListener('close', () => { dlg.classList.remove('watching'); dlg.innerHTML = ''; }, { once: true });
+    $('wake-close').onclick = () => dlg.close();
+    dlg.showModal();
+    play(0);
   }
   function watchScene(b) {
     const dlg = $('wake-dialog');
@@ -3138,20 +3189,27 @@
     if (del) del.onclick = async () => { await post('/api/wake/delete', { video: c.video }); paintView(); };
   }
   // renders run in board order: shots first, then bridges
-  function runningItem() {
-    const shots = wake.board?.shots || [];
-    const shot = shots.find(s => s.status !== 'rendered');
-    if (shot) return { el: document.querySelector(`.sb-card[data-shot="${shot.id}"]`), name: `shot ${shots.indexOf(shot) + 1}` };
-    const i = shots.findIndex((s, n) => n && s.start === 'picture' && s.transition?.type === 'bridge' && s.bridge_status !== 'rendered');
-    return i > 0 ? { el: document.querySelector(`.sb-gap[data-bridge="${shots[i].id}"]`), name: `the bridge into shot ${i + 1}` } : null;
+  // the running job's work in order: the first is rendering, the rest are queued
+  function jobQueue() {
+    const shots = wake.board?.shots || [], one = shots.findIndex(s => s.id === wake.job?.shot);
+    let first = Math.max(0, one);  // "Render shot" covers only that shot's chain, back to its picture
+    while (one >= 0 && first > 0 && shots[first].start === 'continue') first--;
+    const todo = shots.slice(first, one >= 0 ? one + 1 : undefined).filter(s => s.status !== 'rendered' && !(s.locked && s.clip))
+      .map(s => ({ el: document.querySelector(`.sb-card[data-shot="${s.id}"]`), name: `shot ${shots.indexOf(s) + 1}` }));
+    if (one < 0) shots.forEach((s, i) => {
+      if (i && s.start === 'picture' && s.transition?.type === 'bridge' && s.bridge_status !== 'rendered')
+        todo.push({ el: document.querySelector(`.sb-gap[data-bridge="${s.id}"]`), name: `the bridge into shot ${i + 1}` });
+    });
+    return todo;
   }
   function paintWakePhase() {
     const r = wake.run, el = $('wake-phase');
-    if (!el) return;
+    if (!el || !renderingHere()) return;
     if (r?.total) $('wake-bar').style.width = `${100 * r.step / r.total}%`;
-    const now = runningItem(), part = r?.step ? (r.step % 4 || 4) : 0, percent = part * 25;
-    document.querySelectorAll('.running').forEach(x => { if (x !== now?.el) x.classList.remove('running'); });
-    if (now?.el) { now.el.classList.add('running'); now.el.style.setProperty('--p', `${percent}%`); now.el.dataset.p = `${percent}%`; }
+    const queue = jobQueue(), now = queue[0], part = r?.step ? (r.step % 4 || 4) : 0, percent = part * 25;
+    document.querySelectorAll('.running, .queued').forEach(x => { if (!queue.some(q => q.el === x)) x.classList.remove('running', 'queued'); });
+    if (now?.el) { now.el.classList.remove('queued'); now.el.classList.add('running'); now.el.style.setProperty('--p', `${percent}%`); now.el.dataset.p = `${percent}%`; }
+    queue.slice(1).forEach((q, k) => { if (q.el) { q.el.classList.remove('running'); q.el.classList.add('queued'); q.el.dataset.q = `Queued ${k + 1}`; } });
     const mins = Math.floor((Date.now() - (wake.job?.since || Date.now())) / 60000);
     const text = `${r?.phase || 'Starting'}${now ? `, ${now.name}` : ''}${part ? `, ${percent}%` : ''}. ${mins} min so far.`;
     el.textContent = text;
@@ -3163,7 +3221,7 @@
       clearTimeout(saving);
       mergeBoard(await post('/api/board/save', wake.board));  // render what is on screen, not what was last autosaved
       const out = await post('/api/board/render', { id: wake.board.id, shot, background: true });
-      wake.job = { id: out.job, since: Date.now() }; store.set('wake.job', wake.job);
+      wake.job = { id: out.job, since: Date.now(), board: wake.board.id, shot }; store.set('wake.job', wake.job);
     } catch (e) { wake.error = e.message; }
     paintActions();
     if (wake.job) followWake();
@@ -3188,7 +3246,7 @@
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
         wake.run = job;
-        if ((job.rendered ?? -1) !== seen) { seen = job.rendered ?? -1; await refreshBoard(); }  // a shot just finished
+        if ((job.rendered ?? -1) !== seen) { seen = job.rendered ?? -1; if (renderingHere()) await refreshBoard(); }  // a shot just finished
         tabTitle(job.total ? `${Math.round(100 * job.step / job.total)}% · Morpheus` : '⋯ Morpheus');
         paintWakePhase();
         await new Promise(res => setTimeout(res, 1000));

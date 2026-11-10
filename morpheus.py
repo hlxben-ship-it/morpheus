@@ -792,7 +792,14 @@ VIDEO_LOW = "DaSiWa_Wan22_I2V_14B_LOW_v11_Q4_K_M-fix.gguf"
 VIDEO_MODELS = {
     "q4": {"label": "DaSiWa Q4 · faster", "high": VIDEO_HIGH, "low": VIDEO_LOW},
     "q6": {"label": "DaSiWa Q6 · sharper", "high": "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q6_K-fix.gguf", "low": "DaSiWa_Wan22_I2V_14B_LOW_v11_Q6_K-fix.gguf"},
+    # LTX 2.3 DragonLeap, two passes like the author's OmniForge workflow (spike 2026-11-10: livelier than Wan, 3 s at 640x960 in 3 min)
+    "ltx": {"label": "DaSiWa LTX Q4 · lively", "ltx": True},
 }
+LTX_FILES = {"unet": "DaSiWa-LTX23-DragonLeap-v4_Q4_K.gguf", "text_encoders": "gemma-3-12b-it-heretic.Q4_K_M.gguf",
+             "text_projection": "ltx-2.3_text_projection_bf16.safetensors", "vae": "LTX23_video_vae_bf16.safetensors",
+             "audio_vae": "LTX23_audio_vae_bf16.safetensors", "upscaler": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"}
+LTX_DIRS = {"unet": "unet", "text_encoders": "text_encoders", "text_projection": "text_encoders", "vae": "vae",
+            "audio_vae": "checkpoints", "upscaler": "latent_upscale_models"}
 VIDEO_PRESETS = {"low": {"label": "Low", "note": "480 × 832 (480p) · about 2 min", "size": (480, 832)},
                  "high": {"label": "High", "note": "720 × 1280 · about 13 min", "size": (720, 1280)}}
 VIDEO_FRAMES, VIDEO_FPS = 33, 16  # 2 s
@@ -815,6 +822,8 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
             "add_noise": "enable" if first else "disable", "noise_seed": seed if first else 0, "steps": 4, "cfg": 1.0,
             "sampler_name": "euler", "scheduler": "simple", "start_at_step": start, "end_at_step": end,
             "return_with_leftover_noise": "enable" if first else "disable"}}
+    if VIDEO_MODELS.get(model, {}).get("ltx"):
+        return ltx_workflow(image, prompt, width, height, seed, prefix, frames, end)
     mo = VIDEO_MOTION.get(motion, VIDEO_MOTION["normal"])
     graph = {
         "1": expert(VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])["high"]),
@@ -845,6 +854,69 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
     return graph
 
 
+def ltx_workflow(image: str, prompt: str, width: int, height: int, seed: int, prefix: str, frames: int, end: str | None = None) -> dict:
+    """DaSiWa LTX 2.3 DragonLeap Q4: pass 1 at ~0.77 of the board size (8 steps), LTX's latent upscaler x2, pass 2 refines (4 steps, denoise 0.4).
+    Rendered at 16 fps so it cuts with the Wan shots; the audio track is made (the model wants it) and dropped.
+    Both passes need sizes divisible by 32, so the render can be a bit larger and is scaled to the board size at the end.
+    No negative: at CFG 1 ComfyUI skips it anyway. Same output node ids as video_workflow (10 clip, 11 last frame).
+    With end (a bridge), LTXVAddGuide pins that picture to the last frame in both passes; LTXVCropGuides takes the guide
+    frames off again before the upscale and before the decode."""
+    frames = (frames - 1 + 7) // 8 * 8 + 1  # LTX takes 8n + 1
+    # pass 1 at ~0.77 of the board size, not half: at 256x416 hair, hands and limbs broke; 384x640 (for 480x832) came out
+    # clean at about the same time (spike_ltx_res.py, 2026-11-10). 24 fps brought nothing, so the board's 16 fps stays.
+    half_w, half_h = max(32, round(width * 0.77 / 32) * 32), max(32, round(height * 0.77 / 32) * 32)
+    f = LTX_FILES
+    g = {
+        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": f["unet"]}},
+        "2": {"class_type": "DualCLIPLoaderGGUF", "inputs": {"clip_name1": f["text_encoders"], "clip_name2": f["text_projection"], "type": "ltxv"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": f["vae"]}},
+        "4": {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": f["audio_vae"]}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+        "6": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["5", 0]}},
+        "7": {"class_type": "LTXVConditioning", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "frame_rate": VIDEO_FPS}},
+        "8": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "9": {"class_type": "LTXVPreprocess", "inputs": {"image": ["8", 0], "img_compression": 35}},
+        "12": {"class_type": "EmptyLTXVLatentVideo", "inputs": {"width": half_w, "height": half_h, "length": frames, "batch_size": 1}},
+        "13": {"class_type": "LTXVImgToVideoInplace", "inputs": {"vae": ["3", 0], "image": ["9", 0], "latent": ["12", 0], "strength": 1.0, "bypass": False}},
+        "14": {"class_type": "LTXVEmptyLatentAudio", "inputs": {"frames_number": frames, "frame_rate": VIDEO_FPS, "batch_size": 1, "audio_vae": ["4", 0]}},
+        "15": {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": ["13", 0], "audio_latent": ["14", 0]}},
+        "16": {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": ["7", 0], "negative": ["7", 1], "cfg": 1.0}},
+        "17": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler_cfg_pp"}},
+        "18": {"class_type": "BasicScheduler", "inputs": {"model": ["1", 0], "scheduler": "linear_quadratic", "steps": 8, "denoise": 1.0}},
+        "19": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
+        "20": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["19", 0], "guider": ["16", 0], "sampler": ["17", 0], "sigmas": ["18", 0], "latent_image": ["15", 0]}},
+        "21": {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["20", 0]}},
+        "22": {"class_type": "LatentUpscaleModelLoader", "inputs": {"model_name": f["upscaler"]}},
+        "23": {"class_type": "LTXVLatentUpsampler", "inputs": {"samples": ["21", 0], "upscale_model": ["22", 0], "vae": ["3", 0]}},
+        "24": {"class_type": "LTXVImgToVideoInplace", "inputs": {"vae": ["3", 0], "image": ["9", 0], "latent": ["23", 0], "strength": 1.0, "bypass": False}},
+        "25": {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": ["24", 0], "audio_latent": ["21", 1]}},
+        "26": {"class_type": "BasicScheduler", "inputs": {"model": ["1", 0], "scheduler": "linear_quadratic", "steps": 4, "denoise": 0.4}},
+        "27": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed + 1}},
+        "28": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["27", 0], "guider": ["16", 0], "sampler": ["17", 0], "sigmas": ["26", 0], "latent_image": ["25", 0]}},
+        "29": {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["28", 0]}},
+        "31": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["29", 0], "vae": ["3", 0], "tile_size": 256, "overlap": 64, "temporal_size": 48, "temporal_overlap": 8}},
+        "32": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "upscale_method": "lanczos", "width": width, "height": height, "crop": "center"}},
+        "17v": {"class_type": "CreateVideo", "inputs": {"images": ["32", 0], "fps": VIDEO_FPS}},
+        "10": {"class_type": "SaveVideo", "inputs": {"video": ["17v", 0], "filename_prefix": prefix, "format": "auto", "codec": "auto"}},
+        "30": {"class_type": "ImageFromBatch", "inputs": {"image": ["32", 0], "batch_index": frames - 1, "length": 1}},
+        "11": {"class_type": "SaveImage", "inputs": {"images": ["30", 0], "filename_prefix": prefix}},
+    }
+    if end:
+        g["40"] = {"class_type": "LoadImage", "inputs": {"image": end}}
+        g["41"] = {"class_type": "LTXVPreprocess", "inputs": {"image": ["40", 0], "img_compression": 35}}
+        for guide, cond, lat, concat, guider, sampler, sep, crop in (("42", ["7", 0], "13", "15", "16", "20", "21", "43"),
+                                                                       ("44", ["7", 0], "24", "25", "46", "28", "29", "45")):
+            g[guide] = {"class_type": "LTXVAddGuide", "inputs": {"positive": cond, "negative": ["7", 1], "vae": ["3", 0],
+                        "latent": [lat, 0], "image": ["41", 0], "frame_idx": -1, "strength": 1.0}}
+            g[concat]["inputs"]["video_latent"] = [guide, 2]
+            g[guider] = {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": [guide, 0], "negative": [guide, 1], "cfg": 1.0}}
+            g[sampler]["inputs"]["guider"] = [guider, 0]
+            g[crop] = {"class_type": "LTXVCropGuides", "inputs": {"positive": [guide, 0], "negative": [guide, 1], "latent": [sep, 0]}}
+        g["23"]["inputs"]["samples"] = ["43", 2]  # upscale without the guide frames
+        g["31"]["inputs"]["samples"] = ["45", 2]  # decode without them
+    return g
+
+
 # Wan 2.2's HIGH expert makes the motion, LOW the details (DaSiWa guide): more of the 4 steps on HIGH means more motion,
 # a lower shift broader, more varied movement. Same render time either way.
 VIDEO_MOTION = {"normal": {"label": "Normal", "high": 2, "shift": 5.0},
@@ -856,8 +928,24 @@ def shot_motion(board: dict, s: dict) -> str:
     return s.get("motion") if s.get("motion") in VIDEO_MOTION else board.get("motion", "normal")
 
 
+def shot_model(board: dict, s: dict) -> str:
+    """Per shot; boards from before keep their board-wide model as the fallback."""
+    return s.get("model") if s.get("model") in VIDEO_MODELS else board.get("model", "q4")
+
+
+def shot_character(board: dict, s: dict) -> str:
+    return s["character"] if isinstance(s.get("character"), str) else board.get("character", "")
+
+
+def bridge_model(board: dict, s: dict) -> str:
+    m = (s.get("transition") or {}).get("model")
+    return m if m in VIDEO_MODELS else shot_model(board, s)
+
+
 def video_installed(model: str = "q4") -> bool:
     m = VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])
+    if m.get("ltx"):
+        return all((COMFY_MODELS / LTX_DIRS[k] / f).is_file() for k, f in LTX_FILES.items())
     return all((COMFY_MODELS / "unet" / f).is_file() for f in (m["high"], m["low"]))
 
 
@@ -980,7 +1068,7 @@ def run_video(source: Path, source_name: str, sets: list[dict], preset: str, len
 # ---------- Storyboard: a scene of 2 s shots, kept as JSON in output/boards/<id>/board.json next to its renders ----------
 BOARD_DIR = OUTPUT / "boards"
 BOARD_LOCK = threading.RLock()
-SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length", "motion", "tempo")
+SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length", "motion", "tempo", "model", "character")
 SHOT_TEMPOS = (1, 1.25, 1.5)  # up-casting (DaSiWa guide): render more frames, play them in the shot's length; against Wan's slow motion  # what the page may change
 RENDER_FIELDS = ("clip", "last", "thumb", "seconds", "done", "bridge", "bridge_seconds", "bridge_done", "stats")  # what only a render writes
 SHOT_LENGTHS = (2, 3, 4, 5)  # seconds; Wan takes 4n + 1 frames
@@ -997,7 +1085,8 @@ def transition_of(raw) -> dict:
         seconds = 0.5
     return {"type": t.get("type") if t.get("type") in TRANSITIONS else "cut", "seconds": seconds,
             "color": t.get("color") if t.get("color") in FLASH_COLORS else "violet", "prompt": str(t.get("prompt") or ""),
-            "seed": t["seed"] if isinstance(t.get("seed"), int) else random.randrange(2**32)}
+            "seed": t["seed"] if isinstance(t.get("seed"), int) else random.randrange(2**32),
+            "model": t.get("model") if t.get("model") in VIDEO_MODELS else ""}  # "" = same as the shot it leads into
 
 
 def has_bridge(board: dict, i: int) -> bool:
@@ -1011,7 +1100,9 @@ def bridge_sigs(board: dict) -> dict:
     for i, s in enumerate(board["shots"]):
         if has_bridge(board, i):
             t = s["transition"]
-            out[i] = hashlib.sha1(json.dumps([sigs[i - 1], sigs[i], t["prompt"], t["seed"]]).encode("utf-8")).hexdigest()[:12]
+            # an own bridge model joins the fingerprint only when set, so older bridges keep theirs
+            out[i] = hashlib.sha1(json.dumps([sigs[i - 1], sigs[i], t["prompt"], t["seed"]] + ([t["model"]] if t.get("model") else []))
+                                  .encode("utf-8")).hexdigest()[:12]
     return out
 
 
@@ -1055,8 +1146,8 @@ def board_sigs(board: dict) -> list[str]:
     for i, s in enumerate(board["shots"]):
         chained = i > 0 and s["start"] == "continue"
         length = s.get("length", 2)  # a 2 s shot keeps the fingerprint it had before lengths existed
-        model = board.get("model", "q4")
-        text = json.dumps([board.get("character", ""), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]]
+        model = shot_model(board, s)
+        text = json.dumps([shot_character(board, s), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]]
                           + ([length] if length != 2 else []) + ([model] if model != "q4" else [])
                           + ([shot_motion(board, s)] if shot_motion(board, s) != "normal" else [])
                           + ([s["tempo"]] if s.get("tempo", 1) != 1 else []))
@@ -1108,6 +1199,8 @@ def board_store(req: dict) -> dict:
             s["length"] = s["length"] if s["length"] in SHOT_LENGTHS else 2
             s["motion"] = s["motion"] if s["motion"] in VIDEO_MOTION else old.get("motion", "normal")
             s["tempo"] = s["tempo"] if s["tempo"] in SHOT_TEMPOS else 1
+            s["model"] = s["model"] if s["model"] in VIDEO_MODELS else old.get("model", "q4")
+            s["character"] = str(s["character"]) if s["character"] is not None else old.get("character", "")
             s["locked"] = bool(raw["locked"]) if "locked" in raw else bool(before.get(s["id"], {}).get("locked"))
             s.update({k: before[s["id"]][k] for k in RENDER_FIELDS if k in before.get(s["id"], {})})
             shots.append(s)
@@ -1115,8 +1208,8 @@ def board_store(req: dict) -> dict:
             for f in (before[sid].get("clip"), before[sid].get("last"), before[sid].get("thumb"), before[sid].get("bridge")):
                 if f:
                     (OUTPUT / f).unlink(missing_ok=True)
-        old.update(title=str(req.get("title") or "Untitled board").strip()[:80], character=str(req.get("character") or ""), shots=shots,
-                   model=req.get("model") if req.get("model") in VIDEO_MODELS else old.get("model", "q4"))
+        # model and character live on the shots now; the board-wide ones stay only as the fallback for older boards
+        old.update(title=str(req.get("title") or "Untitled board").strip()[:80], shots=shots)
         board_write(old)
         return board_view(old)
 
@@ -1139,8 +1232,8 @@ def board_size(board: dict) -> tuple[int, int]:
     return width, height
 
 
-def board_check(board: dict, upto: int) -> None:
-    for i, s in enumerate(board["shots"][:upto + 1]):
+def board_check(board: dict, upto: int, first: int = 0) -> None:
+    for i, s in list(enumerate(board["shots"]))[first:upto + 1]:
         name = f"Shot {i + 1}"
         if not s["prompt"].strip():
             raise ValueError(f"{name} needs a motion prompt.")
@@ -1161,11 +1254,11 @@ def board_bridge(board: dict, i: int, sig: str, stopped, progress) -> None:
         im.convert("RGB").resize((width, height)).save(first)
     video_frames(OUTPUT / s["clip"])[0].resize((width, height)).save(last)
     motion = s["transition"]["prompt"].strip() or "One smooth continuous camera move from the first picture to the second."
-    prompt = ". ".join(x.strip().rstrip(".") for x in (board.get("character", ""), motion) if x.strip()) + "."
+    prompt = ". ".join(x.strip().rstrip(".") for x in (shot_character(board, s), motion) if x.strip()) + "."
     began = time.time()
     try:
         graph = video_workflow(f"morpheus/{first.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["transition"]["seed"],
-                               f"morpheus/{tag}", f"morpheus/{last.name}", model=board.get("model", "q4"), motion=shot_motion(board, s))
+                               f"morpheus/{tag}", f"morpheus/{last.name}", model=bridge_model(board, s), motion=shot_motion(board, s))
         made, end = video_part(graph, stopped, progress)
     finally:
         first.unlink(missing_ok=True)
@@ -1193,15 +1286,15 @@ def board_shot(board: dict, i: int, sig: str, stopped, progress) -> None:
     staged = COMFY_INPUT / "morpheus" / f"board_{time.time_ns():x}.png"
     staged.parent.mkdir(parents=True, exist_ok=True)
     start.save(staged)
-    prompt = ". ".join(x.strip().rstrip(".") for x in (board.get("character", ""), s["prompt"]) if x.strip()) + "."
+    prompt = ". ".join(x.strip().rstrip(".") for x in (shot_character(board, s), s["prompt"]) if x.strip()) + "."
     began = time.time()
     try:
         tempo = s.get("tempo", 1) if s.get("tempo", 1) in SHOT_TEMPOS else 1
         keep_n = s.get("length", 2) * VIDEO_FPS + 1  # what the shot plays
         frames_n = -(-round(s.get("length", 2) * VIDEO_FPS * tempo) // 4) * 4 + 1  # what Wan renders: 4n + 1
         graph = video_workflow(f"morpheus/{staged.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["seed"], f"morpheus/board_{s['id']}",
-                               frames=frames_n, model=board.get("model", "q4"), motion=shot_motion(board, s))
-        stats = {"model": board.get("model", "q4"), "motion": shot_motion(board, s), "tempo": tempo, "frames": frames_n, "size": f"{width}x{height}"}
+                               frames=frames_n, model=shot_model(board, s), motion=shot_motion(board, s))
+        stats = {"model": shot_model(board, s), "motion": shot_motion(board, s), "tempo": tempo, "frames": frames_n, "size": f"{width}x{height}"}
         made, last = video_part(graph, stopped, progress, stats)
     finally:
         staged.unlink(missing_ok=True)
@@ -1268,22 +1361,27 @@ def board_render(board_id: str, shot: str | None, stopped, progress, on_part) ->
     Finished work is kept, so stopping loses only the running clip."""
     def todo(board):
         sigs = board_sigs(board)
-        upto = next((i for i, s in enumerate(board["shots"]) if s["id"] == shot), len(board["shots"]) - 1)
-        work = [(board_shot, i, sigs[i]) for i, s in enumerate(board["shots"][:upto + 1]) if not shot_current(s, sigs[i])]
+        shots = board["shots"]
+        upto = next((i for i, s in enumerate(shots) if s["id"] == shot), len(shots) - 1)
+        # one shot needs only its own chain: back to the nearest shot that starts on a picture, not the whole board
+        first = upto if shot else 0
+        while first > 0 and shots[first]["start"] == "continue":
+            first -= 1
+        work = [(board_shot, i, sigs[i]) for i in range(first, upto + 1) if not shot_current(shots[i], sigs[i])]
         if not shot:
-            work += [(board_bridge, i, sig) for i, sig in bridge_sigs(board).items() if board["shots"][i].get("bridge_done") != sig]
-        return upto, work
+            work += [(board_bridge, i, sig) for i, sig in bridge_sigs(board).items() if shots[i].get("bridge_done") != sig]
+        return first, upto, work
 
     board = board_load(board_id)
-    upto, work = todo(board)
-    board_check(board, upto)
+    first, upto, work = todo(board)
+    board_check(board, upto, first)
     parts, n = len(work), 0
     while True:
         board = board_load(board_id)
-        upto, work = todo(board)
+        first, upto, work = todo(board)
         if not work:
             break
-        board_check(board, upto)
+        board_check(board, upto, first)
         n += 1
         on_part(min(n, parts), parts)
         render, i, sig = work[0]
