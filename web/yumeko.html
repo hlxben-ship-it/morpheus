@@ -492,6 +492,10 @@ function cardView(el) {  // her card as it was settled, read only
   el.innerHTML = `<h3>Checklist</h3><ul class="note">${a.checklist.map(c => `<li>${esc(c)}</li>`).join('')}</ul><dl class="kv"><dt>Always on her</dt><dd>${esc(a.permanent)}</dd><dt>Signature outfit</dt><dd>${esc(a.signature)}</dd><dt>Negative</dt><dd>${esc(a.negative)}</dd></dl>
     <details><summary>Chat</summary>${a.chat.map(m => m.role === 'user' ? `<p class="user">${esc(m.text)}</p>` : `<p class="note">${esc(m.text)}</p>`).join('')}</details>`;
 }
+document.addEventListener('click', async e => {
+  if (!e.target.closest('#retry') || !job) return;
+  const r = await act('auto_retry', { id:job.id }); if (r) refresh(r);
+});
 function buildView(el) {  // how the set came together: test rounds and the log
   const a = job.auto;
   el.innerHTML = `<h3>Hardening</h3><ul class="note">${a.rounds.map(r => `<li>Test round ${r.round}: ${r.passed} of ${r.of} passed${r.changes ? `. ${esc(r.changes)}` : ''}</li>`).join('')}</ul>
@@ -807,7 +811,7 @@ function p3auto(el) {
   const up = S.find(s => s.state === 'kept'), approved = count(['approved']), open = count(['kept', 'fixing']), todo = count(['todo']), fixing = count(['fixing']);
   const reviewing = a.reviewed && up;
   el.innerHTML = `${refs}<div class="settop"><div class="setsum"><strong>${inSet}<small> / ${S.length}</small></strong><span>in the set</span></div>
-      <p class="note setnow" aria-live="polite">${esc(status)}${a.rejected ? `, ${a.rejected} rejected so far` : ''}${count(['skipped']) ? `, ${count(['skipped'])} given up` : ''}${count(['blocked']) ? `, ${count(['blocked'])} blocked for looking youthful` : ''}</p>
+      <p class="note setnow" aria-live="polite">${esc(status)}${a.rejected ? `, ${a.rejected} rejected so far` : ''}${count(['skipped']) ? `, ${count(['skipped'])} given up <button id="retry" title="Give them new tries with her current tags">Try them again</button>` : ''}${count(['blocked']) ? `, ${count(['blocked'])} blocked for looking youthful` : ''}</p>
       <div class="setacts">${working ? (a.paused || !a.running ? '<button class="go" id="resume">Resume</button>' : '<button id="pause">Pause</button>') : ''}
       ${a.reviewed ? `<button class="go" id="train" ${open || todo || j.busy ? 'disabled' : ''}>Start training</button>` : ''}${j.train?.state === 'stopped' ? `<button id="exstop" ${j.busy ? 'disabled' : ''} title="Test the stages the stopped training saved, then pick one">Examine the stopped run</button>` : ''}</div></div>
     <ul class="kinds">${byKind}</ul>
@@ -1211,8 +1215,8 @@ function paintPanel() {
   if (!p.locked) { $('size-p').value = `${p.width},${p.height}`; $('size-p').onchange = e => { [p.width, p.height] = e.target.value.split(',').map(Number); savePanel(); };
   const compose = t => async () => { p.tags = $('tags').value; p.prompt = $('prompt').value; p.negative = $('neg').value; await savePanel(); const r = await act('panel_compose', { id:p.id, together:t }); if (r) { Object.assign(panel, r); paintPanel(); } };
   $('comp').onclick = compose(false); $('tog').onclick = compose(true); }
-  $('add').onchange = e => { const l = p._loras.find(x => x.id === e.target.value); if (!l) return; const c = { id:`c${Date.now()}`, lora:l.id, name:l.name, trigger:l.trigger, file:l.file, strength:l.strength, denoise:.62, action:l.look ? l.look + ', ' : '', negative:'', identity:true, outfit:false };
-    pillTags(c, l.pills?.identity, true, ['action', 'negative']); p.characters.push(c); tool.active = p.characters.at(-1).id; savePanel(); paintPanel(); };
+  $('add').onchange = e => { const l = p._loras.find(x => x.id === e.target.value); if (!l) return; const c = { id:`c${Date.now()}`, lora:l.id, name:l.name, trigger:l.trigger, file:l.file, strength:l.strength, denoise:.62, action:l.look ? l.look + ', ' : '', negative:'', identity:true, outfit:!!l.pills?.outfit?.[0] };
+    pillTags(c, l.pills?.identity, true, ['action', 'negative']); pillTags(c, l.pills?.outfit, c.outfit, ['action', 'negative'], true); p.characters.push(c); tool.active = p.characters.at(-1).id; savePanel(); paintPanel(); };
   p.characters.forEach((c, i) => { const w = document.createElement('div'); w.className = 'char' + (tool.active === c.id ? ' on' : '');
     w.classList.add('box'); if (folds.has('char:' + c.id)) w.classList.add('min'); w.dataset.box = 'char:' + c.id;
     w.innerHTML = `<div class="row boxhead">${foldBtn('char:' + c.id)}<span class="dot" style="background:${COLORS[i % 4]}"></span><b style="flex:1">${esc(c.name)}</b><span class="note">${c.masked ? 'mask saved' : 'no mask'}</span><span class="icons"><button class="ico" data-p aria-pressed="${tool.active === c.id}" title="Paint her mask" aria-label="Paint mask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21c3 0 5-1.5 5-4a3 3 0 0 0-3-3c-1.5 0-2.5 1-2.5 2.5 0 2-1 3-1.5 4.5zM8.5 14.5 20 3l1 1-11.5 11.5"/></svg></button><button class="ico" data-pass ${p.busy ? 'disabled' : ''} title="Redo her pass" aria-label="Redo this pass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button><button class="ico" data-reset title="Reset description and negative to her defaults (click twice)" aria-label="Reset to defaults"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg></button><button class="ico danger" data-r title="Remove her from this panel" aria-label="Remove"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>

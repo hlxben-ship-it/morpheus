@@ -16,6 +16,7 @@ import re
 import shutil
 import threading
 import time
+import urllib.request
 
 from PIL import Image
 
@@ -55,7 +56,9 @@ Open every listed picture with Read first. Then write:
   youthful, childlike or ambiguous is false, whatever her tags or story say.
 Tags are real Danbooru tags only, never invented phrases ("thin red line under left eye", "chrome plate on right temple"): the
 model doesn't know them. Use the nearest real tag (facial mark, single mechanical arm, prosthesis) and leave the exact detail to
-the checklist. Never a plural that summons two of a thing she has one of (mechanical arms).
+the checklist. Never a plural that summons two of a thing she has one of (mechanical arms). Never words that summon other
+objects: "cups" (bowls; say "breastplate"), "belt" (a waist belt; say "thigh strap"); colours go on the tag that needs them
+("brown thigh strap", "black tattoo").
 She is one adult woman, always SFW. On later turns the user answers or corrects; update every field to match and reply briefly."""
 JUDGE_SCHEMA = {"type": "object", "properties": {"results": {"type": "array", "items": {"type": "object", "properties": {
     "index": {"type": "integer"}, "pass": {"type": "boolean"}, "problems": {"type": "string"},
@@ -104,8 +107,10 @@ Rules, learned the hard way:
 - Use real Danbooru tags. Never invent descriptive phrases, counts or positions ("three beads at ponytail base").
 - No framing, view, pose or background tags (cowboy shot, front view, from above, from behind), in the positive or the
   negative: every picture gets its own scene, and a view in the negative makes those slots impossible.
-- Avoid words that summon other things: "tail", "ears" (summons animal ears), "horn", "wing", "forehead". Fix ears with a
-  negative such as "pointy ears, animal ears" only.
+- Avoid words that summon other things: "tail", "ears" (summons animal ears), "horn", "wing", "forehead", "cups" (summons
+  bowls and drinking cups: say "breastplate"), "belt" (summons a waist belt: say "thigh strap"), "bowl", "glass". Fix ears with
+  a negative such as "pointy ears, animal ears" only. New tags with these words are dropped before rendering.
+- Colours belong on the tag that needs them ("brown thigh strap", "black tattoo"), never as a separate colour tag.
 - No duplicates or near-duplicates; permanent stays under 22 tags, signature under 18, negative under 20.
 - A detail the model can't hold (bead colours, a logo) is not worth more tags; leave it.
 - Never put a garment of her planned other outfits into the negative (you get the list): a complaint about one of them means
@@ -377,6 +382,58 @@ def _real_tags(job: dict, ask: bool = True) -> list:
     return left
 
 
+# words that summon other objects; the Yumeko run: "metal cups" drew bowls in her hands, "brown belt" a waist belt
+TRAP = re.compile(r"\b(cups?|belts?|bowls?|glass(es)?|ears?|tails?|horns?|wings?|forehead)\b")
+
+
+def _split(text) -> list:
+    return [t.strip() for t in (text or "").split(",") if t.strip()]
+
+
+def _lint(a: dict, before: dict) -> list:
+    """Drop new positive tags that carry a trap word. Tags that were there before, and the user's keep tags, stay."""
+    keep, dropped = set(_split(a.get("keep"))), []
+    for f in ("permanent", "signature"):
+        old = set(_split(before.get(f)))
+        out = []
+        for t in _split(a[f]):
+            if t not in old and t not in keep and TRAP.search(t.lower()):
+                dropped.append(t)
+            else:
+                out.append(t)
+        a[f] = ", ".join(out)
+    return dropped
+
+
+def _revert(a: dict, best: dict) -> list:
+    """Back to the best round's tags, but a tag added since that answers a must the best round still missed stays.
+    The Yumeko run: round 3 added "black tattoo" against the red tattoo, scored worse overall, and the revert lost it."""
+    missed = " ".join(p.lower() for p in best.get("problems", []) if p)
+    now = {f: _split(a[f]) for f in ("permanent", "signature")}
+    a.update(best["tags"])
+    kept = []
+    for f in ("permanent", "signature"):
+        have = _split(a[f])
+        for t in now[f]:
+            words = [w for w in re.findall(r"[a-z]+", t.lower()) if len(w) > 3]
+            if t not in have and words and any(w in missed for w in words) and not TRAP.search(t.lower()):
+                have.append(t)
+                kept.append(t)
+        a[f] = ", ".join(have)
+    _protect(a)
+    return kept
+
+
+def _requeue(a: dict, groups=("signature", "other")) -> int:
+    """Given-up slots get a fresh set of tries, e.g. after her tags changed."""
+    n = 0
+    for s in a["slots"]:
+        if s["state"] == "skipped" and s["group"] in groups:
+            s.update(state="todo", tries=0, file=None, hash=None, problems="")
+            n += 1
+    return n
+
+
 def _fix(job: dict, failures: list) -> str:
     a = job["auto"]
     history = "\n".join(f"Round {r['round']}: {r['passed']} of {r['of']} passed" + (f", then changed: {r['changes']}" if r.get("changes") else "") for r in a["rounds"])
@@ -386,10 +443,12 @@ def _fix(job: dict, failures: list) -> str:
            f"[Her planned other outfits: {' | '.join(sorted({x['outfit'] for x in a['slots'] if x.get('outfit')}))}]\n"
            "[Failures:\n- " + "\n- ".join(failures[:16]) + "]\nRevise the tags.")
     answer, _ = y.ask_claude(msg, None, ghost=True, see=False, system=FIX_SYSTEM, schema=FIX_SCHEMA)
+    before = {f: a[f] for f in ("permanent", "signature")}
     a["permanent"], a["signature"], a["negative"] = answer["permanent"], answer["signature"], answer["negative"]
     _protect(a)
     _real_tags(job)
-    return answer["reply"]
+    dropped = _lint(a, before)
+    return answer["reply"] + (f" (dropped {', '.join(dropped)}: those words summon other objects)" if dropped else "")
 
 
 # ---------- actions ----------
@@ -514,6 +573,8 @@ def verdict(req: dict) -> dict:
     return job
 
 
+FIX_WAIT = 600  # seconds a Qwen fix waits for the GPU before it gives up
+FIX_TIMEOUT = 600  # seconds a Qwen fix may render; then ComfyUI is interrupted and the original comes back
 FIX_SHARE = 0.15  # at most this share of a set may be Qwen-fixed: a LoRA trained on many edits learns Qwen's softer look
 
 
@@ -553,10 +614,20 @@ def _fix_run(job_id: str, sid: str, text: str) -> None:
         else:
             sentence = (text + ". Use image 2 as the reference for her look. She is an adult woman."
                         " Change only that; keep everything else in image 1 exactly as it is: her face, pose, the framing and the art style.")
-        with y.GPU:
+        if not y.GPU.acquire(timeout=FIX_WAIT):  # the build holds the GPU: give up instead of queueing behind it for hours
+            raise TimeoutError(f"the GPU stayed busy for {FIX_WAIT // 60} minutes")
+        late = threading.Timer(FIX_TIMEOUT, _interrupt)  # the Yumeko run: one fix at 40 steps held the GPU for 1.5 hours
+        try:
+            late.start()
             y.ensure_comfy()
+            t0 = time.time()
             y._qwen_spot(Image.open(d / s["file"]).convert("RGB"), None, sentence, None if nude else d / j["bases"][0]["file"],
                          ["qwen-lightning"], random.randrange(2 ** 31)).save(d / name)  # without Lightning Qwen samples 40 steps
+            if time.time() - t0 >= FIX_TIMEOUT:
+                raise TimeoutError(f"took over {FIX_TIMEOUT // 60} minutes")
+        finally:
+            late.cancel()
+            y.GPU.release()
         v = _judge(j, [s | {"file": name}])[0]
     except Exception as e:
         v, name = {"pass": False, "problems": f"edit failed: {e}"[:200], "youthful": False, "tags": ""}, (d / name).name
@@ -582,6 +653,13 @@ def _fix_run(job_id: str, sid: str, text: str) -> None:
     _update(job_id, record)
 
 
+def _interrupt() -> None:
+    try:
+        urllib.request.urlopen(urllib.request.Request(morpheus.SERVER + "/interrupt", data=b"{}", headers={"Content-Type": "application/json"}), timeout=10).read()
+    except Exception:
+        pass
+
+
 def second_view(req: dict) -> dict:
     """Optional: from the card, go back to add a second base, for a back or a detail the first doesn't show."""
     def change(j):
@@ -603,7 +681,7 @@ def retag(req: dict) -> dict:
         for k in ("permanent", "signature"):
             if str(req.get(k, "")).strip():
                 a[k] = str(req[k]).strip()
-        n = 0
+        n = _requeue(a, ("signature",))  # given-up signature slots get new tries with the new tags; kept ones stay
         for s in a["slots"]:
             if s["group"] == "other" and s["state"] in ("kept", "approved", "skipped"):
                 if s.get("file"):
@@ -611,7 +689,23 @@ def retag(req: dict) -> dict:
                 s.update(state="todo", tries=0, file=None, hash=None, caption="")
                 n += 1
         a["state"], a["paused"] = "building", False
-        _log(a, f"Her tags changed, redrawing {n} other-outfit pictures")
+        _log(a, f"Her tags changed, redrawing {n} given-up and other-outfit pictures")
+    job = _update(req.get("id"), change)
+    start(job["id"])
+    return job
+
+
+def retry(req: dict) -> dict:
+    """Given-up pictures get a fresh set of tries with her current tags."""
+    def change(j):
+        a = j.get("auto") or {}
+        if a.get("state") not in ("review", "building"):
+            raise ValueError("Only a built set has given-up pictures.")
+        n = _requeue(a)
+        if not n:
+            raise ValueError("Nothing was given up.")
+        a["state"], a["paused"] = "building", False
+        _log(a, f"Trying {n} given-up pictures again")
     job = _update(req.get("id"), change)
     start(job["id"])
     return job
@@ -711,7 +805,8 @@ history of earlier rounds. Rules:
 - When the current sets passed everything, try a smaller set: drop the one to three tags most likely redundant.
 - When a smaller set failed, start from the last set that passed and drop something else, or stop shrinking.
 - Real Danbooru tags only. No framing, pose, scene or style tags. Identity sets must suit any outfit: never a garment in
-  identity or identity_negative.
+  identity or identity_negative, except pieces of her permanent card (a tattoo, a strap, jewellery she always wears): those
+  belong in identity, never in outfit.
 - Leave out modesty negatives (cleavage, see-through, lingerie): those are always added separately.
 - Cleavage, a chest-centred framing or a bigger bust means her body drifted, not her clothes: add her body size from the card
   (e.g. small breasts) to identity and the opposite (large breasts) to identity_negative before touching necklines.
@@ -736,6 +831,24 @@ def _calib_round(j: dict, sets: dict, lora: str, tag: str) -> list:
     j["busy"] = f"Calibrating identity, judging round {int(tag) + 1}"
     y.save(j)
     return [dict(v, file=s["file"]) for s, v in zip(slots, _judge(j, slots))]
+
+
+def _sort_sets(a: dict, sets: dict) -> dict:
+    """Tags of her permanent look (permanent, keep) belong to identity, never to outfit: outfit words are dropped when she
+    wears something else, and her strap and tattoo must stay. The Yumeko run filed "brown thigh strap" under outfit.
+    Outfit negatives against a wrong version of such a tag (black thigh strap) move along."""
+    bare = lambda t: re.sub(r"\s*\(.*?\)", "", t.lower()).strip()  # "ruby (gemstone)" is "ruby"
+    perm = [bare(t) for t in _split(a.get("permanent"))]  # her card's permanent part, not keep: keep holds outfit pieces too
+    moved = [t for t in _split(sets["outfit"]) if any(p and (p == bare(t) or f" {p}" in f" {bare(t)}") for p in perm)]
+    if not moved:
+        return sets
+    nouns = {" ".join(t.lower().split()[-2:]) for t in moved}
+    neg = [t for t in _split(sets["outfit_negative"]) if any(n in t.lower() for n in nouns)]
+    ident, ineg = _split(sets["identity"]), _split(sets["identity_negative"])
+    return dict(sets, outfit=", ".join(t for t in _split(sets["outfit"]) if t not in moved),
+                identity=", ".join(ident + [t for t in moved if t not in ident]),
+                outfit_negative=", ".join(t for t in _split(sets["outfit_negative"]) if t not in neg),
+                identity_negative=", ".join(ineg + [t for t in neg if t not in ineg]))
 
 
 def _ntags(sets: dict) -> int:
@@ -775,7 +888,7 @@ def calibrate(req: dict) -> dict:
                    f"[Last round: {passed} of {n} passed. Notes and problems:\n- " + ("\n- ".join(fails) or "none") + "]\n"
                    + ("Every scene passed: try a smaller set." if passed == n else "Fix what drifted with the fewest tags."))
             answer, _ = y.ask_claude(msg, None, ghost=True, see=False, system=CALIB_SYSTEM, schema=CALIB_SCHEMA)
-            sets = {k: answer[k].strip().strip(",").strip() for k in sets}
+            sets = _sort_sets(a, {k: answer[k].strip().strip(",").strip() for k in sets})
             rounds[-1]["changes"] = answer["reply"]
         full = [x for x in rounds if x["passed"] == n]
         best = min(full, key=lambda x: (x["tags"], -x["round"])) if full else max(rounds, key=lambda x: (x["passed"], -x["tags"]))
@@ -861,8 +974,9 @@ def _harden_round(job_id: str) -> None:
                             "tags": {f: a[f] for f in ("permanent", "signature", "negative")}})
         best = max(a["rounds"], key=lambda x: x["passed"])
         if passed < best["passed"]:  # the last change made it worse: back to the best tags before trying again
-            a.update(best["tags"])
-            _log(a, f"Round {r} was worse than round {best['round']}, back to its tags")
+            kept = _revert(a, best)
+            _log(a, f"Round {r} was worse than round {best['round']}, back to its tags"
+                 + (f", keeping {', '.join(kept)} (a must it still missed)" if kept else ""))
         _log(a, f"Test round {r}: {passed} of {len(tests)} pass")
         # perfect test pictures go straight into the set, into an open slot of the same kind
         for t, v in zip(tests, verdicts):
@@ -900,7 +1014,8 @@ def _build_step(job_id: str) -> bool:
             for f in ("permanent", "signature", "negative"):
                 k["auto"][f] = j["auto"][f]
             k["auto"]["fixed_comments"] = len(comments)
-            _log(k["auto"], f"Revised from your comments: {reply}")
+            n = _requeue(k["auto"])
+            _log(k["auto"], f"Revised from your comments: {reply}" + (f"; {n} given-up pictures get new tries" if n else ""))
         _update(job_id, revised)
         j = y.load(job_id)
         a = j["auto"]
@@ -981,6 +1096,13 @@ def resume_all() -> None:
         for d in y.ROOT.iterdir():
             if (d / "job.json").exists():
                 j = y.load(d.name)
+                if any(s.get("state") == "fixing" for s in j.get("auto", {}).get("slots", [])):  # a fix died with the server
+                    def unstick(k):
+                        for s in k["auto"]["slots"]:
+                            if s.get("state") == "fixing":
+                                s.update(state="kept", fix_failed="the server restarted during the fix")
+                    _update(d.name, unstick)
+                    j = y.load(d.name)
                 if j.get("auto", {}).get("state") in ("hardening", "building") and not j["auto"].get("paused"):
                     def change(k):
                         k["auto"]["paused"] = True
@@ -988,4 +1110,4 @@ def resume_all() -> None:
 
 
 ACTIONS = {"auto_open": open_card, "auto_chat": card_chat, "auto_card": card_edit, "auto_go": go, "auto_pause": pause, "auto_resume": resume,
-           "auto_verdict": verdict, "auto_fix": fix, "auto_retag": retag, "auto_second": second_view, "auto_train": train, "auto_exam": exam, "auto_stage": keep_stage, "auto_calibrate": calibrate}
+           "auto_verdict": verdict, "auto_fix": fix, "auto_retag": retag, "auto_retry": retry, "auto_second": second_view, "auto_train": train, "auto_exam": exam, "auto_stage": keep_stage, "auto_calibrate": calibrate}

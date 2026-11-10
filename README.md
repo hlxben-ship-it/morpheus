@@ -59,7 +59,7 @@ Edit models live in `EDIT_MODELS` in `morpheus.py`:
 | Model | Status | Time |
 |---|---|---|
 | FLUX.2 [klein] 4B | installed (same files as text-to-image), source as reference latent | ~20–30 s once loaded |
-| Qwen-Image-Edit 2511 | installed (Q4 GGUF + 4-step Lightning LoRA); full restyles, keeps the person | ~85 s |
+| Qwen-Image-Edit 2511 | installed (Q6_K GGUF + 4-step Lightning LoRA); full restyles, keeps the person | ~100 s |
 
 In Chat, Claude picks the edit model per edit: Klein for small local changes, Qwen for restyles ("redraw as anime")
 and anything where the person must stay recognisable. In Manual, Qwen sits in the model list; picking it turns the

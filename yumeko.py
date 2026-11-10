@@ -1241,18 +1241,38 @@ def _panel_background(p: dict, label: str, work) -> dict:
     return p
 
 
+def _look_of(c: dict) -> dict:
+    """A panel character's calibrated words (job.look), found by her job id or LoRA file."""
+    for d in ROOT.iterdir() if ROOT.exists() else []:
+        f = d / "job.json"
+        if f.exists():
+            j = json.loads(f.read_text(encoding="utf-8"))
+            if j.get("id") == c.get("lora") or (j.get("lora") or {}).get("file") == c.get("file"):
+                return j.get("look") or {}
+    return {}
+
+
 def panel_compose(req: dict) -> dict:
     """The composition: no LoRA, the scene and each character's look in words. together=true uses the LoRAs at once instead."""
     p = panel_load(req.get("id"))
     loras = [(c["file"], float(c.get("strength", 1.0)) * 0.7) for c in p["characters"]] if req.get("together") else []
 
     def work(q):
-        triggers = ", ".join(c["trigger"] for c in q["characters"]) + ", " if req.get("together") and q["characters"] else ""
-        positive = triggers + q["tags"].replace("_", " ") + ", " + q["prompt"]
+        # with her LoRA: her trigger, plus her calibrated words, and her outfit trigger with its words while her Outfit pill is on.
+        # The Yumeko run: the trigger alone drew a blue dress, thigh boots and a cape over her armor.
+        words, negs = [], []
+        if req.get("together"):
+            for c in q["characters"]:
+                lk = _look_of(c)
+                words += [c["trigger"]] + ([lk.get("identity")] if c.get("identity", True) else []) + ([lk.get("positive"), lk.get("outfit")] if c.get("outfit") else [])
+                negs += ([lk.get("identity_negative")] if c.get("identity", True) else []) + ([lk.get("outfit_negative")] if c.get("outfit") else [])
+        triggers = ", ".join(w for w in words if w) + ", " if words else ""
+        positive = _dedupe(triggers + q["tags"].replace("_", " ")) + ", " + q["prompt"]
+        negative = _dedupe(", ".join(x for x in [q["negative"]] + negs if x)) or None
         size = (int(q["width"]), int(q["height"]))
         name = f"comp_{time.time_ns():x}.png"
         seed = random.randrange(2 ** 31)
-        render(positive, q["negative"] or None, seed, size, loras, progress=_panel_progress).save(panel_dir(q["id"]) / name)
+        render(positive, negative, seed, size, loras, progress=_panel_progress).save(panel_dir(q["id"]) / name)
         q["composition"] = name
         q["versions"] = [{"file": name, "label": "Composition", "seed": seed}] + q["versions"]
         q["current"] = name
