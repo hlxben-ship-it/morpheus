@@ -27,10 +27,13 @@ if "--lr" in args:
     i = args.index("--lr")
     unet_lr, te_lr = args[i + 1].split(",")
     del args[i:i + 2]
+# --save_state keeps the newest full training state (weights, optimizer, step, RNG) beside the stages, so Pause can continue it
+# with --resume; skip_until_initial_step makes the resumed run continue at the saved step.
+state = "--save_state --save_last_n_steps_state 1" + (" --skip_until_initial_step" if "--resume" in args else "")
 learn = (f"--unet_lr {unet_lr} --text_encoder_lr {te_lr} --shuffle_caption --keep_tokens 2" if te
          else "--network_train_unet_only --learning_rate 0.0001 --cache_text_encoder_outputs")
 sys.argv = ["sdxl_train_network.py"] + args + f"""--caption_extension .txt --resolution 832,1216 --network_module networks.lora
  --network_dim 32 --network_alpha 16 {learn} --optimizer_type AdamW --lr_scheduler constant
  --train_batch_size 1 --save_model_as safetensors --mixed_precision fp16 --save_precision fp16 --sdpa --gradient_checkpointing
- --cache_latents --max_data_loader_n_workers 0 --seed 42""".split()
+ --cache_latents --max_data_loader_n_workers 0 --seed 42 {state}""".split()
 runpy.run_path(str(SCRIPTS / "sdxl_train_network.py"), run_name="__main__")

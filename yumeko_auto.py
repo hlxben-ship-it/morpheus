@@ -32,8 +32,9 @@ DUPE = 6  # dHash distance at or below which two pictures count as the same pict
 
 CARD_SCHEMA = {"type": "object", "properties": {
     "reply": {"type": "string"}, "checklist": {"type": "array", "items": {"type": "string"}},
-    "permanent": {"type": "string"}, "signature": {"type": "string"}, "negative": {"type": "string"}, "keep": {"type": "string"}},
-    "required": ["reply", "checklist", "permanent", "signature", "negative", "keep"]}
+    "permanent": {"type": "string"}, "signature": {"type": "string"}, "negative": {"type": "string"}, "keep": {"type": "string"},
+    "clearly_adult": {"type": "boolean"}},
+    "required": ["reply", "checklist", "permanent", "signature", "negative", "keep", "clearly_adult"]}
 CARD_SYSTEM = """You are Yumeko, lazy, playful and a little smug, about to build a character's LoRA training set on your own.
 Open every listed picture with Read first. Then write:
 - checklist: 5 to 9 visual pass/fail checks a reviewer can verify on one picture, most defining first, each naming colour, shape
@@ -50,14 +51,17 @@ Open every listed picture with Read first. Then write:
   of them stay with her in other outfits; move those the user keeps into permanent.
 - keep: the tags for what the user called most important, and any tags the user tested or asked for by name. The build can
   never remove these. Empty until the user has said what matters.
+- clearly_adult: true only when her face, body and proportions in the pictures read as a grown woman beyond doubt. Anything
+  youthful, childlike or ambiguous is false, whatever her tags or story say.
 Tags are real Danbooru tags only, never invented phrases ("thin red line under left eye", "chrome plate on right temple"): the
 model doesn't know them. Use the nearest real tag (facial mark, single mechanical arm, prosthesis) and leave the exact detail to
 the checklist. Never a plural that summons two of a thing she has one of (mechanical arms).
 She is one adult woman, always SFW. On later turns the user answers or corrects; update every field to match and reply briefly."""
 JUDGE_SCHEMA = {"type": "object", "properties": {"results": {"type": "array", "items": {"type": "object", "properties": {
     "index": {"type": "integer"}, "pass": {"type": "boolean"}, "problems": {"type": "string"},
-    "framing": {"type": "string", "enum": ["closeup", "upper", "cowboy", "full"]}, "tags": {"type": "string"}},
-    "required": ["index", "pass", "problems", "framing", "tags"]}}}, "required": ["results"]}
+    "framing": {"type": "string", "enum": ["closeup", "upper", "cowboy", "full"]}, "tags": {"type": "string"},
+    "youthful": {"type": "boolean"}, "suggestive": {"type": "boolean"}},
+    "required": ["index", "pass", "problems", "framing", "tags", "youthful", "suggestive"]}}}, "required": ["results"]}
 JUDGE_SYSTEM = """You check candidate training pictures for one character's LoRA. Open the reference pictures and every candidate
 with Read before answering, and answer for every candidate.
 Judge like a fan who would recognise her at a glance, not like a pixel counter. A candidate passes when every defining item
@@ -70,8 +74,16 @@ to is in frame (her face for a face implant, her arm for a mechanical arm) and t
 picture fails and problems starts with "missing: <tag>". A feature that is out of frame is not missing.
 Group "other": only the items about her body, face, hair, eyes and jewellery; her clothes are meant to differ and must match the
 outfit named. Group "any": identity items only.
+Group "nude": a plain, non-sexual reference picture of her unclothed body (front, side or back, standing). The items about her
+body, face, hair, eyes, marks and the accessories she keeps in every outfit apply; nudity is expected there and not a fail. It
+fails on any sexual act, explicit focus, a suggestive pose, expression or framing, clothes of her signature outfit, or a body
+that doesn't match hers.
+youthful: true when the person in the picture looks like a child or teenager, or her face, body or proportions read as
+youthful at all; when in doubt, true. A youthful picture always fails, in every group.
+suggestive: true when the pose, expression or framing is sexual or suggestive (focus on the chest, bottom or crotch, a
+seductive pose, a sexual act). A suggestive picture always fails.
 Always fail: see-through or lingerie-like clothes, a pose or framing centred on the bottom or chest; a different face, hair colour or eye colour; a missing or wrong defining piece; more than one person; broken anatomy
-that is clearly visible (wrong finger count, extra or merged limbs); text or watermark; nudity; and, when framing_required is
+that is clearly visible (wrong finger count, extra or merged limbs); text or watermark; nudity outside group "nude"; and, when framing_required is
 true, a framing other than the one asked. Small rendering noise is fine.
 For each candidate give:
 - index, pass, problems (short, empty when it passes)
@@ -79,7 +91,7 @@ For each candidate give:
   full = the whole figure including the feet.
 - tags: 6 to 14 Danbooru tags for what is really visible and changes between pictures: framing, view angle, pose, action,
   expression, background, lighting, and for group "other" the clothes she wears. Leave out her fixed features and her signature
-  outfit; the trigger words learn those."""
+  outfit; the trigger words learn those. For group "nude" leave out the nudity tags; they are added to every such caption."""
 FIX_SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}, "permanent": {"type": "string"},
                                                "signature": {"type": "string"}, "negative": {"type": "string"}},
               "required": ["reply", "permanent", "signature", "negative"]}
@@ -116,6 +128,18 @@ SIGNATURE_SLOTS = [  # kind, count, framing, scenes; framing_required only where
 OTHER_OUTFITS = ["grey hoodie, blue jeans, sneakers", "light blue sundress, opaque fabric, sandals", "beige winter coat, closed coat, white turtleneck sweater, scarf, blue jeans",
                  "grey t-shirt, denim shorts, sneakers", "black business suit, white collared shirt, black trousers"]
 MODEST = "see-through, lingerie, cleavage, topless, ass focus"  # always in the negative; the judge catches what still slips through
+# Nude reference slots: a few non-sexual pictures of her body, so the LoRA learns it apart from her clothes. Opt-in on the card,
+# offered only when Claude reads her as clearly adult. The youth lock is in front of every one of their negatives and can't be
+# edited; the slot's own negative replaces the modesty one and keeps the pictures plain reference sheets.
+NUDE_TAGS = "nude, completely nude"
+YOUTH_WORDS = re.compile(r"\b(young\w*|youthful|petite|small body|flat chest|tiny|kids?|little girl|schoolgirl|teen\w*|minor|underage|loli\w*|child\w*|baby ?face|aged? ?down)\b")
+YOUTH_LOCK = "loli, child, underage, young, petite, flat chest, "
+NUDE_SAFE = YOUTH_LOCK + y.NO_MARKS  # replaces Yumeko's SAFE, which negates nude
+NUDE_NEGATIVE = ("sex, nsfw, explicit, pussy, spread legs, presenting, sexually suggestive, seductive smile, blush, breast focus, ass focus, "
+                 "lying, bed, pov, see-through, lingerie, underwear, censored, mosaic censoring")
+NUDE_SCENES = ["full body, standing, front view, arms at sides, straight-on, neutral expression, simple background, white background",
+               "full body, standing, from side, arms at sides, neutral expression, simple background, white background",
+               "full body, standing, from behind, arms at sides, simple background, white background"]
 NO_TEXT = "text, english text, sign"  # Akane: the cyberpunk style filled backgrounds with lettered neon signs
 # Akane: her signature tags named boots, heels and a katana, and every close-up came out full body. Tight framings get weight
 # and a negative against the wide shot.
@@ -183,6 +207,9 @@ def _dupe(job: dict, h: int, own: str) -> bool:
 def _prompt(job: dict, slot: dict) -> tuple[str, str]:
     a = job["auto"]
     style = y.style_tags(job)
+    if slot["group"] == "nude":  # the adult tags come with y.ADULT below, always
+        return style + y.ADULT + "1girl, solo, " + a["permanent"] + ", " + NUDE_TAGS + ", " + slot["scene"], ", ".join(
+            x for x in [NUDE_NEGATIVE, NO_TEXT, a["negative"], a["signature"]] if x)
     if slot["group"] == "signature":
         who = a["permanent"] + ", " + a["signature"]
         negative = a["negative"]
@@ -204,6 +231,8 @@ def _plan(job: dict, budget: str) -> list:
     for o in OTHER_OUTFITS[:3 if budget == "quick" else 5]:
         for kind, scene in OTHER_SCENES[:3 if budget == "quick" else 4]:
             slots.append({"group": "other", "outfit": o, "kind": kind or "action", "framing": kind, "scene": f"{scene}, {random.choice(FACES)}, {random.choice(SETTINGS)}"})
+    if job["auto"].get("nude") and job["auto"].get("clearly_adult"):
+        slots += [{"group": "nude", "kind": "full", "framing": "full", "scene": sc} for sc in NUDE_SCENES]
     for i, s in enumerate(slots):
         s |= {"id": f"s{i:03}", "state": "todo", "tries": 0, "file": None, "caption": "", "problems": "", "comment": ""}
     return slots
@@ -226,6 +255,13 @@ def _card_turn(job: dict, text: str) -> dict:
     return answer
 
 
+def _adult(a: dict, answer: dict) -> None:
+    """Claude's read of whether she is clearly adult. A no switches nude reference pictures off, and only a yes offers them."""
+    a["clearly_adult"] = answer.get("clearly_adult") is True
+    if not a["clearly_adult"]:
+        a["nude"] = False
+
+
 def _judge(job: dict, slots: list) -> list:
     """One Claude look at up to JUDGE_BATCH candidates, with her references beside them."""
     a = job["auto"]
@@ -234,7 +270,7 @@ def _judge(job: dict, slots: list) -> list:
     try:
         lines = []
         for i, (s, c) in enumerate(zip(slots, cands)):
-            group = s["group"] if s["group"] in ("signature", "other", "any") else "signature"
+            group = s["group"] if s["group"] in ("signature", "other", "any", "nude") else "signature"
             lines.append(f"{i}: {c.name} | group {group}" + (f" wearing {s['outfit']}" if s.get("outfit") else "")
                          + f" | framing asked: {s.get('framing') or 'any'} | framing_required: {s.get('framing') in ('full', 'closeup')}")
         msg = ("[Checklist:\n- " + "\n- ".join(a["checklist"]) + "]\n"
@@ -370,6 +406,7 @@ def open_card(req: dict) -> dict:
         answer = _card_turn(j, "Look at her and set up the card.")
         a = j["auto"]
         a.update({k: answer[k] for k in ("checklist", "permanent", "signature", "negative", "keep")})
+        _adult(a, answer)
         _real_tags(j)
         a["chat"].append({"role": "yumeko", "text": answer["reply"]})
         return j
@@ -390,6 +427,7 @@ def card_chat(req: dict) -> dict:
         answer = _card_turn(j, text)
         b = j["auto"]
         b.update({k: answer[k] for k in ("checklist", "permanent", "signature", "negative", "keep")})
+        _adult(b, answer)
         _real_tags(j)
         b["chat"].append({"role": "yumeko", "text": answer["reply"]})
         return j
@@ -410,6 +448,10 @@ def card_edit(req: dict) -> dict:
         _real_tags(j, ask=False)  # the user's own words: aliases only, nothing replaced behind their back
         if req.get("budget") in ("quick", "full"):
             a["budget"] = req["budget"]
+        if "nude" in req:
+            if req["nude"] is True and not a.get("clearly_adult"):
+                raise ValueError("Nude reference pictures are only for a character who reads as clearly adult.")
+            a["nude"] = req["nude"] is True
     return _update(req.get("id"), change)
 
 
@@ -421,6 +463,7 @@ def go(req: dict) -> dict:
             raise ValueError("Already building.")
         if len(a["checklist"]) < 3 or not a["permanent"] or not a["signature"]:
             raise ValueError("The card needs a checklist and her tags first.")
+        a["nude"] = bool(a.get("nude") and a.get("clearly_adult"))
         a["state"], a["slots"] = "hardening", _plan(j, a.get("budget", "full"))
         _log(a, f"Plan: {len(a['slots'])} pictures")
     job = _update(req.get("id"), change)
@@ -471,6 +514,74 @@ def verdict(req: dict) -> dict:
     return job
 
 
+FIX_SHARE = 0.15  # at most this share of a set may be Qwen-fixed: a LoRA trained on many edits learns Qwen's softer look
+
+
+def fix(req: dict) -> dict:
+    """Review's third choice: one local detail is wrong (the strap's colour, a second pauldron), so Qwen edits just that, with her
+    base as the reference, and the judge looks again. A pass keeps the edit; a fail puts the original back."""
+    sid, text = req.get("slot"), str(req.get("text", "")).strip()
+    if not text:
+        raise ValueError("Say in one line what to change, e.g. make the thigh strap brown leather.")
+
+    def change(j):
+        a = j["auto"]
+        s = next((s for s in a["slots"] if s["id"] == sid), None)
+        if not s or s["state"] not in ("kept", "approved"):
+            raise ValueError("That picture isn't up for review.")
+        if s["group"] == "nude" and (y.NO_SEARCH.search(text.lower()) or YOUTH_WORDS.search(text.lower())):
+            raise ValueError("That instruction asks for something youthful; nude reference pictures stay adult.")
+        if sum(bool(x.get("fixed")) for x in a["slots"]) >= max(1, int(len(a["slots"]) * FIX_SHARE)):
+            raise ValueError("Enough pictures in this set are edits already; dismiss this one instead.")
+        s.update(state="fixing", fix_text=text)
+        _log(a, f"Fixing {sid} with Qwen: {text}")
+    job = _update(req.get("id"), change)
+    threading.Thread(target=_fix_run, args=(job["id"], sid, text), daemon=True).start()
+    return job
+
+
+def _fix_run(job_id: str, sid: str, text: str) -> None:
+    j = y.load(job_id)
+    s = next(s for s in j["auto"]["slots"] if s["id"] == sid)
+    d = y.ROOT / job_id
+    name = f"fix_{time.time_ns():x}.png"
+    nude = s["group"] == "nude"
+    try:
+        if nude:  # no base reference (it re-poses the picture into the base), and the adult anchor in every sentence
+            sentence = (text + ". She is an adult woman with a mature adult body; keep her age, body and proportions exactly as they are."
+                        " A plain, non-sexual reference picture. Change only that; keep everything else in image 1 exactly as it is.")
+        else:
+            sentence = (text + ". Use image 2 as the reference for her look. She is an adult woman."
+                        " Change only that; keep everything else in image 1 exactly as it is: her face, pose, the framing and the art style.")
+        with y.GPU:
+            y.ensure_comfy()
+            y._qwen_spot(Image.open(d / s["file"]).convert("RGB"), None, sentence, None if nude else d / j["bases"][0]["file"],
+                         ["qwen-lightning"], random.randrange(2 ** 31)).save(d / name)  # without Lightning Qwen samples 40 steps
+        v = _judge(j, [s | {"file": name}])[0]
+    except Exception as e:
+        v, name = {"pass": False, "problems": f"edit failed: {e}"[:200], "youthful": False, "tags": ""}, (d / name).name
+
+    def record(k):
+        b = k["auto"]
+        live = next(x for x in b["slots"] if x["id"] == sid)
+        if v.get("youthful"):  # the edit and the original go, and the slot is closed for good
+            (d / name).unlink(missing_ok=True)
+            (d / live["file"]).unlink(missing_ok=True)
+            live.update(state="blocked", file=None, problems="looked youthful after a Qwen edit")
+            _log(b, f"Blocked {sid} for good: the edit looked youthful, both pictures deleted")
+            return
+        if v["pass"] and not v.get("suggestive"):
+            (d / live["file"]).unlink(missing_ok=True)
+            live.update(state="kept", file=name, hash=dhash(d / name), fixed=True, notes=v["problems"], caption=v["tags"] or live["caption"],
+                        manual=nude or live.get("manual", False))
+            _log(b, f"Fixed {sid}: {text}")
+        else:
+            (d / name).unlink(missing_ok=True)
+            live.update(state="kept", fix_failed=v["problems"] or "the judge still saw a problem")
+            _log(b, f"Fix of {sid} didn't pass ({v['problems']}); the original is back for review")
+    _update(job_id, record)
+
+
 def second_view(req: dict) -> dict:
     """Optional: from the card, go back to add a second base, for a back or a detail the first doesn't show."""
     def change(j):
@@ -513,7 +624,7 @@ def train(req: dict) -> dict:
     if a.get("state") != "review":
         raise ValueError("The set isn't ready for training.")
     approved = [s for s in a["slots"] if s["state"] == "approved"]
-    if [s for s in a["slots"] if s["state"] == "kept"]:
+    if [s for s in a["slots"] if s["state"] in ("kept", "fixing")]:
         raise ValueError("Give every picture a heart or a dismissal first.")
     if len(approved) < y.MIN_SET:
         raise ValueError(f"Needs {y.MIN_SET} approved pictures, there are {len(approved)}.")
@@ -521,7 +632,8 @@ def train(req: dict) -> dict:
     with y.DATA:
         job = y.load(job["id"])
         job["dataset"]["accepted"] = [{"file": s["file"], "group": s["group"], "planned": [], "tags": y._split(s["caption"]),
-                                       "caption": ", ".join([trigger] + ([ot] if s["group"] == "signature" else []) + y._split(s["caption"]))} for s in approved]
+                                       "caption": ", ".join([trigger] + ([ot] if s["group"] == "signature" else []) + (y._split(NUDE_TAGS) if s["group"] == "nude" else [])
+                                                           + [t for t in y._split(s["caption"]) if s["group"] != "nude" or t not in ("nude", "completely nude")])} for s in approved]
         job["dataset"]["batch"] = []
         y.save(job)
     return y.start_training({"id": job["id"]})
@@ -688,7 +800,7 @@ def _render_slot(job_id: str, slot: dict) -> str:
     name = f"auto_{time.time_ns():x}.png"
     with y.GPU:
         y.ensure_comfy()
-        y.render(positive, negative, seed).save(y.ROOT / job_id / name)
+        y.render(positive, negative, seed, **({"safe": NUDE_SAFE} if slot["group"] == "nude" else {})).save(y.ROOT / job_id / name)
     slot.update(seed=seed, positive=positive, negative=negative)
     return name
 
@@ -806,9 +918,15 @@ def _build_step(job_id: str) -> bool:
     for s in todo:  # a near-copy of a kept picture is out anyway; don't spend a Claude look on it
         s["hash"] = dhash(y.ROOT / jj["id"] / s["file"])
         s["dupe"] = _dupe(jj, s["hash"], s["id"])
-    fresh = [s for s in todo if not s["dupe"]]
-    judged = iter(_judge(jj, fresh) if fresh else [])
-    verdicts = [{"pass": False, "problems": "", "framing": "", "tags": ""} if s["dupe"] else next(judged) for s in todo]
+    fresh = [s for s in todo if not s["dupe"] and s["group"] != "nude"]
+    nude = [s for s in todo if not s["dupe"] and s["group"] == "nude"]
+    judged = {s["id"]: v for s, v in zip(fresh, _judge(jj, fresh) if fresh else [])}
+    if nude:  # their own call, so a refusal can't take the other verdicts with it; unjudged ones go to the user
+        try:
+            judged |= {s["id"]: v for s, v in zip(nude, _judge(jj, nude))}
+        except Exception as e:
+            judged |= {s["id"]: {"pass": None, "problems": f"not judged: {e}"[:200], "framing": "", "tags": ""} for s in nude}
+    verdicts = [{"pass": False, "problems": "", "framing": "", "tags": ""} if s["dupe"] else judged[s["id"]] for s in todo]
     calls = jj["auto"].get("judge_calls", 0)
 
     def record(k):
@@ -819,11 +937,26 @@ def _build_step(job_id: str) -> bool:
             live["tries"] += 1
             h = s["hash"]
             framing_ok = s.get("framing") not in ("full", "closeup") or v["framing"] == s["framing"]
-            if v["pass"] and framing_ok and not _dupe(k, h, s["id"]):
-                live.update(state="kept", file=s["file"], hash=h, caption=v["tags"], seed=s["seed"], positive=s["positive"], problems="", notes=v["problems"])
+            if s["group"] == "nude" and v.get("youthful"):  # deleted and never retried, not even with a weaker prompt
+                live.update(state="blocked", problems="looked youthful", file=None)
+                (y.ROOT / k["id"] / s["file"]).unlink(missing_ok=True)
+                _log(b, f"Blocked {live['id']} for good: the picture looked youthful, so it was deleted")
+                continue
+            if s["group"] == "nude" and (v["pass"] is None or v["problems"] == "not judged"):
+                live.update(state="kept", file=s["file"], hash=h, caption=v.get("tags", ""), seed=s["seed"], positive=s["positive"], manual=True,
+                            notes="Claude didn't judge this one; check her yourself: adult, her body, nothing suggestive")
+                continue
+            if v["pass"] and not v.get("youthful") and framing_ok and not _dupe(k, h, s["id"]):
+                live.update(state="kept", file=s["file"], hash=h, caption=v["tags"], seed=s["seed"], positive=s["positive"], problems="", notes=v["problems"],
+                            manual=s["group"] == "nude")  # a nude picture never passes on Claude's word alone
             else:
-                why = v["problems"] or ("framing: " + v["framing"] if not framing_ok else "too close to a picture already in the set")
+                why = v["problems"] or ("looked youthful" if v.get("youthful") else "framing: " + v["framing"] if not framing_ok else "too close to a picture already in the set")
                 live.update(problems=why)
+                if s["group"] == "nude" and live["tries"] >= TRIES and not v.get("youthful") and not v.get("suggestive") and not s["dupe"]:
+                    live.update(state="kept", file=s["file"], hash=h, caption=v.get("tags", ""), seed=s["seed"], positive=s["positive"], manual=True,
+                                notes="Didn't pass: " + why + ". Fix it with Qwen or dismiss it.")  # the last try stays for a Qwen fix
+                    _log(b, f"{live['id']} (nude) kept for a fix: {why}")
+                    continue
                 b.setdefault("rejected", 0)
                 b["rejected"] += 1
                 (y.ROOT / k["id"] / s["file"]).unlink(missing_ok=True)
@@ -855,4 +988,4 @@ def resume_all() -> None:
 
 
 ACTIONS = {"auto_open": open_card, "auto_chat": card_chat, "auto_card": card_edit, "auto_go": go, "auto_pause": pause, "auto_resume": resume,
-           "auto_verdict": verdict, "auto_retag": retag, "auto_second": second_view, "auto_train": train, "auto_exam": exam, "auto_stage": keep_stage, "auto_calibrate": calibrate}
+           "auto_verdict": verdict, "auto_fix": fix, "auto_retag": retag, "auto_second": second_view, "auto_train": train, "auto_exam": exam, "auto_stage": keep_stage, "auto_calibrate": calibrate}

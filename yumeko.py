@@ -35,6 +35,7 @@ MIN_SET = 30
 STEPS = 2000
 BIG_SET = 40  # a set above this has more to learn, so it gets more steps
 BIG_STEPS = 2500
+SAVE_EVERY = 250  # stage and training-state saves; Pause stops at the next one
 SIZE = (832, 1216)
 NO_MARKS = "watermark, copyright, signature, artist name, text, "
 SAFE = "nsfw, nude, loli, child, " + NO_MARKS  # added in front of the model's own negative on everything Yumeko renders
@@ -779,12 +780,79 @@ def start_training(req: dict) -> dict:
         except OSError:
             pass  # ComfyUI isn't running, so there is nothing on the GPU to free
         cmd = [str(TRAIN_PY), str(TRAINER), "--pretrained_model_name_or_path", str(CHECKPOINT), "--train_data_dir", str(d / "dataset"),
-               "--output_dir", str(d / "lora"), "--output_name", "lora", "--max_train_steps", str(steps), "--save_every_n_steps", "500"] + (["--text-encoders"] if auto else [])
-        log = open(d / "train.log", "w", encoding="utf-8")
-        p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT / "tools" / "sd-scripts",
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-        job["phase"], job["train"] = 4, {"state": "running", "pid": p.pid, "started": time.time(), "step": 0, "total": steps, "stages": []}
+               "--output_dir", str(d / "lora"), "--output_name", "lora", "--max_train_steps", str(steps), "--save_every_n_steps", str(SAVE_EVERY)] + (["--text-encoders"] if auto else [])
+        for old in (d / "lora").glob("lora*-state"):  # an earlier run's state must not count as this run's pause point
+            shutil.rmtree(old, ignore_errors=True)
+        p = _spawn(d, cmd, "w")
+        job["phase"], job["train"] = 4, {"state": "running", "pid": p.pid, "started": time.time(), "step": 0, "from": 0, "total": steps, "stages": [], "cmd": cmd}
         return save(job)
+    finally:
+        GPU.release()
+
+
+def _spawn(d: Path, cmd: list, mode: str):
+    log = open(d / "train.log", mode, encoding="utf-8")
+    return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT / "tools" / "sd-scripts",
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+
+
+def _newest_state(job: dict) -> tuple[int, Path] | None:
+    """The newest complete training state on disk. accelerate writes the RNG states last, so their file marks it complete."""
+    found = [(int(p.name[-14:-6]), p) for p in (ROOT / job["id"] / "lora").glob("lora-step*-state") if (p / "random_states_0.pkl").exists()]
+    return max(found) if found else None
+
+
+def _kill(pid: int):
+    subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+def pause_training(req: dict) -> dict:
+    """Stop right after the next state save, so nothing is lost; Continue picks up there. The GPU is free while paused."""
+    with DATA:
+        job = load(req.get("id"))
+        t = job["train"]
+        if t.get("state") != "running" or not t.get("cmd"):
+            raise ValueError("Only a running training started with Pause support can pause.")
+        train_state(job)
+        t["pause_at"] = (t.get("step", 0) // SAVE_EVERY + 1) * SAVE_EVERY
+        save(job)
+    threading.Thread(target=_pause_watch, args=(job["id"],), daemon=True).start()
+    return job
+
+
+def _pause_watch(job_id: str):
+    while True:
+        time.sleep(5)
+        with DATA:
+            job = load(job_id)
+            if job["train"].get("state") != "running" or not train_state(job).get("pause_at"):
+                return
+
+
+def resume_training(req: dict) -> dict:
+    """Continue from the newest state with the same arguments and the same frozen dataset folder."""
+    job = load(req.get("id"))
+    if job["train"].get("state") != "paused":
+        raise ValueError("This training isn't paused.")
+    newest = _newest_state(job)
+    if not newest:
+        raise ValueError("The saved training state is gone; stop and train again.")
+    if training_now():
+        raise ValueError("Another LoRA is training.")
+    if not GPU.acquire(timeout=180):
+        raise ValueError("The GPU is rendering; try again when it's done.")
+    try:
+        try:
+            urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8188/free", b'{"unload_models":true,"free_memory":true}',
+                                                           {"Content-Type": "application/json"}), timeout=10)
+        except OSError:
+            pass
+        with DATA:
+            job = load(job["id"])
+            t = job["train"]
+            p = _spawn(ROOT / job["id"], t["cmd"] + ["--resume", str(newest[1])], "a")
+            t.update(state="running", pid=p.pid, started=time.time(), step=newest[0], **{"from": newest[0]})
+            return save(job)
     finally:
         GPU.release()
 
@@ -807,22 +875,32 @@ def train_state(job: dict) -> dict:
     if steps:
         t["step"] = int(steps[-1])
     t["stages"] = sorted(f.name for f in (d / "lora").glob("lora-step*.safetensors")) if (d / "lora").exists() else []
+    newest = _newest_state(job) if t.get("pause_at") else None
+    if newest and newest[0] >= t["pause_at"] and newest[0] < t["total"]:
+        _kill(t["pid"])
+        t.pop("pause_at")
+        t.update(state="paused", step=newest[0], paused=time.time())  # phase stays 4; the dataset folder stays frozen
+        save(job)
+        return t
     if not _alive(t["pid"]):
         last = d / "lora" / f"lora-step{t['total']:08}.safetensors"
         t["state"] = "done" if last.exists() else "failed"
         t["log_tail"] = "" if last.exists() else text[-600:]
         if last.exists():
             job["phase"] = 5
+            for old in (d / "lora").glob("lora*-state"):  # a finished run can't continue, so its state is just 0.5 GB on disk
+                shutil.rmtree(old, ignore_errors=True)
         save(job)
     return t
 
 
 def stop_training(job: dict) -> dict:
     t = job["train"]
-    if t.get("state") == "running":
-        subprocess.run(["taskkill", "/PID", str(t["pid"]), "/T", "/F"], capture_output=True,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if t.get("state") in ("running", "paused"):
+        if t["state"] == "running":
+            _kill(t["pid"])
         t["state"] = "stopped"
+        t.pop("pause_at", None)
         job["phase"] = 3
         job["dataset"]["accepted"] = job["dataset"]["accepted"]
     return save(job)
@@ -835,7 +913,8 @@ def stages_of_saved(job: dict) -> list:
 
 def stages_of(job: dict) -> list:
     """The last three stages saved on disk. A full run gives total-1000, total-500 and total; a stopped run its newest three."""
-    saved = sorted(int(p.stem[-8:]) for p in (ROOT / job["id"] / "lora").glob("lora-step*.safetensors"))
+    every = stages_of_saved(job)
+    saved = [s for s in every if s % 500 == 0] or every  # saves every 250 for Pause; exam stages stay 500 apart
     if saved:
         return saved[-3:]
     total = job["train"].get("total", STEPS)
@@ -1573,7 +1652,7 @@ def _locked(action):
 ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": create, "delete": delete, "star": star, "previews": previews, "style": pick_style, "chat": chat, "approve": approve,
            "phase2": phase2_render, "batch": batch, "decide": _locked(decide), "unaccept": _locked(remove_accepted), "train": start_training,
            "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
-           "stop": lambda r: stop_training(load(r.get("id"))),
+           "stop": lambda r: stop_training(load(r.get("id"))), "pause": pause_training, "resume": resume_training,
            "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_mask": panel_mask,
            "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_qwen_ref": panel_qwen_ref, "book_new": book_new, "book_edit": book_edit, "book_delete": book_delete}
 

@@ -56,6 +56,7 @@
   .head img { width:96px; height:96px; border-radius:50%; border:2px solid var(--accent); object-fit:cover; flex:none; }
   .say { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; max-width:70ch; min-height:48px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,200px)); gap:14px; }
+  #sets { grid-template-columns:repeat(auto-fill,minmax(150px,185px)); } /* one more set per row */
   .tile { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; cursor:pointer; text-align:left; padding:0; }
   .tile img, .tile .blank { width:100%; aspect-ratio:2/3; object-fit:cover; display:grid; place-items:center; color:var(--muted); background:var(--raised); font-size:42px; }
   .tile .meta { padding:9px 11px; display:flex; flex-direction:column; gap:6px; }
@@ -169,9 +170,21 @@
   @media (max-width:860px) { .review { grid-template-columns:1fr; } }
   .exact { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 11px; white-space:pre-wrap; word-break:break-word; font-size:12.5px; margin:0 0 4px; }
   .kv { display:grid; grid-template-columns:auto 1fr; gap:3px 14px; font-size:12.5px; margin:0 0 12px; } .kv dt { color:var(--muted); } .kv dd { margin:0; }
+  dialog.rp { width:min(96vw, calc((94vh - 120px) * .85 + 60px)); max-width:none; height:94vh; max-height:94vh; border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel); color:var(--text); }
+  dialog.rp[open] { display:flex; flex-direction:column; gap:10px; } dialog.rp::backdrop { background:rgba(8,6,20,.7); }
+  dialog.rp .rpg { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; overflow:auto; min-height:120px; flex:1 1 auto; align-content:start; grid-auto-rows:calc((94vh - 120px) / 3); }
+  dialog.rp .rpg button { display:block; width:100%; height:auto; min-width:0; max-width:none; margin:0; padding:0; border:2px solid var(--line); border-radius:8px; overflow:hidden; height:100%; flex:none; background:var(--bg); cursor:pointer; }
+  dialog.rp .rpg button:hover, dialog.rp .rpg button:focus-visible { border-color:var(--accent); }
+  dialog.rp .rpg img { width:100%; height:100%; object-fit:cover; object-position:top; display:block; }
+  dialog.rp .rpc { flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; }
+  dialog.rp .rpc .wrap { position:relative; display:inline-block; max-height:100%; touch-action:none; user-select:none; }
+  dialog.rp .rpc img { display:block; max-width:100%; max-height:calc(94vh - 120px); }
+  dialog.rp .rpc .sq { position:absolute; border:2px solid #fff; box-shadow:0 0 0 9999px rgba(0,0,0,.55); cursor:move; }
+  dialog.rp .rpc .sq i { position:absolute; right:-8px; bottom:-8px; width:16px; height:16px; background:var(--accent); border:2px solid #fff; border-radius:50%; cursor:nwse-resize; }
+  dialog.rp .rpc .wrap { overflow:hidden; }
   dialog.lb { width:100vw; height:100vh; max-width:none; max-height:none; border:0; padding:16px; background:rgba(8,6,20,.94); color:var(--text); }
   dialog.lb[open] { display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-rows:minmax(0,1fr) auto; gap:10px 14px; align-items:center; }
-  dialog.lb img { width:100%; height:100%; min-height:0; object-fit:contain; display:block; }
+  dialog.lb img { width:100%; height:100%; min-height:0; object-fit:cover; object-position:top; display:block; }
   dialog.lb .nav { width:48px; height:72px; font-size:24px; padding:0; } dialog.lb p { grid-column:1 / 4; margin:0; text-align:center; font-size:12.5px; color:var(--muted); }
   dialog.lb .x { position:absolute; top:12px; right:16px; }
   .plan { display:grid; gap:8px; margin-top:8px; } .plan label { display:block; font-size:12.5px; color:var(--muted); margin-bottom:3px; }
@@ -212,13 +225,13 @@
   .bigbtn { all:unset; display:contents; cursor:zoom-in; } .bigbtn:focus-visible img { outline:2px solid var(--accent); }
   dialog.pv { width:min(1200px,96vw); max-width:none; height:min(860px,92vh); padding:16px; }
   dialog.pv[open] { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr); gap:18px; }
-  dialog.pv img { width:100%; height:100%; min-height:0; object-fit:contain; display:block; }
+  dialog.pv img { width:100%; height:100%; min-height:0; object-fit:cover; object-position:top; display:block; }
   .pvside { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-width:0; position:relative; padding-top:28px; }
   .pvside .x { position:absolute; top:0; right:0; } .pvside pre { white-space:pre-wrap; margin:0; }
   @media (max-width:760px) { dialog.pv { height:auto; max-height:94vh; overflow-y:auto; } dialog.pv[open] { grid-template-columns:1fr; } dialog.pv img { height:auto; max-height:55vh; } }
-  .live { position:relative; max-width:100%; max-height:100%; width:auto; height:100%; background:repeating-linear-gradient(135deg, var(--panel) 0 12px, var(--raised) 12px 24px); border-radius:8px; overflow:hidden; }
+  .live:not(.dlg) { position:relative; max-width:100%; max-height:100%; width:auto; height:100%; background:repeating-linear-gradient(135deg, var(--panel) 0 12px, var(--raised) 12px 24px); border-radius:8px; overflow:hidden; }
   .viewer .big .live img[hidden] { display:none; }
-  .live img { width:100%; height:100%; object-fit:cover; filter:saturate(1.1); }
+  .live:not(.dlg) img { width:100%; height:100%; object-fit:cover; filter:saturate(1.1); }
   .livebar { position:absolute; left:12px; right:12px; bottom:12px; height:6px; border-radius:3px; background:rgba(0,0,0,.45); overflow:hidden; }
   .livebar i { display:block; height:100%; width:0; background:var(--accent); transition:width .5s; }
   .livetxt { position:absolute; left:12px; bottom:22px; margin:0; font-size:12px; color:#fff; text-shadow:0 1px 3px #000; }
@@ -230,10 +243,10 @@
   .pvpic { position:relative; min-height:0; } .pvpic .nav { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:64px; font-size:24px; padding:0; background:rgba(8,6,20,.6); }
   .pvpic .prev { left:6px; } .pvpic .next { right:6px; }
   .slides { position:fixed; inset:0; z-index:100; background:#000; cursor:pointer; }
-  .slides img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; transition:opacity .8s; }
+  .slides img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; transition:opacity .8s; }
   .slides img.back { opacity:0; } .slides .x { position:absolute; top:14px; right:16px; opacity:.5; } .slides .x:hover { opacity:1; }
   @media (prefers-reduced-motion: reduce) { .slides img { transition:none; } }
-  .viewer .big img { width:100%; height:100%; object-fit:contain; display:block; }
+  .viewer .big img { width:100%; height:100%; object-fit:cover; object-position:top; display:block; }
   .strip { display:flex; gap:8px; overflow-x:auto; flex:none; padding-bottom:4px; }
   .strip button { padding:0; width:66px; height:96px; flex:none; overflow:hidden; border-width:2px; }
   .strip button[aria-current=true] { border-color:var(--accent); } .strip img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -400,7 +413,7 @@ async function home() {
     <div class="grid" id="sets"></div>`;
   const say = $('say'); let i = 0; (function type() { if (i <= S.greeting.length) { say.textContent = S.greeting.slice(0, i++); setTimeout(type, 16); } })();
   const g = $('sets'), add = document.createElement('button');
-  add.className = 'tile'; add.innerHTML = '<span class="blank">+</span><span class="meta"><b>Add</b><small>New set</small></span>'; add.onclick = () => location.hash = 'new'; g.append(add);
+  add.className = 'tile'; add.innerHTML = '<span class="blank">+</span><span class="meta"><b>Add</b><small>New set</small></span>'; add.onclick = () => location.hash = 'new';
   S.jobs.forEach(j => {
     const t = document.createElement('div'); t.className = 'tile'; t.tabIndex = 0;
     t.innerHTML = `${j.cover ? `<img src="${file(j.id, j.cover)}" alt="">` : '<span class="blank">?</span>'}<div class="meta"><b>${esc(j.agent)}</b>
@@ -413,6 +426,7 @@ async function home() {
     t.onkeydown = e => { if (e.key === 'Enter') location.hash = 'job/' + j.id; };
     g.append(t);
   });
+  g.append(add);  // last, after the sets
 }
 function askDelete(j) {
   $('del-text').textContent = `This removes ${j.agent}'s job folder with every picture, the training set and the trained LoRA. It can't be undone. Type ${j.agent} to confirm.`;
@@ -764,6 +778,7 @@ function p3auto(el) {
         <details class="promptlist"><summary>Her tags</summary><label for="pm">Always on her, in every outfit: hair, eyes, marks, and accessories she keeps</label><textarea id="pm" rows="3">${esc(a.permanent)}</textarea>
           <label for="sg">Signature outfit: her other outfits replace all of this</label><textarea id="sg" rows="3">${esc(a.signature)}</textarea><label for="ng">Negative</label><textarea id="ng" rows="2">${esc(a.negative)}</textarea></details>
         <fieldset class="row" style="border:0;padding:0;margin:10px 0"><legend class="note">Size</legend><label><input type="radio" name="bud" value="quick" ${a.budget === 'quick' ? 'checked' : ''}> Quick, about 35 pictures</label><label><input type="radio" name="bud" value="full" ${a.budget !== 'quick' ? 'checked' : ''}> Thorough, about 70</label></fieldset>
+        ${a.clearly_adult ? `<label class="note" style="display:block;margin:0 0 10px"><input type="checkbox" id="nude" ${a.nude ? 'checked' : ''}> Add 3 nude reference pictures (front, side, back; plain standing poses), so she learns her body apart from her clothes. You check each one yourself.</label>` : ''}
         <div class="row"><button class="go" id="build" ${j.busy || !a.checklist.length ? 'disabled' : ''}>Build the set</button>${j.bases.length < 2 ? `<button id="second" ${j.busy ? 'disabled' : ''} title="For a back or a detail the base doesn't show">Add a second view</button>` : ''}</div></div>
       <div><div class="chat" id="log"></div><div class="promptbox"><p class="note" id="att" style="margin:0 0 4px;min-height:1.55em"></p><div class="composerbox"><textarea id="txt" rows="3" aria-label="Message to Yumeko" placeholder="What matters most about her? What did I miss?">${esc(job.chatDraft || '')}</textarea><button class="go" id="send" aria-label="Send" ${j.busy ? 'disabled' : ''}>↑</button></div></div></div></div>`;
     const lines = a.chat.length ? a.chat : [{ role:'yumeko', text:'Let me look at her first …' }], lastBot = j.busy ? -1 : lines.map(m => m.role).lastIndexOf('yumeko');
@@ -771,9 +786,10 @@ function p3auto(el) {
     if (!j.busy) typeOut($('log').querySelector('.dlg.live .dlg-text'));
     $('log').scrollTop = 1e6;
     $('txt').oninput = e => job.chatDraft = e.target.value;
-    const save = () => act('auto_card', { id:j.id, checklist:$('ck').value.split('\n'), permanent:$('pm').value, signature:$('sg').value, negative:$('ng').value, budget:el.querySelector('[name=bud]:checked').value });
+    const save = () => act('auto_card', { id:j.id, checklist:$('ck').value.split('\n'), permanent:$('pm').value, signature:$('sg').value, negative:$('ng').value, budget:el.querySelector('[name=bud]:checked').value, ...($('nude') ? { nude:$('nude').checked } : {}) });
     ['ck', 'pm', 'sg', 'ng'].forEach(k => $(k).onchange = () => save().then(refresh));
     el.querySelectorAll('[name=bud]').forEach(r => r.onchange = () => save().then(refresh));
+    if ($('nude')) $('nude').onchange = () => save().then(refresh);
     const send = () => { const t = $('txt').value.trim(); if (t) { job.chatDraft = ''; act('auto_chat', { id:j.id, text:t }).then(refresh); } };
     $('send').onclick = send; $('txt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
     if ($('second')) $('second').onclick = () => act('auto_second', { id:j.id }).then(refresh);
@@ -783,23 +799,26 @@ function p3auto(el) {
   const S = a.slots, count = st => S.filter(s => st.includes(s.state)).length, inSet = count(['kept', 'approved']);
   const has = s => ['kept', 'approved'].includes(s.state);
   const byKind = Object.keys(KINDS).map(k => { const of = S.filter(s => s.group === 'signature' && s.kind === k); return `<li><span>${KINDS[k]}</span><b>${of.filter(has).length}/${of.length}</b></li>`; }).join('')
-    + `<li><span>Other outfits</span><b>${S.filter(s => s.group === 'other' && has(s)).length}/${S.filter(s => s.group === 'other').length}</b></li>`;
+    + `<li><span>Other outfits</span><b>${S.filter(s => s.group === 'other' && has(s)).length}/${S.filter(s => s.group === 'other').length}</b></li>`
+    + (S.some(s => s.group === 'nude') ? `<li><span>Nude reference</span><b>${S.filter(s => s.group === 'nude' && has(s)).length}/${S.filter(s => s.group === 'nude').length}</b></li>` : '');
   const working = ['hardening', 'building'].includes(a.state);
   const status = a.paused ? 'Paused' : working ? (a.running ? (a.now || 'Working') + ' …' : 'Paused, the server restarted') : 'Set built';
   const rounds = a.rounds.map(r => `<li>Test round ${r.round}: ${r.passed} of ${r.of} passed${r.changes ? `. ${esc(r.changes)}` : ''}</li>`).join('');
-  const up = S.find(s => s.state === 'kept'), approved = count(['approved']), open = count(['kept']), todo = count(['todo']);
+  const up = S.find(s => s.state === 'kept'), approved = count(['approved']), open = count(['kept', 'fixing']), todo = count(['todo']), fixing = count(['fixing']);
   const reviewing = a.reviewed && up;
   el.innerHTML = `${refs}<div class="settop"><div class="setsum"><strong>${inSet}<small> / ${S.length}</small></strong><span>in the set</span></div>
-      <p class="note setnow" aria-live="polite">${esc(status)}${a.rejected ? `, ${a.rejected} rejected so far` : ''}${count(['skipped']) ? `, ${count(['skipped'])} given up` : ''}</p>
+      <p class="note setnow" aria-live="polite">${esc(status)}${a.rejected ? `, ${a.rejected} rejected so far` : ''}${count(['skipped']) ? `, ${count(['skipped'])} given up` : ''}${count(['blocked']) ? `, ${count(['blocked'])} blocked for looking youthful` : ''}</p>
       <div class="setacts">${working ? (a.paused || !a.running ? '<button class="go" id="resume">Resume</button>' : '<button id="pause">Pause</button>') : ''}
       ${a.reviewed ? `<button class="go" id="train" ${open || todo || j.busy ? 'disabled' : ''}>Start training</button>` : ''}${j.train?.state === 'stopped' ? `<button id="exstop" ${j.busy ? 'disabled' : ''} title="Test the stages the stopped training saved, then pick one">Examine the stopped run</button>` : ''}</div></div>
     <ul class="kinds">${byKind}</ul>
     ${reviewing ? `<div class="compare">${baseRef(j, 0, 'First base')}<div class="swipe"><div class="shotbox"><button class="shot" id="big" aria-label="Enlarge this picture"><img src="${file(j.id, up.file)}" alt="Picture up for review"></button>
         <p class="note">${esc(KINDS[up.kind] || up.kind)}${up.outfit ? `, ${esc(up.outfit)}` : ''}. Caption: ${esc(up.caption)}</p>
+        ${up.manual ? `<p class="note judgenote warn">Nude reference: your call, not Claude's. Keep it only if she is plainly adult, it is her body, and nothing about it is suggestive.</p>` : ''}
         ${up.notes ? `<p class="note judgenote${/^missing:/i.test(up.notes) ? ' warn' : ''}" title="What the judge noticed but let pass">Judge noted: ${esc(up.notes)}</p>` : ''}
-        <div class="row"><input id="why" placeholder="What's wrong? Needed to dismiss" aria-label="Reason for dismissing" value="${esc(job.reviewNote || '')}" style="flex:1"></div>
-        <div class="swipebar"><button class="nope" id="no" aria-label="Dismiss" title="Dismiss with the reason above">✕</button><button class="love" id="yes" aria-label="Keep" title="Keep, right arrow key">♥</button></div>
-        <p class="note swipecount">${approved} kept, ${open} to go${todo ? `, ${todo} being rendered` : ''}</p></div></div>${baseRef(j, 1, 'Second base')}</div>`
+        ${up.fixed ? `<p class="note judgenote">Qwen-fixed: ${esc(up.fix_text || '')}</p>` : ''}${up.fix_failed ? `<p class="note judgenote warn">The Qwen fix didn't pass: ${esc(up.fix_failed)}. This is the original.</p>` : ''}
+        <div class="row"><input id="why" placeholder="What's wrong? Needed to dismiss or fix" aria-label="Reason for dismissing, or what to fix" value="${esc(job.reviewNote || '')}" style="flex:1"></div>
+        <div class="swipebar"><button class="nope" id="no" aria-label="Dismiss" title="Dismiss with the reason above">✕</button>${true ? '<button id="fix" aria-label="Fix with Qwen" title="One detail is wrong: Qwen edits just that, using the line above, and the judge looks again">✎ Fix</button>' : ''}<button class="love" id="yes" aria-label="Keep" title="Keep, right arrow key">♥</button></div>
+        <p class="note swipecount">${approved} kept, ${open} to go${todo ? `, ${todo} being rendered` : ''}${fixing ? `, ${fixing} being fixed` : ''}</p></div></div>${baseRef(j, 1, 'Second base')}</div>`
       : a.reviewed ? `<p class="note">${todo ? 'Rendering replacements …' : 'Every picture has a heart. Start training when you like.'}</p>` : ''}
     ${rounds ? `<h3>Hardening</h3><ul class="note">${rounds}</ul>` : ''}
     <details ${a.reviewed ? '' : 'open'}><summary>In the set so far, ${inSet}</summary><div class="thumbs">${S.filter(has).map(s => `<img loading="lazy" src="${file(j.id, s.file)}" alt="" title="${esc(s.caption)}">`).join('')}</div></details>
@@ -818,7 +837,9 @@ function p3auto(el) {
     $('why').oninput = e => job.reviewNote = e.target.value;
     const send = async keep => { if (job.deciding) return; const comment = $('why').value.trim(); if (!keep && !comment) { $('why').focus(); return; }
       job.deciding = true; const r = await act('auto_verdict', { id:j.id, slot:up.id, keep, comment }); job.deciding = false; if (r) { job.reviewNote = ''; refresh(r); } };
-    $('yes').onclick = () => send(true); $('no').onclick = () => send(false); $('big').onclick = () => lightbox([{ src:file(j.id, up.file), caption:up.caption }], 0);
+    $('yes').onclick = () => send(true); $('no').onclick = () => send(false);
+    if ($('fix')) $('fix').onclick = async () => { const text = $('why').value.trim(); if (!text) { $('why').focus(); return; }
+      const r = await act('auto_fix', { id:j.id, slot:up.id, text }); if (r) { job.reviewNote = ''; refresh(r); } }; $('big').onclick = () => lightbox([{ src:file(j.id, up.file), caption:up.caption }], 0);
     document.onkeydown = e => { if (e.repeat || document.querySelector('dialog[open]') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === 'ArrowRight') send(true); };
     el.querySelectorAll('.baseref button').forEach(b => b.onclick = () => lightbox(j.bases.map((x, i) => ({ src:file(j.id, x.file), caption:i ? 'Second base' : 'First base' })), +b.dataset.i));
   }
@@ -841,14 +862,20 @@ function examWire(j) {
 }
 function p4(el) {
   const j = job, t = j.train, pct = Math.round((t.step || 0) / (t.total || 2000) * 100);
-  const left = t.step && t.started ? Math.round(((Date.now() / 1000 - t.started) / t.step) * (t.total - t.step) / 60) : null;
+  const done = (t.step || 0) - (t.from || 0);
+  const left = done > 0 && t.started ? Math.round(((Date.now() / 1000 - t.started) / done) * (t.total - t.step) / 60) : null;
+  const paused = t.state === 'paused';
   const cover = j.bases[0];
   el.innerHTML = `<div class="trainbox">${cover ? `<img src="${file(j.id, cover.file)}" alt="Base image">` : '<span></span>'}<div>
-    <b>${t.state === 'running' ? `Step ${t.step || 0} of ${t.total}${left != null ? `, about ${left} min left` : ', loading'}` : esc(t.state)}</b><div class="meter"><i style="width:${pct}%"></i></div>
-    <p class="note">${t.stages?.length || 0} of ${Math.floor((t.total || 2000) / 500)} stages saved. Runs on its own, so you can close this page. Morpheus can't render until it finishes.</p>
+    <b>${t.state === 'running' ? `Step ${t.step || 0} of ${t.total}${t.pause_at ? `, pausing after the save at step ${t.pause_at}` : left != null ? `, about ${left} min left` : ', loading'}` : paused ? `Paused at step ${t.step} of ${t.total}` : esc(t.state)}</b><div class="meter"><i style="width:${pct}%"></i></div>
+    <p class="note">${t.stages?.length || 0} of ${Math.floor((t.total || 2000) / 500)} stages saved. ${paused ? 'The GPU is free: Morpheus and Yumeko can render. The training set stays frozen until you continue.' : "Runs on its own, so you can close this page. Morpheus can't render until it finishes."}</p>
     ${t.log_tail ? `<pre class="note" style="white-space:pre-wrap">${esc(t.log_tail)}</pre>` : ''}
     <h3>Training set, ${j.dataset.accepted.length} pictures</h3><div class="thumbs">${j.dataset.accepted.map(a => `<img loading="lazy" src="${file(j.id, a.file)}" alt="" title="${esc(a.tags.join(', '))}">`).join('')}</div>
-    <button id="stop" class="danger" style="margin-top:14px">Stop training</button></div></div>`;
+    <div class="row" style="margin-top:14px">${paused ? '<button id="resume" class="go">Continue</button>'
+      : t.state === 'running' && t.cmd ? `<button id="pause" ${t.pause_at ? 'disabled' : ''}>Pause</button>` : ''}
+    <button id="stop" class="danger">Stop training</button></div></div></div>`;
+  if ($('pause')) $('pause').onclick = () => act('pause', { id:j.id }).then(refresh);
+  if ($('resume')) $('resume').onclick = () => act('resume', { id:j.id }).then(refresh);
   $('stop').onclick = () => { if (confirm('Stop this run? The pictures stay, the run ends and has to start over.')) act('stop', { id:j.id }).then(refresh); };
 }
 function p5(el) {
@@ -1051,6 +1078,55 @@ async function savePanel() { const { _loras, ...p } = panel; const r = await act
 function fx(c) { return tool.fix.by[c.id] ||= { preset:'small', text:'', denoise:0.5, loras:['qwen-lightning'] }; }
 const QWEN_LORAS = [['qwen-lightning', 'Lightning'], ['qwen-anything2real', 'Anything2Real'], ['qwen-multiple-angles', 'Multiple angles'], ['qwen-sfw', 'SFW']];
 /* her Qwen reference: her own upload for this panel, else her base image */
+/* reference picker: her training pictures, her generated ones, or a file from the PC; resolves a data URL or null */
+function pickRef(ids) {
+  return new Promise(done => {
+    const L = panel?._loras || [], want = (ids || []).map(c => L.find(x => x.id === c.lora || x.file === c.file || x.name === c.name)?.id).filter(Boolean);
+    const loras = want.length ? L.filter(l => want.includes(l.id)) : L;
+    let who = loras[0]?.id, kind = 'trained', data = {}, fin = false;
+    const d = document.createElement('dialog'); d.className = 'rp'; d.setAttribute('aria-label', 'Choose a reference picture');
+    const end = v => { if (fin) return; fin = true; done(v); d.close(); };
+    const toData = async src => { const b = await (await fetch(src)).blob(); return new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }); };
+    const paint = async () => {
+      d.innerHTML = `<div class="row" style="margin:0;align-items:center">${loras.length > 1 ? `<select id="rpwho" aria-label="Character">${loras.map(l => `<option value="${l.id}" ${l.id === who ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>` : ''}
+        <span class="chips row" style="margin:0">${[['trained', 'Trained'], ['generated', 'Generated']].map(([k, t]) => `<button class="chip" data-k="${k}" aria-pressed="${kind === k}">${t}</button>`).join('')}</span>
+        <button id="rppc" style="margin-left:auto">Ref from PC</button><button id="rpx" aria-label="Close">✕</button><input type="file" accept="image/*" id="rpfile" hidden></div><div class="rpg"><p class="note">Loading …</p></div>`;
+      d.querySelector('#rpx').onclick = () => end(null);
+      d.querySelector('#rppc').onclick = () => d.querySelector('#rpfile').click();
+      d.querySelector('#rpfile').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => crop(r.result); r.readAsDataURL(f); };
+      d.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; paint(); });
+      const sel = d.querySelector('#rpwho'); if (sel) sel.onchange = () => { who = sel.value; paint(); };
+      const g = d.querySelector('.rpg'); if (!who) { g.innerHTML = '<p class="note">No trained character here: use Ref from PC.</p>'; return; }
+      try { data[who] ||= await get('/api/yumeko/job/' + who); } catch { g.innerHTML = '<p class="note">Couldn\'t load her pictures.</p>'; return; }
+      const j = data[who], list = kind === 'trained' ? (j.dataset?.accepted || []) : (j.gallery || []);
+      if (!list.length) { g.innerHTML = `<p class="note">No ${kind} pictures yet.</p>`; return; }
+      g.innerHTML = ''; list.forEach(x => { const src = file(j.id, x.file), b = document.createElement('button'); b.title = (x.tags || []).join?.(', ') || x.prompt || '';
+        b.innerHTML = `<img loading="lazy" src="${src}" alt="">`; b.onclick = async () => crop(await toData(src)); g.append(b); });
+    };
+    /* step 2: the picked picture large, with a square to cut out of it */
+    const crop = src => {
+      d.innerHTML = `<div class="row" style="margin:0;align-items:center"><button id="rpback">← Back</button><span class="note" style="margin:0">Drag the square, pull its corner to resize.</span>
+        <button id="rpall" style="margin-left:auto">Whole picture</button><button class="primary" id="rpok">Use square</button><button id="rpx" aria-label="Close">✕</button></div>
+        <div class="rpc"><div class="wrap"><img alt="Picked picture" src="${src}"><div class="sq"><i></i></div></div></div>`;
+      const img = d.querySelector('img'), sq = d.querySelector('.sq'), wrap = d.querySelector('.wrap'); let b = null;
+      const put = () => { Object.assign(sq.style, { left:b.x + 'px', top:b.y + 'px', width:b.s + 'px', height:b.s + 'px' }); };
+      img.onload = () => { const W = img.clientWidth, H = img.clientHeight, s0 = Math.min(W, H) * .7; b = { x:(W - s0) / 2, y:(H - s0) / 2, s:s0 }; put(); };
+      wrap.onpointerdown = e => { if (!b) return; e.preventDefault(); const W = img.clientWidth, H = img.clientHeight, sx = e.clientX, sy = e.clientY, o = { ...b }, size = e.target.tagName === 'I';
+        if (!size && e.target !== sq) { const r = wrap.getBoundingClientRect(); o.x = Math.min(Math.max(e.clientX - r.left - o.s / 2, 0), W - o.s); o.y = Math.min(Math.max(e.clientY - r.top - o.s / 2, 0), H - o.s); b = { ...o }; put(); }
+        const mv = ev => { const dx = ev.clientX - sx, dy = ev.clientY - sy;
+          if (size) { const n = Math.max(32, Math.min(o.s + Math.max(dx, dy), W - o.x, H - o.y)); b = { ...o, s:n }; }
+          else b = { ...o, x:Math.min(Math.max(o.x + dx, 0), W - o.s), y:Math.min(Math.max(o.y + dy, 0), H - o.s) };
+          put(); };
+        const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); };
+        addEventListener('pointermove', mv); addEventListener('pointerup', up); };
+      d.querySelector('#rpx').onclick = () => end(null); d.querySelector('#rpback').onclick = () => paint(); d.querySelector('#rpall').onclick = () => end(src);
+      d.querySelector('#rpok').onclick = () => { const k = img.naturalWidth / img.clientWidth, c = document.createElement('canvas'), n = Math.round(b.s * k);
+        c.width = c.height = n; c.getContext('2d').drawImage(img, b.x * k, b.y * k, n, n, 0, 0, n, n); end(c.toDataURL('image/png')); };
+    };
+    d.onclick = e => { if (e.target === d) end(null); }; d.onclose = () => { d.remove(); if (!fin) { fin = true; done(null); } };
+    document.body.append(d); d.showModal(); paint();
+  });
+}
 function refOf(c) { if (c.ref) return file(dir(), c.ref) + '?' + (c._refv || ''); const l = panel?._loras?.find(x => x.id === c.lora || x.file === c.file); return l?.base ? `/yumeko-file/${l.base.split('/').map(encodeURIComponent).join('/')}` : null; }
 function pillsOf(c) { const l = panel?._loras?.find(x => x.id === c.lora || x.file === c.file || x.name === c.name); return l?.pills; }
 // Folded boxes (scene, locked composition, each character), remembered per browser.
@@ -1115,7 +1191,8 @@ function paintPanel() {
   document.querySelectorAll('[data-pqlora]').forEach(b => b.onclick = () => { const k = b.dataset.pqlora; Q.loras = Q.loras.includes(k) ? Q.loras.filter(x => x !== k) : [...Q.loras, k]; b.setAttribute('aria-pressed', Q.loras.includes(k)); });
   $('qbrush').onclick = () => { tool.erase = false; tool.active = tool.active === 'qwen' ? panel.characters[0]?.id ?? null : 'qwen'; syncPanel(); const keep = captureMasks(); paintPanel(); restoreMasks(keep); };
   $('qclear').onclick = () => { drawn.qwen?.getContext('2d').clearRect(0, 0, drawn.qwen.width, drawn.qwen.height); showMask(); };
-  $('qref').onclick = e => { if (e.target.closest('#qrefx')) return; $('qfile').click(); };
+  $('qref').onclick = async e => { if (e.target.closest('#qrefx')) return; const img = await pickRef(panel.characters); if (!img) return;
+    const r = await act('panel_qwen_ref', { id:p.id, image:img }); if (r) { p.qwen_ref = r.qwen_ref; Q.refv = Date.now(); paintPanel(); } };
   $('qfile').onchange = () => { const f0 = $('qfile').files[0]; if (!f0) return; const rd = new FileReader();
     rd.onload = async () => { const r = await act('panel_qwen_ref', { id:p.id, image:rd.result }); if (r) { p.qwen_ref = r.qwen_ref; Q.refv = Date.now(); paintPanel(); } }; rd.readAsDataURL(f0); };
   if ($('qrefx')) $('qrefx').onclick = async e => { e.stopPropagation(); const r = await act('panel_qwen_ref', { id:p.id }); if (r) { delete p.qwen_ref; paintPanel(); } };
@@ -1162,7 +1239,9 @@ function paintPanel() {
     w.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { F.text = w.querySelector('[data-ftext]').value; F.preset = b.dataset.preset; F.denoise = { small:0.5, sharp:0.35, outfit:0.85, pose:0.9, qwen:1 }[F.preset]; paintPanel(); });
     w.querySelectorAll('[data-qlora]').forEach(b => b.onclick = () => { const k = b.dataset.qlora; F.text = w.querySelector('[data-ftext]').value; F.loras = F.loras.includes(k) ? F.loras.filter(x => x !== k) : [...F.loras, k]; paintPanel(); });
     const qf = w.querySelector('[data-qfile]');
-    if (qf) { w.querySelector('[data-qref]').onclick = e => { if (e.target.closest('[data-qrefx]')) return; qf.click(); };
+    if (qf) { w.querySelector('[data-qref]').onclick = async e => { if (e.target.closest('[data-qrefx]')) return; const img = await pickRef([c]); if (!img) return;
+        F.text = w.querySelector('[data-ftext]').value; syncPanel(); await savePanel();
+        const r = await act('panel_ref', { id:panel.id, character:c.id, image:img }); if (r) { c.ref = r.characters.find(x => x.id === c.id)?.ref; c._refv = Date.now(); paintPanel(); } };
       qf.onchange = () => { const f0 = qf.files[0]; if (!f0) return; const rd = new FileReader(); rd.onload = async () => { F.text = w.querySelector('[data-ftext]').value; syncPanel(); await savePanel();
         const r = await act('panel_ref', { id:panel.id, character:c.id, image:rd.result }); if (r) { c.ref = r.characters.find(x => x.id === c.id)?.ref; c._refv = Date.now(); paintPanel(); } }; rd.readAsDataURL(f0); };
       const x = w.querySelector('[data-qrefx]'); if (x) x.onclick = async e => { e.stopPropagation(); const r = await act('panel_ref', { id:panel.id, character:c.id }); if (r) { delete c.ref; paintPanel(); } }; }
