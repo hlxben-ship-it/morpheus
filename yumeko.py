@@ -18,7 +18,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import agents
 import csv
@@ -1279,18 +1279,44 @@ def panel_compose(req: dict) -> dict:
     return _panel_background(p, "Rendering composition", work)
 
 
-def _inpaint(source: Image.Image, mask: Image.Image, positive: str, negative: str | None, lora: str | None, strength: float, denoise: float, seed: int,
-             wash: bool = False, context: float = 0.0) -> Image.Image:
-    """One character's pass: crop around her mask, redo the crop large with her LoRA, paste back through a soft mask."""
+POSE_PY = morpheus.ROOT / ".venv-faceswap" / "Scripts" / "python.exe"  # pose.py runs there (rtmlib + onnxruntime), like faceswap.py
+CONTROLNET = "noob_openpose_pre.safetensors"  # Laxhar/noob_openpose, for eps NoobAI / Illustrious checkpoints such as JANKU
+
+
+def _pose(image: Path, skeleton: Path, fit=None, canvas=None, onto: Path | None = None) -> list:
+    """Write the OpenPose skeleton of a picture and return its people (box, face, hands). With fit, only the largest
+    person, moved into that box of a canvas-sized skeleton: another picture's pose put where the masked character stands."""
+    if not POSE_PY.exists():
+        raise ValueError("The pose reader is not installed (.venv-faceswap is missing, see README).")
+    cmd = [str(POSE_PY), "-I", str(morpheus.ROOT / "pose.py"), str(image), str(skeleton)]
+    if fit:
+        cmd += ["--fit", ",".join(str(int(v)) for v in fit), "--canvas", f"{int(canvas[0])},{int(canvas[1])}"] + (["--onto", str(onto)] if onto else [])
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=180, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise ValueError("The pose could not be read: " + (r.stderr.strip().splitlines() or ["no output"])[-1][:200])
+    if out.get("error"):
+        raise ValueError(out["error"])
+    return out["people"]
+
+
+def _inpaint(source: Image.Image, mask: Image.Image | None, positive: str, negative: str | None, lora: str | None, strength: float, denoise: float, seed: int,
+             wash: bool = False, context: float = 0.0, loras: list | None = None, steps: int | None = None, cfg: float | None = None,
+             control: Image.Image | None = None, control_strength: float = 1.0) -> Image.Image:
+    """One character's pass: crop around her mask, redo the crop large with her LoRA, paste back through a soft mask.
+    Without a mask the whole picture is redone at its own size. loras replaces the single lora; control is a skeleton
+    picture the size of the source, applied through the OpenPose ControlNet."""
     W, H = source.size
-    mask = mask.convert("L").resize((W, H)).filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
+    whole = mask is None
+    mask = Image.new("L", (W, H), 255) if whole else mask.convert("L").resize((W, H)).filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(6))
     box = mask.getbbox()
     if not box:
         raise ValueError("That character's mask is empty; paint her first.")
     pad = max(48, int(context * max(box[2] - box[0], box[3] - box[1])))  # a fix sees more of her around the spot, so it continues her body
     box = (max(0, box[0] - pad), max(0, box[1] - pad), min(W, box[2] + pad), min(H, box[3] + pad))
     cw, ch = box[2] - box[0], box[3] - box[1]
-    scale = 1216 / max(cw, ch)
+    scale = 1.0 if whole else 1216 / max(cw, ch)
     rw, rh = int(cw * scale) // 8 * 8, int(ch * scale) // 8 * 8
     folder = morpheus.COMFY_INPUT / "yumeko"
     folder.mkdir(parents=True, exist_ok=True)
@@ -1309,7 +1335,21 @@ def _inpaint(source: Image.Image, mask: Image.Image, positive: str, negative: st
     g["23"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["1", 2]}}
     g["24"] = {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["23", 0], "mask": ["22", 0]}}
     g["8"]["inputs"]["latent_image"], g["8"]["inputs"]["denoise"] = ["24", 0], denoise
-    result = morpheus.generate(_with_loras(g, [(lora, strength)] if lora else []), progress=_panel_progress).resize((cw, ch), Image.LANCZOS)
+    if steps:
+        g["8"]["inputs"]["steps"] = steps
+    if cfg:
+        g["8"]["inputs"]["cfg"] = cfg
+    if control is not None:
+        if not (morpheus.COMFY_MODELS / "controlnet" / CONTROLNET).exists():
+            raise ValueError(f"The pose ControlNet is missing: models/controlnet/{CONTROLNET} (see README).")
+        control.convert("RGB").resize((W, H)).crop(box).resize((rw, rh), Image.LANCZOS).save(folder / "control.png")
+        g["25"] = {"class_type": "LoadImage", "inputs": {"image": "yumeko/control.png"}}
+        g["26"] = {"class_type": "ControlNetLoader", "inputs": {"control_net_name": CONTROLNET}}
+        g["27"] = {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "control_net": ["26", 0], "image": ["25", 0],
+                                                                         "strength": control_strength, "start_percent": 0.0, "end_percent": 1.0, "vae": ["1", 2]}}
+        g["8"]["inputs"]["positive"], g["8"]["inputs"]["negative"] = ["27", 0], ["27", 1]
+    chain = loras if loras is not None else ([(lora, strength)] if lora else [])
+    result = morpheus.generate(_with_loras(g, chain), progress=_panel_progress).resize((cw, ch), Image.LANCZOS)
     out = source.copy()
     out.paste(result, box[:2], mask.crop(box))
     return out
@@ -1535,7 +1575,8 @@ def panel_fix(req: dict) -> dict:
 
 def panel_qwen(req: dict) -> dict:
     """The panel's own Qwen edit: a sentence, LoRAs, an optional reference; with a painted mask only that area is pasted
-    back, without one the whole picture is Qwen's."""
+    back, without one the whole picture is Qwen's. With janku, JANKU then goes over the same area lightly (Change 0.3, the
+    scene tags, the Inpaint box's LoRAs and negative, held in the pose Qwen drew), so the edit is back in the panel's style."""
     p = panel_load(req.get("id"))
     text = str(req.get("text") or "").strip()
     if not text:
@@ -1551,6 +1592,11 @@ def panel_qwen(req: dict) -> dict:
     sentence = (text + (" Use image 2 as the reference." if ref else "")
                 + " All people are adult women."
                 + " Keep everything else in image 1 exactly as it is, in the same art style.")
+    janku = bool(req.get("janku"))
+    done = {l["id"]: l for l in finished()}
+    hers = [(done[x.get("id")], _num(x.get("strength"), done[x.get("id")]["strength"], 0.1, 1.5)) for x in (req.get("janku_loras") or [])[:3]
+            if isinstance(x, dict) and x.get("id") in done]
+    typed = _tidy(str(req.get("negative") or "").replace("_", " "))
 
     def work(q):
         d = panel_dir(q["id"])
@@ -1563,6 +1609,22 @@ def panel_qwen(req: dict) -> dict:
         q["versions"].insert(0, {"file": name, "label": "Qwen edit" + (" · masked" if mask is not None else ""), "kind": "fix",
                                  "text": text, "seed": seed, "loras": loras, "from": start})
         q["current"] = name
+        if janku:
+            # her look goes with her trigger, her outfit words don't: the outfit Qwen left in the picture is the one to keep
+            q["busy"] = "JANKU goes over it"
+            panel_save(q)
+            scene = (q.get("pass_tags") if q.get("locked") else pass_tags(q["tags"])) or ""
+            positive = _dedupe(_tidy(", ".join([w for l, _ in hers for w in (l["trigger"], l["look"]) if w] + [scene.replace("_", " ")])))
+            avoid = [typed or (q.get("pass_negative") if q.get("locked") else q.get("negative")) or ""] + [l["pills"]["identity"][1] for l, _ in hers]
+            negative = _dedupe(_tidy(", ".join(x for x in avoid if x))) or None
+            skeleton = Image.open(d / "pose_skel.png").convert("RGB") if _pose(d / name, d / "pose_skel.png") else None
+            im = _inpaint(im, mask, positive, negative, None, 1.0, QWEN_REFINE, seed, context=0.0 if mask is None else 0.3,
+                          loras=[(l["file"], s) for l, s in hers], control=skeleton)
+            again = f"inp_{time.time_ns():x}.png"
+            im.save(d / again)
+            q["versions"].insert(0, {"file": again, "label": "Qwen edit + JANKU" + (" · masked" if mask is not None else ""), "kind": "fix", "text": text, "negative": negative or "",
+                                     "seed": seed, "denoise": QWEN_REFINE, "loras": [[l["name"], s] for l, s in hers], "control": "keep" if skeleton else "off", "from": name})
+            q["current"] = again
     return _panel_background(p, "Qwen edit", work)
 
 
@@ -1579,6 +1641,168 @@ def panel_qwen_ref(req: dict) -> dict:
         f.unlink(missing_ok=True)
         p.pop("qwen_ref", None)
     return panel_save(p)
+
+
+def _num(value, default: float, low: float, high: float) -> float:
+    try:
+        return max(low, min(high, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def panel_pose_ref(req: dict) -> dict:
+    """The Inpaint box's pose picture: its largest person's pose is what Change pose paints. Empty clears it."""
+    p = panel_load(req.get("id"))
+    d = panel_dir(p["id"])
+    f, skel = d / "pose_ref.png", d / "pose_ref_skel.png"
+    if req.get("image"):
+        im = _data_image(req["image"]).convert("RGB")
+        im.thumbnail((1536, 1536))
+        im.save(f)
+        if not _pose(f, skel):
+            f.unlink(missing_ok=True)
+            skel.unlink(missing_ok=True)
+            p.pop("pose_ref", None)
+            panel_save(p)
+            raise ValueError("No person found in that picture; pick one that shows the body.")
+        p["pose_ref"] = f.name
+    else:
+        f.unlink(missing_ok=True)
+        skel.unlink(missing_ok=True)
+        p.pop("pose_ref", None)
+    return panel_save(p)
+
+
+DETAIL_TAGS = {"face": "detailed face, detailed eyes, ", "hands": "detailed hands, five fingers, "}
+DETAIL_MAX = 6  # faces and hands redone per run; each is its own render
+QWEN_REFINE = 0.3  # JANKU's Change over a Qwen pose: enough for her lines and face, too little to repaint the outfit
+
+
+def _detail(im: Image.Image, area: Image.Image | None, which: str, positive: str, negative: str | None, loras: list, strength: float,
+            seed: int, folder: Path) -> tuple[Image.Image, int]:
+    """The detailer: find faces and hands (inside the repainted area), redo each one large and lightly. Returns the picture and the count."""
+    tmp = folder / "detail_src.png"
+    im.save(tmp)
+    try:
+        people = _pose(tmp, folder / "detail_skel.png")
+    finally:
+        tmp.unlink(missing_ok=True)
+        (folder / "detail_skel.png").unlink(missing_ok=True)
+    spots = [(k, b) for q in people for k, bs in (("face", [q["face"]] if q.get("face") else []), ("hands", q.get("hands") or []))
+             if which in (k, "both") for b in bs]
+    if area is not None:
+        area = area.convert("L").resize(im.size)
+        spots = [(k, b) for k, b in spots if area.crop(tuple(b)).getbbox()]
+    done = 0
+    for k, b in spots[:DETAIL_MAX]:
+        m = Image.new("L", im.size, 0)
+        ImageDraw.Draw(m).ellipse(tuple(b), fill=255)
+        im = _inpaint(im, m, DETAIL_TAGS[k] + pass_tags(positive), negative, None, 1.0, strength, seed, context=0.5, loras=loras)
+        done += 1
+    return im, done
+
+
+def panel_inpaint(req: dict) -> dict:
+    """The panel's own SDXL inpaint: own tags and negative, a painted mask or the whole picture, Change, up to three
+    finished LoRAs (each with her look, and her outfit words when outfit is set), optionally the pose ControlNet (keep: the skeleton of the shown version; ref: the pose picture's,
+    fitted into the mask) and a face / hand detailer afterwards."""
+    p = panel_load(req.get("id"))
+    text = _tidy(str(req.get("text") or "").replace("_", " "))
+    if not text:
+        raise ValueError("Write in tags what should be there.")
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a composition first.")
+    mask = _data_image(req["mask"]).convert("L") if req.get("mask") else None
+    if mask is not None and not mask.getbbox():
+        mask = None
+    control = req.get("control") if req.get("control") in ("keep", "ref") else "off"
+    if control == "ref" and not p.get("pose_ref"):
+        raise ValueError("Add a pose picture first.")
+    via_qwen = bool(req.get("qwen"))  # "Inpaint with Qwen": Qwen changes the pose and keeps the outfit, JANKU then goes over it lightly
+    if via_qwen and control != "ref":
+        raise ValueError("Inpaint with Qwen changes the pose and keeps the outfit: pick Change pose and add a pose picture.")
+    if control == "ref" and mask is None and not via_qwen:
+        raise ValueError("Paint a mask over the character who takes the pose.")
+    detail = req.get("detail") if req.get("detail") in ("face", "hands", "both") else "off"
+    denoise = _num(req.get("denoise"), 0.6, 0.05, 1.0)
+    cstr, dstr = _num(req.get("control_strength"), 1.0, 0.1, 1.5), _num(req.get("detail_strength"), 0.35, 0.1, 0.7)
+    steps = int(_num(req.get("steps"), 0, 10, 60)) if req.get("steps") else None
+    cfg = _num(req.get("cfg"), 0, 1.0, 10.0) if req.get("cfg") else None
+    fixed = str(req.get("seed") if req.get("seed") is not None else "").strip()
+    done = {l["id"]: l for l in finished()}
+    chosen = [(done[x.get("id")], _num(x.get("strength"), done[x.get("id")]["strength"], 0.1, 1.5)) for x in (req.get("loras") or [])[:3]
+              if isinstance(x, dict) and x.get("id") in done]
+    loras = [(l["file"], s) for l, s in chosen]
+    # like a character pass: her trigger alone draws some outfit (the Yumeko run: a blue dress and a cape over her armor),
+    # so her calibrated look goes in with it, and her signature outfit with its negatives while "Her outfit" is on
+    worn = set() if via_qwen else {x.get("id") for x in (req.get("loras") or []) if isinstance(x, dict) and x.get("outfit")}
+    words = [w for l, _ in chosen for w in (l["trigger"], l["look"], l["pills"]["outfit"][0] if l["id"] in worn else "")]
+    avoid = [w for l, _ in chosen for w in (l["pills"]["identity"][1], l["pills"]["outfit"][1] if l["id"] in worn else "")]
+    positive = _dedupe(_tidy(", ".join([w for w in words if w] + [text])))
+    negative = _dedupe(_tidy(", ".join([str(req.get("negative") or "").replace("_", " ")] + [w for w in avoid if w]))) or None
+    label = ("Inpaint with Qwen" if via_qwen else "Inpaint") + (" · masked" if mask is not None else " · whole picture") + {"off": "", "keep": " · pose kept", "ref": " · new pose"}[control]
+
+    def work(q):
+        d = panel_dir(q["id"])
+        seed = int(fixed) % 2 ** 31 if fixed.isdigit() else random.randrange(2 ** 31)
+        src = Image.open(d / start).convert("RGB")
+        skeleton = None
+        if control != "off":
+            q["busy"] = "Reading the pose"
+            panel_save(q)
+            skel = d / "pose_skel.png"
+            if control == "keep":
+                if not _pose(d / start, skel):
+                    raise ValueError("No person found in this picture to keep the pose of.")
+            # without a mask (Inpaint with Qwen on a one-person panel) the whole frame is the box she is looked for in
+            elif not _pose(d / q["pose_ref"], skel, fit=mask.resize(src.size).getbbox() if mask is not None else (0, 0, *src.size), canvas=src.size, onto=d / start):
+                raise ValueError("No person found in the pose picture.")
+            skeleton = Image.open(skel).convert("RGB")
+        area = mask
+        if control == "ref" and mask is not None:
+            # the new pose reaches past the painted mask (knees, elbows, hands): the mask grows to cover the new limbs,
+            # or they end at its edge. Grown on a small copy, by about a limb's half width.
+            W, H = src.size
+            small = skeleton.convert("L").resize((W // 8, H // 8), Image.BILINEAR).point(lambda v: 255 if v > 8 else 0)
+            box = small.getbbox()
+            if box:
+                k = max(3, int(0.12 * max(box[2] - box[0], box[3] - box[1])) * 2 + 1)
+                grown = small.filter(ImageFilter.MaxFilter(k)).resize((W, H), Image.BILINEAR).point(lambda v: 255 if v > 127 else 0)
+                area = ImageChops.lighter(mask.resize((W, H)), grown)
+        base, strength = start, denoise
+        if via_qwen:
+            # Qwen sees the picture, so the outfit stays. Image 2 is the skeleton, already at her size and place: given the
+            # pose picture itself, Qwen copied that person's hair and clothes into the panel, and given the skeleton as
+            # it was read, it drew her as large as the skeleton. Its result is a version of its own, then JANKU repaints
+            # it lightly with her LoRA, held in Qwen's pose, for the line quality.
+            q["busy"] = "Qwen changes the pose"
+            panel_save(q)
+            sentence = ("Change the pose of the woman in image 1 to the pose of the stick figure in image 2: " + text + ". Image 2 is only a pose skeleton. "
+                        "She keeps her own face, hair, outfit and colours exactly, at the same size and position in the picture. All people are adult women. "
+                        "Keep everything else in image 1 exactly as it is, in the same art style.")
+            src = _qwen_spot(src, area, sentence, d / "pose_skel.png", ["qwen-lightning"], seed)
+            base = f"qwen_{time.time_ns():x}.png"
+            src.save(d / base)
+            q["versions"].insert(0, {"file": base, "label": "Qwen pose", "kind": "fix", "text": text, "seed": seed, "loras": ["qwen-lightning"], "from": start})
+            q["current"] = base
+            strength = QWEN_REFINE
+            skeleton = Image.open(d / "pose_skel.png").convert("RGB") if _pose(d / base, d / "pose_skel.png") else None
+        q["busy"] = "JANKU goes over it" if via_qwen else label
+        panel_save(q)
+        im = _inpaint(src, area, positive, negative, None, 1.0, strength, seed, context=0.0 if area is None else 0.3, loras=loras,
+                      steps=steps, cfg=cfg, control=skeleton, control_strength=cstr)
+        fixes = 0
+        if detail != "off":
+            q["busy"] = "Detailing " + {"face": "faces", "hands": "hands", "both": "faces and hands"}[detail]
+            panel_save(q)
+            im, fixes = _detail(im, area, detail, positive, negative, loras, dstr, seed, d)
+        name = f"inp_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": label, "kind": "fix", "text": text, "negative": negative or "", "seed": seed, "denoise": strength,
+                                 "loras": [[l["name"], s] for l, s in chosen], "control": control, "detail": detail, "detailed": fixes, "from": base})
+        q["current"] = name
+    return _panel_background(p, label, work)
 
 
 def _panel_fix_qwen(p: dict, req: dict, c: dict | None) -> dict:
@@ -1674,7 +1898,7 @@ ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": 
            "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
            "stop": lambda r: stop_training(load(r.get("id"))), "pause": pause_training, "resume": resume_training,
            "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_mask": panel_mask,
-           "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_qwen_ref": panel_qwen_ref, "book_new": book_new, "book_edit": book_edit, "book_delete": book_delete}
+           "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_qwen_ref": panel_qwen_ref, "panel_inpaint": panel_inpaint, "panel_pose_ref": panel_pose_ref,"book_new": book_new, "book_edit": book_edit, "book_delete": book_delete}
 
 
 def job_view(job_id: str) -> dict:

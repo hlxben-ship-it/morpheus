@@ -302,7 +302,7 @@
   .fixcard { border-top:1px solid var(--line); padding-top:8px; margin-top:4px; display:flex; flex-direction:column; gap:6px; }
   .fixcard:not([open]) { gap:0; } .fixcard summary { cursor:pointer; color:var(--muted); font-size:13px; } .fixcard[open] summary { color:var(--text); margin-bottom:4px; }
   .fixcard textarea { width:100%; }
-  .qbox { margin-bottom:14px; }
+  .qbox { margin-bottom:14px; } .iskel { height:72px; border-radius:8px; background:#000; } .qbox input[type=number], .qbox #iseed { margin-top:2px; }
   .qrow { display:grid; grid-template-columns:minmax(0,1fr) 72px; gap:8px; align-items:stretch; }
   .qref { position:relative; padding:0; width:72px; height:72px; overflow:hidden; border-radius:8px; } .qref img { width:100%; height:100%; object-fit:cover; display:block; }
   .qref span { font-size:12px; color:var(--muted); } .qref i { position:absolute; top:2px; right:2px; width:18px; height:18px; display:grid; place-items:center; font-style:normal; font-size:10px; border-radius:50%; background:rgba(0,0,0,.7); color:#fff; }
@@ -400,7 +400,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&l
 const file = (dir, f) => `/yumeko-file/${dir}/${encodeURIComponent(f)}`;
 const get = async u => { const r = await fetch(u), j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Request failed'); return j; };
 const post = async (a, b) => { const r = await fetch('/api/yumeko/' + a, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Request failed'); return j; };
-let timer, catalog, S, job, panel, tool = { qwen:{ text:'', loras:['qwen-lightning'], refv:0 }, active:null, size:36, erase:false, fix:{ who:null, open:new Set(), by:{} } }, drawn = {};
+let timer, catalog, S, job, panel, tool = { qwen:{ text:'', loras:['qwen-lightning'], refv:0 }, inp:{ text:'', negative:null, denoise:0.6, loras:[], control:'off', cstr:1, detail:'off', dstr:0.35, seed:'', steps:30, cfg:5, refv:0 }, active:null, size:36, erase:false, fix:{ who:null, open:new Set(), by:{} } }, drawn = {};
 const PHASES = ['Base image', 'Second base', 'Training set', 'Training', 'Use', ];
 const COLORS = ['#ff4060', '#40a0ff', '#50e090', '#ffc040'];
 function fail(e) { const n = document.createElement('p'); n.className = 'err'; n.textContent = e.message; app.prepend(n); setTimeout(() => n.remove(), 7000); }
@@ -1181,7 +1181,24 @@ function paintPanel() {
         <div class="qrow"><textarea id="qtext" rows="3" placeholder="The three women laugh, a pillow flies through the air.">${esc(tool.qwen.text)}</textarea>
           <button class="qref" id="qref" title="${p.qwen_ref ? 'Your reference: click to change' : 'Optional: a reference picture, e.g. an outfit or an object'}" aria-label="Reference picture">${p.qwen_ref ? `<img src="${file(dir(), p.qwen_ref)}?${tool.qwen.refv || ''}" alt=""><i id="qrefx" title="Remove the reference" role="button">✕</i>` : '<span>+ ref</span>'}</button><input type="file" accept="image/*" id="qfile" hidden></div>
         <span class="chips row" style="margin:0">${QWEN_LORAS.map(([k, t]) => `<button class="chip" data-pqlora="${k}" aria-pressed="${tool.qwen.loras.includes(k)}">${t}</button>`).join('')}</span>
-        <div class="row" style="margin:0"><button id="qbrush" aria-pressed="${tool.active === 'qwen'}">${tool.active === 'qwen' ? 'Painting the Qwen mask' : 'Paint mask'}</button><button id="qclear">Clear mask</button><button id="qrun" class="primary" ${p.busy || !top ? 'disabled' : ''}>Qwen edit</button></div>
+        <div class="row" style="margin:0"><button id="qbrush" aria-pressed="${tool.active === 'qwen'}">${tool.active === 'qwen' ? 'Painting the Qwen mask' : 'Paint mask'}</button><button id="qclear">Clear mask</button><button id="qrun" class="primary" ${p.busy || !top ? 'disabled' : ''}>Qwen edit</button><button id="qrunj" ${p.busy || !top ? 'disabled' : ''} title="The Qwen edit, then JANKU goes over the same area lightly (Change 0.3) so it is back in the panel's style. JANKU uses the scene tags and the LoRAs and negative chosen in the Inpaint box below. About half a minute longer; both results land in Versions.">Qwen edit + JANKU</button></div>
+      </section>
+      <section class="box qbox${folded('inpaint')}" data-box="inpaint"><div class="lockhead boxhead">${foldBtn('inpaint')}<h3>Inpaint</h3></div>
+        <p class="note">JANKU repaints from your tags. Paint its own mask to repaint only that area; without a mask the whole picture is redone.</p>
+        <textarea id="itext" rows="3" placeholder="red kimono, floral print, obi">${esc(tool.inp.text)}</textarea>
+        <label class="note" for="ineg">Negative</label><textarea id="ineg" rows="2" placeholder="nsfw, extra person">${esc(tool.inp.negative ?? (p.locked ? p.pass_negative : p.negative) ?? '')}</textarea>
+        <label class="note" for="iden">Change ${tool.inp.denoise}</label><input id="iden" type="range" min="0.05" max="1" step="0.05" value="${tool.inp.denoise}" style="padding:0" title="0.3 keeps the picture and refines it, 0.6 changes it, 0.9 repaints it">
+        ${p._loras.length ? `<label class="note">LoRAs, up to three</label><span class="chips row" style="margin:0">${p._loras.map(l => `<button class="chip" data-ilora="${esc(l.id)}" aria-pressed="${tool.inp.loras.some(x => x.id === l.id)}" title="Her trigger is added in front of your tags">${esc(l.name)}</button>`).join('')}</span>
+        ${tool.inp.loras.map(x => `<label class="note">${esc(p._loras.find(l => l.id === x.id)?.name || 'LoRA')} ${x.strength}</label><input data-istr="${esc(x.id)}" type="range" min="0.3" max="1.3" step="0.05" value="${x.strength}" style="padding:0">${p._loras.find(l => l.id === x.id)?.pills?.outfit?.[0] ? `<span class="chips row" style="margin:0"><button class="chip" data-iout="${esc(x.id)}" aria-pressed="${!!x.outfit}" title="Adds her signature outfit: ${esc(p._loras.find(l => l.id === x.id).pills.outfit[0])}">Her outfit</button></span>` : ''}`).join('')}
+        ${tool.inp.loras.length ? '<p class="note">Her look (hair, eyes, marks) is added with her trigger. Turn Her outfit off to dress her in your own tags.</p>' : ''}` : ''}
+        <label class="note">Pose (ControlNet)</label><span class="chips row" style="margin:0">${[['off', 'Off', 'No pose guidance'], ['keep', 'Keep pose', 'The skeleton is read from the shown version: a strong repaint keeps the pose'], ['ref', 'Change pose', 'The pose of another picture, put where your mask is; needs a mask over the character']].map(([k, t, d]) => `<button class="chip" data-ictl="${k}" aria-pressed="${tool.inp.control === k}" title="${d}">${t}</button>`).join('')}</span>
+        ${tool.inp.control === 'ref' ? `<div class="row" style="margin:0;align-items:center"><button class="qref" id="iref" title="${p.pose_ref ? 'Your pose picture: click to change' : 'A picture of a person in the pose you want'}" aria-label="Pose picture">${p.pose_ref ? `<img src="${file(dir(), p.pose_ref)}?${tool.inp.refv}" alt=""><i id="irefx" title="Remove the pose picture" role="button">✕</i>` : '<span>+ pose</span>'}</button>${p.pose_ref ? `<img class="iskel" src="${file(dir(), 'pose_ref_skel.png')}?${tool.inp.refv}" alt="The pose that was read">` : ''}<span class="note" style="flex:1">A new pose needs Change 0.9 to 1 and tags for her whole look, not only the pose. Mask her as she is now; the mask grows by itself over the new arms and legs.</span><input type="file" accept="image/*" id="ifile" hidden></div>` : ''}
+        ${tool.inp.control !== 'off' ? `<label class="note" for="icstr">Pose strength ${tool.inp.cstr}</label><input id="icstr" type="range" min="0.3" max="1.5" step="0.05" value="${tool.inp.cstr}" style="padding:0">` : ''}
+        <label class="note">Detailer, redoes them large afterwards</label><span class="chips row" style="margin:0">${[['off', 'Off'], ['face', 'Faces'], ['hands', 'Hands'], ['both', 'Both']].map(([k, t]) => `<button class="chip" data-idet="${k}" aria-pressed="${tool.inp.detail === k}">${t}</button>`).join('')}</span>
+        ${tool.inp.detail !== 'off' ? `<label class="note" for="idstr">Detail change ${tool.inp.dstr}</label><input id="idstr" type="range" min="0.1" max="0.7" step="0.05" value="${tool.inp.dstr}" style="padding:0">` : ''}
+        <details class="fixcard" id="iset" ${tool.inp.open ? 'open' : ''}><summary>Settings</summary>
+          <div class="row" style="margin:0"><label class="note" style="flex:1">Seed<input id="iseed" inputmode="numeric" placeholder="random" value="${esc(String(tool.inp.seed))}"></label><label class="note" style="flex:1">Steps<input id="isteps" type="number" min="10" max="60" value="${tool.inp.steps}"></label><label class="note" style="flex:1">CFG<input id="icfg" type="number" min="1" max="10" step="0.5" value="${tool.inp.cfg}"></label></div></details>
+        <div class="row" style="margin:0"><button id="ibrush" aria-pressed="${tool.active === 'inpaint'}">${tool.active === 'inpaint' ? 'Painting the inpaint mask' : 'Paint mask'}</button><button id="iclear">Clear mask</button><button id="irun" class="primary" ${p.busy || !top ? 'disabled' : ''}>Inpaint</button><button id="irunq" ${p.busy || !top ? 'disabled' : ''} title="Change pose, keep the outfit: Qwen redraws her in the pose picture's pose from the picture itself, then JANKU goes over it lightly with her LoRA. About two and a half minutes. Needs Change pose and a pose picture; a mask is optional.">Inpaint with Qwen</button></div>
       </section>
       <div class="lockhead"><h3 title="The first character is painted first">Characters</h3><span class="row" style="margin:0;gap:6px"><button class="mini" data-foldall="1">Fold all</button><button class="mini" data-foldall="0">Unfold all</button></span></div><div id="chars"></div>
       <div class="row"><select id="add" aria-label="Add LoRA" style="flex:1"><option value="">Add LoRA …</option>${p._loras.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></div>
@@ -1200,11 +1217,40 @@ function paintPanel() {
   $('qfile').onchange = () => { const f0 = $('qfile').files[0]; if (!f0) return; const rd = new FileReader();
     rd.onload = async () => { const r = await act('panel_qwen_ref', { id:p.id, image:rd.result }); if (r) { p.qwen_ref = r.qwen_ref; Q.refv = Date.now(); paintPanel(); } }; rd.readAsDataURL(f0); };
   if ($('qrefx')) $('qrefx').onclick = async e => { e.stopPropagation(); const r = await act('panel_qwen_ref', { id:p.id }); if (r) { delete p.qwen_ref; paintPanel(); } };
-  $('qrun').onclick = async () => { Q.text = $('qtext').value; if (!Q.text.trim()) return alert('Write in a sentence what should change.');
+  const runQ = janku => async () => { Q.text = $('qtext').value; if (!Q.text.trim()) return alert('Write in a sentence what should change.');
     const m = drawn.qwen, has = m && m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v); let mask = null;
     if (has) { const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0); mask = t.toDataURL('image/png'); }
-    syncPanel(); await savePanel(); const r = await act('panel_qwen', { id:p.id, text:Q.text, loras:Q.loras, mask });
+    syncPanel(); await savePanel(); const r = await act('panel_qwen', { id:p.id, text:Q.text, loras:Q.loras, mask, janku, janku_loras:janku ? tool.inp.loras : [], negative:janku ? $('ineg').value : '' });
     if (r) { panel.busy = r.busy; paintPanel(); pollPanel(); } };
+  $('qrun').onclick = runQ(false); $('qrunj').onclick = runQ(true);
+  /* the panel's own SDXL inpaint */
+  const I = tool.inp, syncI = () => { I.text = $('itext').value; I.negative = $('ineg').value; I.seed = $('iseed').value.trim(); I.steps = +$('isteps').value || 30; I.cfg = +$('icfg').value || 5; I.open = $('iset').open; };
+  const repaintI = () => { syncI(); syncPanel(); const keep = captureMasks(); paintPanel(); restoreMasks(keep); };
+  ['itext', 'ineg', 'iseed', 'isteps', 'icfg'].forEach(k => $(k).oninput = syncI);
+  const slide = (id, key, word) => { if ($(id)) $(id).oninput = e => { I[key] = +e.target.value; e.target.previousElementSibling.textContent = word + ' ' + I[key]; }; };
+  slide('iden', 'denoise', 'Change'); slide('icstr', 'cstr', 'Pose strength'); slide('idstr', 'dstr', 'Detail change');
+  document.querySelectorAll('[data-ilora]').forEach(b => b.onclick = () => { const id = b.dataset.ilora, l = p._loras.find(x => x.id === id);
+    if (I.loras.some(x => x.id === id)) I.loras = I.loras.filter(x => x.id !== id); else if (I.loras.length < 3) I.loras = [...I.loras, { id, strength:l.strength, outfit:!!l.pills?.outfit?.[0] }]; repaintI(); });
+  document.querySelectorAll('[data-iout]').forEach(b => b.onclick = () => { const x = I.loras.find(y => y.id === b.dataset.iout); x.outfit = !x.outfit; repaintI(); });
+  document.querySelectorAll('[data-istr]').forEach(r => r.oninput = e => { const x = I.loras.find(y => y.id === r.dataset.istr); x.strength = +e.target.value; e.target.previousElementSibling.textContent = (p._loras.find(l => l.id === x.id)?.name || 'LoRA') + ' ' + x.strength; });
+  document.querySelectorAll('[data-ictl]').forEach(b => b.onclick = () => { I.control = b.dataset.ictl; if (I.control === 'ref' && I.denoise < 0.9) I.denoise = 1; /* below that the old pose in the picture wins over the skeleton */ repaintI(); });
+  document.querySelectorAll('[data-idet]').forEach(b => b.onclick = () => { I.detail = b.dataset.idet; repaintI(); });
+  $('ibrush').onclick = () => { tool.erase = false; tool.active = tool.active === 'inpaint' ? panel.characters[0]?.id ?? null : 'inpaint'; repaintI(); };
+  $('iclear').onclick = () => { drawn.inpaint?.getContext('2d').clearRect(0, 0, drawn.inpaint.width, drawn.inpaint.height); showMask(); };
+  if ($('iref')) { $('iref').onclick = e => { if (!e.target.closest('#irefx')) $('ifile').click(); };
+    $('ifile').onchange = () => { const f0 = $('ifile').files[0]; if (!f0) return; const rd = new FileReader();
+      rd.onload = async () => { syncI(); const r = await act('panel_pose_ref', { id:p.id, image:rd.result }); if (r) { p.pose_ref = r.pose_ref; I.refv = Date.now(); repaintI(); } }; rd.readAsDataURL(f0); };
+    if ($('irefx')) $('irefx').onclick = async e => { e.stopPropagation(); const r = await act('panel_pose_ref', { id:p.id }); if (r) { delete p.pose_ref; repaintI(); } }; }
+  const runI = qwen => async () => { syncI(); if (!I.text.trim()) return alert(qwen ? 'Write the new pose in a few words.' : 'Write in tags what should be there.');
+    if (qwen && I.control !== 'ref') return alert('Inpaint with Qwen changes the pose and keeps the outfit: pick Change pose and add a pose picture.');
+    const m = drawn.inpaint, has = m && m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v); let mask = null;
+    if (I.control === 'ref' && !p.pose_ref) return alert('Add a pose picture first.');
+    if (I.control === 'ref' && !has && !qwen) return alert('Paint a mask over the character who takes the pose.');
+    if (has) { const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0); mask = t.toDataURL('image/png'); }
+    syncPanel(); await savePanel();
+    const r = await act('panel_inpaint', { id:p.id, text:I.text, negative:I.negative, denoise:I.denoise, loras:I.loras, control:I.control, control_strength:I.cstr, detail:I.detail, detail_strength:I.dstr, seed:I.seed, steps:I.steps, cfg:I.cfg, mask, qwen });
+    if (r) { panel.busy = r.busy; paintPanel(); pollPanel(); } };
+  $('irun').onclick = runI(false); $('irunq').onclick = runI(true);
   $('delp').onclick = async () => { if (confirm('Delete this panel and its versions?')) { await act('panel_delete', { id:p.id }); location.hash = book ? 'book/' + book.id : 'manga'; } };
   if (!p.locked) { ['tags', 'prompt'].forEach(k => $(k).onchange = e => { p[k] = e.target.value; savePanel(); }); $('neg').onchange = e => { p.negative = e.target.value; savePanel(); }; }
   else { $('ptags').onchange = e => { p.pass_tags = e.target.value; savePanel(); }; $('pneg').onchange = e => { p.pass_negative = e.target.value; savePanel(); }; }
@@ -1274,8 +1320,8 @@ function paintPanel() {
     w.querySelector('[data-den]').onchange = e => { c.denoise = +e.target.value; savePanel(); paintPanel(); };
     w.querySelector('[data-pass]').onclick = async () => { syncPanel(); await savePanel(); await saveMasks(); const r = await act('panel_pass', { id:p.id, character:c.id, from:shownOf(p) }); if (r) { Object.assign(panel, r); paintPanel(); } };
     $('chars').append(w); });
-  tagSearch(Object.fromEntries([['tags', 'tags'], ['prompt', 'prompt'], ['neg', 'negative'], ['ptags', 'pass_tags'], ['pneg', 'pass_negative'], ...p.characters.map(c => ['act-' + c.id, c.id]), ...p.characters.map(c => ['cneg-' + c.id, 'neg:' + c.id])]), (key, value) => {
-    const cn = key.startsWith('neg:') && p.characters.find(x => x.id === key.slice(4)), c = p.characters.find(x => x.id === key); if (cn) cn.negative = value; else if (c) c.action = value; else p[key] = value; savePanel(); });
+  tagSearch(Object.fromEntries([['tags', 'tags'], ['prompt', 'prompt'], ['neg', 'negative'], ['ptags', 'pass_tags'], ['pneg', 'pass_negative'], ['itext', 'inp:text'], ['ineg', 'inp:negative'], ...p.characters.map(c => ['act-' + c.id, c.id]), ...p.characters.map(c => ['cneg-' + c.id, 'neg:' + c.id])]), (key, value) => {
+    const cn = key.startsWith('neg:') && p.characters.find(x => x.id === key.slice(4)), c = p.characters.find(x => x.id === key); if (key.startsWith('inp:')) { tool.inp[key.slice(4)] = value; return; } if (cn) cn.negative = value; else if (c) c.action = value; else p[key] = value; savePanel(); });
   $('all').onclick = async () => { syncPanel(); await savePanel(); await saveMasks(); const comp = p.composition; const r = await act('panel_pass', { id:p.id, all:true, from:comp }); if (r) { Object.assign(panel, r); paintPanel(); } };
   if (top) setupPainter();
 }
@@ -1291,8 +1337,8 @@ function setupPainter() {
   cv.onpointerdown = e => { if (!tool.active) return; down = true; last = null; cv.setPointerCapture(e.pointerId); stroke(e); };
   // the brush itself as the cursor: its real size, in the colour of the character being painted (dashed when erasing)
   const ring = document.createElement('i'); ring.className = 'brushring'; cv.parentElement.append(ring);
-  const showRing = e => { const i = panel.characters.findIndex(x => x.id === tool.active), qw = tool.active === 'qwen'; if (i < 0 && !qw) { ring.hidden = true; cv.style.cursor = 'not-allowed'; return; }
-    const r = cv.getBoundingClientRect(), col = qw ? '#e8e0ff' : COLORS[i % 4]; cv.style.cursor = 'none'; ring.hidden = false;
+  const showRing = e => { const i = panel.characters.findIndex(x => x.id === tool.active), qw = tool.active === 'qwen' || tool.active === 'inpaint'; if (i < 0 && !qw) { ring.hidden = true; cv.style.cursor = 'not-allowed'; return; }
+    const r = cv.getBoundingClientRect(), col = tool.active === 'inpaint' ? '#ffb070' : qw ? '#e8e0ff' : COLORS[i % 4]; cv.style.cursor = 'none'; ring.hidden = false;
     Object.assign(ring.style, { width:tool.size + 'px', height:tool.size + 'px', left:(e.clientX - r.left) + 'px', top:(e.clientY - r.top) + 'px',
       borderColor:tool.erase ? '#fff' : col, borderStyle:tool.erase ? 'dashed' : 'solid', background:tool.erase ? 'transparent' : col + '40' }); };
   cv.onpointermove = e => { showRing(e); if (down) stroke(e); };
@@ -1321,7 +1367,7 @@ function maskOf(id) { if (!id || !$('cv')) return null; if (!drawn[id]) { const 
     const c0 = panel.characters.find(x => x.id === id); if (c0?.masked) { const im = new Image(); im.onload = () => { const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const g = t.getContext('2d'); g.drawImage(im, 0, 0, c.width, c.height); const d = g.getImageData(0, 0, c.width, c.height); for (let i = 0; i < d.data.length; i += 4) { d.data[i + 3] = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; } c.getContext('2d').putImageData(d, 0, 0); showMask(); }; im.src = file(dir(), `mask_${id}.png`) + '?' + Date.now(); } }
   return drawn[id]; }
 function showMask() { const cv = $('cv'); if (!cv) return; const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
-  [...panel.characters, { id:'qwen' }].forEach((ch, i) => { const q = ch.id === 'qwen', m = q ? drawn.qwen : maskOf(ch.id); if (!m) return; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g = t.getContext('2d'); g.drawImage(m, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = q ? '#e8e0ff' : COLORS[i % 4]; g.fillRect(0, 0, t.width, t.height); c.drawImage(t, 0, 0); }); }
+  [...panel.characters, { id:'qwen' }, { id:'inpaint' }].forEach((ch, i) => { const q = ch.id === 'qwen' || ch.id === 'inpaint', m = q ? drawn[ch.id] : maskOf(ch.id); if (!m) return; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g = t.getContext('2d'); g.drawImage(m, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = ch.id === 'inpaint' ? '#ffb070' : q ? '#e8e0ff' : COLORS[i % 4]; g.fillRect(0, 0, t.width, t.height); c.drawImage(t, 0, 0); }); }
 async function saveMasks() { for (const ch of panel.characters) { const m = drawn[ch.id]; if (!m) continue; const t = document.createElement('canvas'); t.width = m.width; t.height = m.height; const g = t.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, t.width, t.height); g.drawImage(m, 0, 0); if (!m.getContext('2d').getImageData(0, 0, m.width, m.height).data.some((v, i) => i % 4 === 3 && v)) continue;
     const r = await act('panel_mask', { id:panel.id, character:ch.id, mask:t.toDataURL('image/png') }); if (r) ch.masked = true; } }
 

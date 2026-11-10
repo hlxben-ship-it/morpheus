@@ -150,6 +150,13 @@ ComfyUI, and the edit model streamed its 28 GB through the 20 GB card.
 `MODELS` in `morpheus.py` is the registry. A model is selectable once it has a workflow and all its
 files exist under `ComfyUI/models`; the others show as "Not installed" in the UI.
 
+**Panel inpaint (Yumeko, Create Manga)** paints with JANKU and needs two things besides the checkpoint:
+
+- `ComfyUI/models/controlnet/noob_openpose_pre.safetensors` (2.5 GB, `openpose_pre.safetensors` from
+  `huggingface.co/Laxhar/noob_openpose`): the pose ControlNet behind Keep pose / Change pose.
+- `pose.py`, which reads skeletons, faces and hands. It runs in `.venv-faceswap` with `rtmlib` on the CPU
+  (about 2 s per picture); rtmlib downloads its two ONNX models to `~/.cache/rtmlib` on first use.
+
 ## Styles
 
 | Style | Prompt prefix | Post-processing |
