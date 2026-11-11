@@ -166,7 +166,7 @@ def flux2_klein_edit_workflow(prompt: str, image: str, width: int, height: int, 
 
 
 def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: int, steps: int, loras: list | None = None) -> dict:
-    """Qwen-Image-Edit-2511 (20B, Q6_K GGUF) with the 4-step Lightning LoRA, after ComfyUI's image_qwen_image_edit_2511
+    """Qwen-Image-Edit-2511 (20B, Q5_K_M GGUF) with the 4-step Lightning LoRA, after ComfyUI's image_qwen_image_edit_2511
     template. Its Qwen2.5-VL encoder reads the picture along with the instruction, which keeps who she is through
     an outfit change better than Klein, at the cost of loading 22 GB in turns.
 
@@ -174,7 +174,7 @@ def qwen_edit_workflow(prompt: str, image: str, width: int, height: int, seed: i
     the base model's way: 40 steps at cfg 4, about ten times slower.
     """
     loras = lora_keys("qwen-image-edit-2511", loras)
-    graph, model = lora_chain({"1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q6_K.gguf"}}},
+    graph, model = lora_chain({"1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q5_K_M.gguf"}}},
                               ["1", 0], loras)
     fast = any(LORAS[k].get("speed") for k in loras)
     if not fast:
@@ -563,7 +563,7 @@ EDIT_MODELS = {
         "manual_note": "Edits a source picture: restyles, keeps the person",
         "label": "Qwen-Image-Edit 2511",
         "note": "Best at outfit and detail changes, keeps the person and style; slower",
-        "files": ["unet/qwen-image-edit-2511-Q6_K.gguf",
+        "files": ["unet/qwen-image-edit-2511-Q5_K_M.gguf",
                   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "vae/qwen_image_vae.safetensors"],
         "steps": 4,
         "pixel_art": True,  # keeps a pixel-art source's grid and flat colours on its own (Soulforge skips its restyle)

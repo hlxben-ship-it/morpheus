@@ -55,8 +55,32 @@
   .head { display:flex; gap:16px; align-items:center; margin-bottom:22px; }
   .head img { width:96px; height:96px; border-radius:50%; border:2px solid var(--accent); object-fit:cover; flex:none; }
   .say { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 16px; max-width:70ch; min-height:48px; }
+  #promptview { margin-top:12px; } #promptview details.pv { margin:6px 0; } #promptview textarea { width:100%; font-size:12px; } #promptview code { font-size:11px; opacity:.7; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,200px)); gap:14px; }
   #sets { grid-template-columns:repeat(auto-fill,minmax(150px,185px)); } /* one more set per row */
+  /* start page: two shelves of 2 x 5, newest first, then favourites; hover peeks */
+  .shelf { margin:0 0 30px; } .shelf-head { display:flex; align-items:baseline; gap:12px; margin:0 0 12px; } .shelf-head h2 { margin:0; font:400 15px/1 var(--px); letter-spacing:.1em; text-transform:uppercase; color:var(--accent); text-shadow:0 0 14px var(--glow); }
+  .shelf-head .count { color:var(--muted); font-size:12px; } .shelf-head .add { margin-left:auto; }
+  .shelfgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--tile,210px),1fr)); gap:14px; }
+  .peek { position:relative; padding:0; border:1px solid var(--line); border-radius:12px; overflow:visible; background:var(--panel); cursor:pointer; text-align:left; display:block; color:inherit;
+    transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease; transform-origin:center; }
+  .peek .pv { display:block; border-radius:11px 11px 0 0; overflow:hidden; background:var(--raised); }
+  .peek img, .peek .blank { width:100%; aspect-ratio:var(--ar, 2/3); object-fit:cover; display:grid; place-items:center; color:var(--muted); font-size:38px; }
+  .peek.sq img { object-position:50% 8%; }  /* square sets: the face and shoulders from the top of her portrait */
+  .peek .cap { display:flex; flex-direction:column; gap:2px; padding:7px 10px 9px; } .peek .cap b { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .peek .cap small { color:var(--muted); font-size:11px; }
+  .peek:hover, .peek:focus-visible { z-index:6; transform:scale(1.55); border-color:var(--accent); box-shadow:0 0 34px var(--glow), 0 18px 44px rgba(0,0,0,.75); }
+  .peek { transform-origin:var(--x,center) var(--y,center); } .peek.l { --x:left; } .peek.r { --x:right; } .peek.t { --y:top; }  /* edge tiles grow inwards, the top row grows down */
+  .peek .tag { position:absolute; top:7px; left:7px; z-index:1; font:400 10px/1 var(--px); letter-spacing:.08em; padding:4px 7px; border-radius:999px; background:var(--accent); color:#fff; box-shadow:0 0 12px var(--glow); }
+  .peek .acts { position:absolute; top:6px; right:6px; z-index:1; display:flex; gap:4px; opacity:0; transition:opacity .15s; }
+  .peek:hover .acts, .peek:focus-within .acts, .peek .acts .on { opacity:1; } .peek .acts { pointer-events:auto; }
+  .peek .acts button { width:26px; height:26px; padding:0; border-radius:7px; display:grid; place-items:center; font-size:14px; background:rgba(0,0,0,.6); border:1px solid var(--line); color:#fff; }
+  .peek .acts button.on { color:#ffd84a; opacity:1; }
+  .peek.more { display:grid; place-items:center; min-height:100%; border-style:dashed; color:var(--accent); font:400 13px/1.4 var(--px); letter-spacing:.08em; text-align:center; background:transparent; }
+  .peek.more:hover { transform:none; box-shadow:0 0 22px var(--glow); }
+  .wall { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,280px)); gap:18px; } .wall .peek:hover, .wall .peek:focus-visible { transform:scale(1.35); }
+  .wall-end { height:1px; }
+  @media (max-width:560px) { .shelfgrid { --tile:150px; } .peek:hover, .peek:focus-visible, .wall .peek:hover { transform:none; } }
+  @media (prefers-reduced-motion:reduce) { .peek, .peek .acts { transition:none; } }
   .tile { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; cursor:pointer; text-align:left; padding:0; }
   .tile img, .tile .blank { width:100%; aspect-ratio:2/3; object-fit:cover; display:grid; place-items:center; color:var(--muted); background:var(--raised); font-size:42px; }
   .tile .meta { padding:9px 11px; display:flex; flex-direction:column; gap:6px; }
@@ -325,6 +349,9 @@
   .ico.armed { background:#c0392b !important; color:#fff; }
   .versions .vdel.armed { width:auto; padding:0 8px; border-radius:999px; background:#c0392b; opacity:1; font-size:11px; }
   .bookbar { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; } .bookbar select { width:auto; min-width:180px; } .bookbar input { flex:1; min-width:160px; width:auto; }
+  .filmbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:-4px 0 14px; } .filmbar .bar { flex:1; min-width:120px; height:6px; border-radius:3px; background:var(--line); overflow:hidden; } .filmbar .bar i { display:block; height:100%; background:var(--pink); transition:width .4s; }
+  .film { margin:0 0 16px; } .film video { width:100%; max-height:62vh; background:#000; border-radius:8px; display:block; }
+  @media (prefers-reduced-motion:reduce) { .filmbar .bar i { transition:none; } }
   .book { display:grid; grid-template-columns:150px 1fr; gap:18px; align-items:start; }
   .pages { display:flex; flex-direction:column; gap:10px; position:sticky; top:12px; max-height:calc(100vh - 140px); overflow:auto; padding-right:4px; }
   .pages button { display:flex; flex-direction:column; gap:5px; padding:6px; font-size:12.5px; text-align:center; color:var(--muted); }
@@ -388,7 +415,7 @@
 <body>
 <header>
   <nav class="views" aria-label="Yumeko views">
-    <a href="#" id="nav-sets">Sets</a><a href="#manga" id="nav-manga">Create Manga</a>
+    <a href="#" id="nav-sets">Yumeko's Lair</a><a href="#manga" id="nav-manga">Stories</a>
   </nav>
 </header>
 <main id="app"></main>
@@ -407,26 +434,75 @@ function fail(e) { const n = document.createElement('p'); n.className = 'err'; n
 const act = async (a, b) => { try { const r = await post(a, b); return r; } catch (e) { fail(e); } };
 
 // ---------- home ----------
+// Yumeko's Lair (character sets) and Stories (mangas): newest first, then favourites, then the rest by date.
+function ordered(items) {
+  const by = [...items].sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  if (!by.length) return by;
+  const [first, ...rest] = by;
+  return [first, ...rest.filter(x => x.star), ...rest.filter(x => !x.star)];
+}
+async function lairItems() {
+  S = await get('/api/yumeko/state');
+  return S.jobs.map(j => ({ kind:'set', id:j.id, star:!!j.star, updated:j.updated || 0, title:j.agent, img:j.cover ? file(j.id, j.cover) : null,
+    sub:j.finished ? 'Finished' : `In progress · ${j.step || PHASES[j.phase - 1]}${j.phase === 3 && !j.step ? ` · ${j.accepted} kept` : ''}`, job:j }));
+}
+async function storyItems() {
+  mangaData = await get('/api/yumeko/manga');
+  const byId = Object.fromEntries(mangaData.panels.map(p => [p.id, p]));
+  return mangaData.books.map(b => { const ps = b.panels.map(x => byId[x]).filter(Boolean), cover = ps.find(p => shownOf(p)), pages = Math.max(1, Math.ceil(ps.length / 4));
+    return { kind:'story', id:b.id, star:!!b.star, updated:Math.max(0, b.film_at || 0, ...ps.map(p => p.updated || 0)), title:b.title, film:!!b.film,
+      img:cover ? file('_manga/' + cover.id, shownOf(cover)) : null, sub:`${ps.length} ${ps.length === 1 ? 'panel' : 'panels'} · ${pages} ${pages === 1 ? 'page' : 'pages'}` }; });
+}
+function peekTile(it, i, newest, again) {
+  const t = document.createElement('div'); t.className = 'peek'; t.tabIndex = 0; t.setAttribute('role', 'link');
+  t.style.setProperty('--ar', '1/1'); if (it.kind === 'set') t.classList.add('sq');  // all tiles the same square; sets crop from the top
+  t.innerHTML = `<span class="pv">${it.img ? `<img src="${it.img}" alt="" loading="lazy">` : `<span class="blank">${it.kind === 'story' ? '▦' : '?'}</span>`}</span>
+    ${i === 0 && newest ? '<span class="tag">Newest</span>' : it.film ? '<span class="tag">Film</span>' : ''}
+    <span class="acts"><button data-a="star" class="${it.star ? 'on' : ''}" aria-label="${it.star ? 'Remove from favourites' : 'Favourite'}" title="Favourite">${it.star ? '★' : '☆'}</button>${it.kind === 'set' ? '<button data-a="del" aria-label="Delete" title="Delete">✕</button>' : ''}</span>
+    <span class="cap"><b>${esc(it.title)}</b><small>${esc(it.sub)}</small></span>`;
+  const open = () => location.hash = it.kind === 'set' ? 'job/' + it.id : 'book/' + it.id;
+  t.onclick = async e => { const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'star') { e.stopPropagation(); await (it.kind === 'set' ? act('star', { id:it.id }) : act('book_edit', { id:it.id, star:!it.star })); again(); }
+    else if (a === 'del') { e.stopPropagation(); askDelete(it.job); }
+    else open(); };
+  t.onkeydown = e => { if (e.key === 'Enter' && e.target === t) open(); };
+  return t;
+}
+// Two rows of as many tiles as fit; More opens the Grand Gallery once not all fit.
+function cols(el) { return Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length); }
+function edges(el) { const n = cols(el); [...el.children].forEach((t, i) => { t.classList.toggle('l', i % n === 0); t.classList.toggle('r', i % n === n - 1); t.classList.toggle('t', i < n); }); }
+let shelves = null;
 async function home() {
-  clearTimeout(timer); S = await get('/api/yumeko/state');
-  app.innerHTML = `${dialogueBox('', true, 'say')}
-    <div class="grid" id="sets"></div>`;
-  const say = $('say'); let i = 0; (function type() { if (i <= S.greeting.length) { say.textContent = S.greeting.slice(0, i++); setTimeout(type, 16); } })();
-  const g = $('sets'), add = document.createElement('button');
-  add.className = 'tile'; add.innerHTML = '<span class="blank">+</span><span class="meta"><b>Add</b><small>New set</small></span>'; add.onclick = () => location.hash = 'new';
-  S.jobs.forEach(j => {
-    const t = document.createElement('div'); t.className = 'tile'; t.tabIndex = 0;
-    t.innerHTML = `${j.cover ? `<img src="${file(j.id, j.cover)}" alt="">` : '<span class="blank">?</span>'}<div class="meta"><b>${esc(j.agent)}</b>
-      <small>${j.finished ? 'Finished' : `In progress, ${j.step || PHASES[j.phase - 1]}`}${j.phase === 3 && !j.step ? `, ${j.accepted} kept` : ''}</small>
-      <div class="row"><button data-a="star" aria-label="Favourite">${j.star ? '★' : '☆'}</button><button data-a="del" class="danger">Delete</button></div></div>`;
-    t.onclick = e => { const a = e.target.dataset.a;
-      if (a === 'star') act('star', { id:j.id }).then(home);
-      else if (a === 'del') askDelete(j);
-      else location.hash = 'job/' + j.id; };
-    t.onkeydown = e => { if (e.key === 'Enter') location.hash = 'job/' + j.id; };
-    g.append(t);
-  });
-  g.append(add);  // last, after the sets
+  clearTimeout(timer);
+  const [lair, stories] = await Promise.all([lairItems(), storyItems()]);
+  app.innerHTML = `<section class="shelf"><div class="shelf-head"><h2>Yumeko's Lair</h2><span class="count">${lair.length} ${lair.length === 1 ? 'set' : 'sets'}</span><button class="add" id="addset">+ New set</button></div><div class="shelfgrid" id="lair"></div>${lair.length ? '' : '<p class="note">No set yet.</p>'}</section>
+    <section class="shelf"><div class="shelf-head"><h2>Stories</h2><span class="count">${stories.length} ${stories.length === 1 ? 'story' : 'stories'}</span><button class="add" id="addstory">+ New story</button></div><div class="shelfgrid" id="stories"></div>${stories.length ? '' : '<p class="note">No story yet.</p>'}</section>`;
+  $('addset').onclick = () => location.hash = 'new';
+  $('addstory').onclick = async () => { const b = await act('book_new', { title:'New manga' }); if (b) location.hash = 'book/' + b.id; };
+  shelves = [['lair', ordered(lair), 'all/lair'], ['stories', ordered(stories), 'manga']];
+  fillShelves();
+}
+function fillShelves() {
+  if (!shelves || !$('lair')) return;
+  for (const [box, items, all] of shelves) {
+    const el = $(box), fit = cols(el) * 2, more = items.length > fit;
+    el.replaceChildren(...items.slice(0, more ? fit - 1 : fit).map((it, i) => peekTile(it, i, true, home)));
+    if (more) { const m = document.createElement('a'); m.className = 'peek more'; m.href = '#' + all; m.innerHTML = `More<br><small>all ${items.length}</small>`; el.append(m); }
+    edges(el);
+  }
+}
+let resizing; addEventListener('resize', () => { clearTimeout(resizing); resizing = setTimeout(() => { fillShelves(); if ($('wall')) edges($('wall')); }, 120); });
+// The Grand Gallery: every set or every story as a large wall, loaded in batches while scrolling.
+async function gallery(kind) {
+  clearTimeout(timer);
+  const items = ordered(kind === 'lair' ? await lairItems() : await storyItems());
+  app.innerHTML = `<div class="shelf-head"><a class="btnlike" href="#">← Start</a><h2>${kind === 'lair' ? "Yumeko's Lair" : 'Stories'}</h2><span class="count">${items.length}</span>
+    <button class="add" id="addg">${kind === 'lair' ? '+ New set' : '+ New story'}</button></div><div class="wall" id="wall"></div><div class="wall-end" id="wend"></div>`;
+  $('addg').onclick = async () => { if (kind === 'lair') location.hash = 'new'; else { const b = await act('book_new', { title:'New manga' }); if (b) location.hash = 'book/' + b.id; } };
+  let at = 0; const wall = $('wall'), again = () => gallery(kind);
+  const more = () => { items.slice(at, at + 24).forEach((it, i) => wall.append(peekTile(it, at + i, true, again))); at += 24; edges(wall); if (at >= items.length) io.disconnect(); };
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) more(); }, { rootMargin:'600px' });
+  more(); io.observe($('wend'));
 }
 function askDelete(j) {
   $('del-text').textContent = `This removes ${j.agent}'s job folder with every picture, the training set and the trained LoRA. It can't be undone. Type ${j.agent} to confirm.`;
@@ -1020,17 +1096,7 @@ function picModal(j, g, variant) {
 const shownOf = p => p?.current || p?.versions?.[0]?.file;
 // Mangas: an overview of all of them, then one read like a book, four panels to a page, in order.
 let mangaData, bookAt = {};
-async function manga() {
-  clearTimeout(timer); mangaData = await get('/api/yumeko/manga');
-  const byId = Object.fromEntries(mangaData.panels.map(p => [p.id, p]));
-  app.innerHTML = `<div class="row" style="justify-content:space-between"><h2>Create Manga</h2><button class="go" id="newb">New manga</button></div>
-    <div class="grid" id="bs"></div>${mangaData.books.length ? '' : '<p class="note">No manga yet. Start one; its characters come from finished sets.</p>'}`;
-  $('newb').onclick = async () => { const b = await act('book_new', { title:'New manga' }); if (b) location.hash = 'book/' + b.id; };
-  mangaData.books.forEach(b => { const first = byId[b.panels[0]], f = shownOf(first), el = document.createElement('button'); el.className = 'tile';
-    const pages = Math.max(1, Math.ceil(b.panels.length / 4));
-    el.innerHTML = `${f ? `<img src="${file('_manga/' + first.id, f)}" alt="">` : '<span class="blank">▦</span>'}<span class="meta"><b>${esc(b.title)}</b><small>${b.panels.length} ${b.panels.length === 1 ? 'panel' : 'panels'}, ${pages} ${pages === 1 ? 'page' : 'pages'}</small></span>`;
-    el.onclick = () => location.hash = 'book/' + b.id; $('bs').append(el); });
-}
+async function manga() { return gallery('stories'); }
 async function openBook(id, page) {
   clearTimeout(timer); mangaData = await get('/api/yumeko/manga');
   const b = mangaData.books.find(x => x.id === id); if (!b) { location.hash = 'manga'; return; }
@@ -1039,9 +1105,13 @@ async function openBook(id, page) {
   const at = Math.min(Math.max(1, page || bookAt[id] || 1), pages); bookAt[id] = at;
   const img = pid => { const p = byId[pid], f = shownOf(p); return f ? `<img src="${file('_manga/' + pid, f)}" alt="${esc(p.title)}">` : '<span class="startp">Empty panel<br>Open it to write the scene</span>'; };
   const others = mangaData.books.filter(x => x.id !== id).flatMap(x => x.panels.filter(pid => byId[pid]).map(pid => ({ pid, from:x.title })));
-  const slots = ids.slice((at - 1) * 4, at * 4);
+  const slots = ids.slice((at - 1) * 4, at * 4), anim = mangaData.animating?.[id];
   app.innerHTML = `<div class="bookbar"><select id="bsel" aria-label="Pick a manga">${mangaData.books.map(x => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}</select>
-      <input id="btitle" value="${esc(b.title)}" aria-label="Manga title"><button id="newb">New manga</button><button class="danger" id="delb" title="Its panels move to Loose panels">Delete manga</button></div>
+      <input id="btitle" value="${esc(b.title)}" aria-label="Manga title"><button id="newb">New manga</button><button class="danger" id="delb" title="Its panels move to Loose panels">Delete manga</button>
+      ${anim && !anim.done ? `<button id="animstop">Stop</button>` : `<button class="go" id="animate" ${ids.length ? '' : 'disabled'} title="Every panel's picture becomes a 2 s clip from its Motion text (LTX), joined into one film. Unchanged panels are not rendered again.">Animate that</button>`}</div>
+    ${anim && !anim.done ? `<div class="filmbar" role="status"><b>Animating panel ${anim.at || 1} of ${anim.of}</b>${anim.panel ? ` · ${esc(anim.panel)}` : ''}<span class="bar"><i style="width:${Math.round(100 * ((anim.at || 1) - 1 + (anim.step || 0) / (anim.total || 12)) / anim.of)}%"></i></span><span class="note">about 2½ min per panel</span></div>` : ''}
+    ${anim?.error ? `<p class="note err" role="alert">Animate stopped: ${esc(anim.error)}</p>` : ''}
+    ${b.film ? `<figure class="film"><video src="${file('_manga', b.film)}" controls playsinline preload="metadata"></video><figcaption class="note">${esc(b.title)} · the film, ${new Date(b.film_at * 1000).toLocaleString()}</figcaption></figure>` : ''}
     <div class="book"><nav class="pages" aria-label="Pages">${Array.from({ length:pages }, (_, i) => `<button data-page="${i + 1}" aria-current="${i + 1 === at}"><span class="mini">${[0, 1, 2, 3].map(k => { const pid = ids[i * 4 + k]; return `<i>${pid ? img(pid) : ''}</i>`; }).join('')}</span>Page ${i + 1}</button>`).join('')}</nav>
     <div class="reader"><div class="paper">${[0, 1, 2, 3].map(k => { const pid = slots[k], n = (at - 1) * 4 + k;
         if (pid) return `<figure class="frame"><button class="open" data-open="${pid}" title="Edit: ${esc(byId[pid].title)}">${img(pid)}</button>
@@ -1054,6 +1124,9 @@ async function openBook(id, page) {
   $('btitle').onchange = e => act('book_edit', { id, title:e.target.value });
   $('newb').onclick = async () => { const nb = await act('book_new', { title:'New manga' }); if (nb) location.hash = 'book/' + nb.id; };
   $('delb').onclick = async () => { if (confirm(`Delete "${b.title}"? Its panels move to Loose panels.`)) { await act('book_delete', { id }); location.hash = 'manga'; } };
+  if ($('animate')) $('animate').onclick = async () => { if (await act('book_animate', { id })) openBook(id, at); };
+  if ($('animstop')) $('animstop').onclick = async () => { await act('book_animate_stop', { id }); };
+  if (anim && !anim.done) timer = setTimeout(() => { if (location.hash.startsWith('#book/' + id)) openBook(id, at); }, 3000);
   app.querySelectorAll('[data-page]').forEach(x => x.onclick = () => go(+x.dataset.page));
   app.querySelectorAll('[data-open]').forEach(x => x.onclick = () => location.hash = 'panel/' + x.dataset.open);
   app.querySelectorAll('[data-move]').forEach(x => x.onclick = async () => { const i = +x.dataset.move, j = i + +x.dataset.by, o = [...ids]; [o[i], o[j]] = [o[j], o[i]];
@@ -1161,11 +1234,14 @@ function paintPanel() {
     ${p.busy ? `<p class="busy">${esc(p.busy)} …</p>` : ''}${p.error ? `<p class="err">${esc(p.error)}</p>` : ''}
     <div class="pedit"><aside class="pvers">${top ? `<h3>Versions</h3><div class="versions" id="vs"></div>` : ''}</aside>
     <div class="pmid">${top ? `<div class="stage${tool.hide ? ' nomask' : ''}" id="stage"><button class="ico maskeye" id="eye" aria-pressed="${!!tool.hide}" title="${tool.hide ? 'Show the masks' : 'Hide the masks'}" aria-label="Hide masks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button><img id="pic" src="${file(dir(), top.file)}" alt="Panel"><canvas id="cv"></canvas></div>
-      <div class="row brushbar"><label class="note">Brush</label><input id="size" type="range" min="6" max="140" value="${tool.size}" style="width:140px;padding:0"><button id="erase" aria-pressed="${tool.erase}">${tool.erase ? 'Erasing' : 'Erase'}</button><button id="clear">Clear mask</button><button id="savem">Save masks</button></div>` : `<ol class="howto"><li><b>Write the scene</b> on the right. Describe each person in words, with hair and outfit colours: the composition has no LoRA yet.</li>
+      <div class="row brushbar"><label class="note">Brush</label><input id="size" type="range" min="6" max="140" value="${tool.size}" style="width:140px;padding:0"><button id="erase" aria-pressed="${tool.erase}">${tool.erase ? 'Erasing' : 'Erase'}</button><button id="clear">Clear mask</button><button id="savem">Save masks</button></div>
+      <section class="box magic"><h3>Fix it</h3><p class="note">Render a <b>sketch</b> (the staging, no LoRAs), then <b>Cast characters</b>: everyone keeps the sketch's place and pose and gets her own LoRA, left to right in the order listed. Then say what's wrong, naming her, and <b>Finish</b> it: larger, crisp, faces up close.</p>
+      <div class="row"><button class="go" id="castb" ${p.busy || !p.characters.length ? 'disabled' : ''} title="Redraw the shown picture with every character's LoRA in her own place">Cast characters</button><button class="go" id="finb" ${p.busy ? 'disabled' : ''} title="1.5x larger, redrawn crisp with every LoRA, faces up close">Finish</button></div>
+      <div class="row"><input id="magic" placeholder="Yumeko's underboob cutout is missing" aria-label="What is wrong" style="flex:1"><button class="go" id="magicb" ${p.busy ? 'disabled' : ''}>✨ Fix it</button></div></section>` : `<ol class="howto"><li><b>Write the scene</b> on the right. Describe each person in words, with hair and outfit colours: the composition has no LoRA yet.</li>
         <li><b>Add the characters</b> below it. Each one's look is filled in from her set; add what she does in this panel.</li>
-        <li><b>Render composition.</b> It sets the staging, poses and place.</li>
-        <li><b>Paint a mask</b> over each character, then <b>Paint all characters</b>: her LoRA repaints her inside the mask.</li>
-        <li>Fix one character with her own <b>Redo this pass</b>; pick the version for the manga under Versions.</li></ol>`}
+        <li><b>Render sketch.</b> It sets the staging, poses and place; render again until the staging is right.</li>
+        <li><b>Cast characters:</b> one render, every character with her own LoRA in her place.</li>
+        <li><b>Fix it:</b> say what's wrong, naming her ("Yumeko's underboob cutout is missing").</li></ol>`}
     ${p.locked ? `<section class="box${folded('lock')}" data-box="lock"><div class="lockhead boxhead">${foldBtn('lock')}<h3>Composition locked</h3><button id="unlock" ${p.busy ? 'disabled' : ''} title="Back to the scene to render a new composition">Unlock</button></div>
       <label class="note" for="ptags">Pass tags, with every character</label><textarea id="ptags" rows="2" placeholder="indoors, night, bedroom">${esc(p.pass_tags || '')}</textarea>
       <label class="note" for="pneg">Pass negative, plus each character's own</label><textarea id="pneg" rows="2">${esc(p.pass_negative || '')}</textarea>
@@ -1174,8 +1250,10 @@ function paintPanel() {
       <label class="note" for="prompt">Prompt, natural language</label><textarea id="prompt" rows="8" placeholder="manga panel, cyber cafe. On the left a woman with black hair, on the right a woman with white hair.">${esc(p.prompt)}</textarea>
       <label class="note" for="neg">Negative</label><textarea id="neg" rows="2" placeholder="text, letters, speech_bubble, watermark, signature">${esc(p.negative)}</textarea>
       <div class="row"><select id="size-p" aria-label="Size" style="width:auto"><option value="1024,1024">Square</option><option value="1216,832">Wide</option><option value="832,1216">Tall</option></select>
-      <button class="go" id="comp" ${p.busy ? 'disabled' : ''}>Render composition</button>${top ? '<button id="lock" title="Keep this composition; character passes then use the pass tags and negative below">Lock composition</button>' : ''}<button id="tog" ${p.busy || p.characters.length < 1 ? 'disabled' : ''} title="Experimental: LoRAs together often mix identities">With LoRAs</button></div>
-</section>`}</div>
+      <button class="go" id="comp" ${p.busy ? 'disabled' : ''}>Render sketch</button>${top ? '<button id="lock" title="Keep this composition; character passes then use the pass tags and negative below">Lock composition</button>' : ''}<button id="tog" ${p.busy || p.characters.length < 1 ? 'disabled' : ''} title="Experimental: LoRAs together often mix identities">With LoRAs</button><button id="showprompt" title="The exact words, LoRAs and negatives each button sends">Show prompt</button></div><div id="promptview" hidden></div>
+</section>`}
+    <section class="box${folded('motion')}" data-box="motion"><div class="lockhead boxhead">${foldBtn('motion')}<h3>Comes alive</h3></div>
+      <label class="note" for="pmotion">Motion for <b>Animate that</b>: what moves in this panel's 2 s clip</label><textarea id="pmotion" rows="3" placeholder="Anime style. Kiri's goggles slip down her nose, Nova laughs, a slow camera push-in.">${esc(p.motion || '')}</textarea></section></div>
     <div class="pside">      <section class="box qbox${folded('qwen')}" data-box="qwen"><div class="lockhead boxhead">${foldBtn('qwen')}<h3>Qwen edit</h3></div>
         <p class="note">One sentence for the whole panel. Paint its own mask to edit only that area; without a mask Qwen gets the whole picture.</p>
         <div class="qrow"><textarea id="qtext" rows="3" placeholder="The three women laugh, a pillow flies through the air.">${esc(tool.qwen.text)}</textarea>
@@ -1252,6 +1330,7 @@ function paintPanel() {
     if (r) { panel.busy = r.busy; paintPanel(); pollPanel(); } };
   $('irun').onclick = runI(false); $('irunq').onclick = runI(true);
   $('delp').onclick = async () => { if (confirm('Delete this panel and its versions?')) { await act('panel_delete', { id:p.id }); location.hash = book ? 'book/' + book.id : 'manga'; } };
+  $('pmotion').onchange = async e => { p.motion = e.target.value; await act('panel_edit', { id:p.id, motion:p.motion }); };
   if (!p.locked) { ['tags', 'prompt'].forEach(k => $(k).onchange = e => { p[k] = e.target.value; savePanel(); }); $('neg').onchange = e => { p.negative = e.target.value; savePanel(); }; }
   else { $('ptags').onchange = e => { p.pass_tags = e.target.value; savePanel(); }; $('pneg').onchange = e => { p.pass_negative = e.target.value; savePanel(); }; }
   const HEADCOUNT = /^(\d\+?|multiple|solo)[ _]?(girls?|boys?|others?)$|^solo$|^(group|crowd)$/;
@@ -1259,8 +1338,21 @@ function paintPanel() {
     pass_negative:p.pass_negative || ['nsfw', 'nude', ...p.negative.split(',').map(t => t.trim()).filter(t => t && !['loli', 'child', 'nsfw', 'nude'].includes(t.toLowerCase()))].join(', ') }); /* loli, child are locked; nsfw, nude editable */ await act('panel_edit', { id:p.id, locked:true, pass_tags:p.pass_tags, pass_negative:p.pass_negative }); paintPanel(); };
   if ($('unlock')) $('unlock').onclick = async () => { syncPanel(); p.locked = false; await act('panel_edit', { id:p.id, locked:false, pass_tags:p.pass_tags, pass_negative:p.pass_negative }); paintPanel(); };
   if (!p.locked) { $('size-p').value = `${p.width},${p.height}`; $('size-p').onchange = e => { [p.width, p.height] = e.target.value.split(',').map(Number); savePanel(); };
-  const compose = t => async () => { p.tags = $('tags').value; p.prompt = $('prompt').value; p.negative = $('neg').value; await savePanel(); const r = await act('panel_compose', { id:p.id, together:t }); if (r) { Object.assign(panel, r); paintPanel(); } };
+  const compose = t => async () => { p.tags = $('tags').value; p.prompt = $('prompt').value; p.negative = $('neg').value; await savePanel(); const r = await act(t ? 'panel_compose' : 'panel_sketch', { id:p.id, together:t }); if (r) { Object.assign(panel, r); paintPanel(); } };
   $('comp').onclick = compose(false); $('tog').onclick = compose(true); }
+  if ($('showprompt')) $('showprompt').onclick = async () => {
+    const v = $('promptview'); if (!v.hidden) { v.hidden = true; return; }
+    const r = await act('panel_prompt', { id:p.id, tags:$('tags')?.value ?? p.tags, prompt:$('prompt')?.value ?? p.prompt, negative:$('neg')?.value ?? p.negative }); if (!r) return;
+    const box = (label, text) => `<label>${esc(label)}</label><textarea readonly rows="${Math.min(8, 2 + Math.ceil(text.length / 140))}">${esc(text)}</textarea>`;
+    v.innerHTML = `<p class="note">Model ${esc(r.model)}. Read-only: this is what ComfyUI receives.</p>` + r.steps.map(st => `<details class="pv"><summary><b>${esc(st.step)}</b>${st.loras.length ? ' · ' + st.loras.map(l => `${esc(l.name)} <code>${esc(l.file)}</code> @ ${l.strength}`).join(', ') : ' · no LoRA'}${st.denoise != null ? ' · denoise ' + st.denoise : ''}</summary>`
+      + box('Positive' + (st.regions ? ' (base, whole picture)' : ''), st.positive)
+      + (st.regions || []).map(g => box(`Region ${g.where}: ${g.name}`, g.positive)).join('')
+      + box('Negative', st.negative) + '</details>').join('');
+    v.hidden = false; };
+  const run = (action, body) => async () => { const r = await act(action, { id:p.id, ...body() }); if (r) { Object.assign(panel, r); paintPanel(); } };
+  if ($('castb')) $('castb').onclick = run('panel_cast', () => ({}));
+  if ($('finb')) $('finb').onclick = run('panel_finish', () => ({}));
+  if ($('magicb')) { $('magicb').onclick = run('panel_magic', () => ({ text:$('magic').value })); $('magic').onkeydown = e => { if (e.key === 'Enter') $('magicb').click(); }; }
   $('add').onchange = e => { const l = p._loras.find(x => x.id === e.target.value); if (!l) return; const c = { id:`c${Date.now()}`, lora:l.id, name:l.name, trigger:l.trigger, file:l.file, strength:l.strength, denoise:.62, action:l.look ? l.look + ', ' : '', negative:'', identity:true, outfit:!!l.pills?.outfit?.[0] };
     pillTags(c, l.pills?.identity, true, ['action', 'negative']); pillTags(c, l.pills?.outfit, c.outfit, ['action', 'negative'], true); p.characters.push(c); tool.active = p.characters.at(-1).id; savePanel(); paintPanel(); };
   p.characters.forEach((c, i) => { const w = document.createElement('div'); w.className = 'char' + (tool.active === c.id ? ' on' : '');
@@ -1375,7 +1467,7 @@ async function saveMasks() { for (const ch of panel.characters) { const m = draw
 if (parent !== window) document.body.classList.add('embedded');  // inside Morpheus the top bar carries this navigation
 async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel') && !h.startsWith('book')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book'));
   catalog ||= await get('/api/yumeko/catalog');
-  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else if (h.startsWith('book/')) { const [, bid, pg] = h.split('/'); await openBook(bid, +pg || 0); } else await home(); }
+  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h === 'all/lair') await gallery('lair'); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else if (h.startsWith('book/')) { const [, bid, pg] = h.split('/'); await openBook(bid, +pg || 0); } else await home(); }
   catch (e) { app.innerHTML = ''; fail(e); } }
 addEventListener('hashchange', route); route();
 </script>

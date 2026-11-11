@@ -815,7 +815,8 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/yumeko/catalog":
             return self.send_json(yumeko.CATALOG)
         if route == "/api/yumeko/manga":
-            return self.send_json({"panels": yumeko.panels(), "books": yumeko.books(), "loras": yumeko.finished(), "pass_fixed": yumeko.pass_fixed()})
+            return self.send_json({"panels": yumeko.panels(), "books": yumeko.books(), "loras": yumeko.finished(), "pass_fixed": yumeko.pass_fixed(),
+                                   "animating": {k: {x: y for x, y in v.items() if x != "stop"} for k, v in yumeko.ANIMATING.items()}})
         if route.startswith("/api/yumeko/live/"):  # the newest preview frame of a Use render
             frame = yumeko.LIVE.get(route.rsplit("/", 1)[1], {}).get("frame")
             if not frame:
@@ -1669,6 +1670,8 @@ def warm_up() -> None:
 
 
 yumeko.ask_claude, yumeko.ensure_comfy, yumeko.CHAT_DIR = ask_claude, ensure_comfy, CHAT_DIR
+yumeko.ensure_video_comfy, yumeko.SERVER_GPU = ensure_video_comfy, gpu  # Animate that: the same lock and ComfyUI start as Dawnforge
+yumeko._unstick()  # panels cut off by the last restart are free again
 yumeko.register_all()
 yumeko_auto.resume_all()
 

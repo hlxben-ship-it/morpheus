@@ -18,7 +18,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 import agents
 import csv
@@ -1103,6 +1103,15 @@ BOOKS = MANGA / "books.json"
 def books() -> list:
     """Every manga with its panel order. Panels from before mangas existed land in "Loose panels" once."""
     data = json.loads(BOOKS.read_text(encoding="utf-8")) if BOOKS.exists() else []
+    # a panel that never got a picture and sat untouched for 30 min was a click, not work: it goes, and so does a
+    # "Loose panels" story left empty by that
+    drafts = {q["id"] for q in panels() if not q.get("versions") and not q.get("busy") and time.time() - q.get("updated", 0) > 1800}
+    for pid in drafts:
+        shutil.rmtree(panel_dir(pid), ignore_errors=True)
+    if drafts or any(b["title"] == "Loose panels" and not b["panels"] for b in data):
+        data = [dict(b, panels=[x for x in b["panels"] if x not in drafts]) for b in data]
+        data = [b for b in data if b["panels"] or b["title"] != "Loose panels"]
+        _books_save(data)
     placed = {pid for b in data for pid in b["panels"]}
     loose = [p["id"] for p in sorted(panels(), key=lambda p: p.get("updated", 0)) if p["id"] not in placed]
     if loose:
@@ -1125,13 +1134,15 @@ def book_new(req: dict) -> dict:
 
 
 def book_edit(req: dict) -> dict:
-    """Rename, reorder (panels: the full new order), or move one panel here (add: panel id, taken out of any other manga)."""
+    """Rename, star, reorder (panels: the full new order), or move one panel here (add: panel id, taken out of any other manga)."""
     data = books()
     b = next((x for x in data if x["id"] == req.get("id")), None)
     if not b:
         raise ValueError("Unknown manga.")
     if "title" in req:
         b["title"] = str(req["title"]).strip() or b["title"]
+    if "star" in req:  # a favourite story comes right after the newest one on the start page
+        b["star"] = bool(req["star"])
     if isinstance(req.get("panels"), list) and sorted(req["panels"]) == sorted(b["panels"]):
         b["panels"] = req["panels"]
     if req.get("add"):
@@ -1149,6 +1160,110 @@ def book_delete(req: dict) -> dict:
     _books_save(data)
     books()
     return {"ok": True}
+
+
+# ---------- Animate that: a manga becomes a film, every panel a 2 s living picture (LTX, see the vault seed manga_comes_alive) ----------
+ensure_video_comfy = lambda: None  # server.py hands in its own, with its GPU lock
+SERVER_GPU = threading.Lock()
+MOTION_DEFAULT = "Subtle living motion: hair and clothes sway gently, she breathes and blinks, a slow camera push-in. Anime style."
+FILM_SIZE = (768, 512)  # 3:2 like the 1216x832 panels; LTX pass 1 then runs at 576x384
+ANIMATING: dict[str, dict] = {}  # book id -> {"at": n, "of": N, "panel": title, "step": s, "total": t, "error": ...}
+
+
+def _clip_key(pid: str, picture: str, motion: str) -> str:
+    import hashlib
+    return hashlib.sha1(f"{pid}|{picture}|{motion}|ltx1".encode()).hexdigest()[:12]
+
+
+def _letterbox(frame: Image.Image) -> Image.Image:
+    """A portrait clip in the landscape film: fitted, black bars left and right."""
+    if frame.size == FILM_SIZE:
+        return frame
+    f = frame.copy()
+    f.thumbnail(FILM_SIZE, Image.LANCZOS)
+    out = Image.new("RGB", FILM_SIZE)
+    out.paste(f, ((FILM_SIZE[0] - f.width) // 2, (FILM_SIZE[1] - f.height) // 2))
+    return out
+
+
+def book_animate(req: dict) -> dict:
+    """Render every panel's shown picture as a 2 s LTX clip from its Motion text and join them into the manga's film.
+    A clip stays per panel (keyed by picture and Motion), so animating again only renders what changed."""
+    data = books()
+    b = next((x for x in data if x["id"] == req.get("id")), None)
+    if not b:
+        raise ValueError("Unknown manga.")
+    if b["id"] in ANIMATING and not ANIMATING[b["id"]].get("done"):
+        raise ValueError("This manga is already being animated.")
+    if not morpheus.video_installed("ltx"):
+        raise ValueError("The LTX video model is not installed.")
+    todo = []
+    for pid in b["panels"]:
+        try:
+            p = panel_load(pid)
+        except (OSError, ValueError):
+            continue
+        shown = p.get("current") or (p["versions"][0]["file"] if p.get("versions") else None)
+        if shown and (panel_dir(pid) / shown).exists():
+            todo.append((p, shown))
+    if not todo:
+        raise ValueError("No panel has a picture yet.")
+    if training_now():
+        raise ValueError("A LoRA is training; the GPU is taken until it finishes.")
+    state = ANIMATING[b["id"]] = {"at": 0, "of": len(todo), "panel": "", "step": 0, "total": 12, "error": None, "done": False}
+
+    def progress(step=None, total=None, preview=None):
+        if step is not None:
+            state["step"], state["total"] = step, total or state["total"]
+
+    def run():
+        try:
+            frames = []
+            with GPU, SERVER_GPU:  # Yumeko's lock first, then the server's: the order a panel render takes them (ensure_comfy), or two jobs deadlock
+                ensure_video_comfy()
+                for n, (p, shown) in enumerate(todo, 1):
+                    motion = (p.get("motion") or "").strip() or MOTION_DEFAULT
+                    state.update(at=n, panel=p.get("title", ""), step=0)
+                    clip = panel_dir(p["id"]) / f"anim_{_clip_key(p['id'], shown, motion)}.mp4"
+                    if not clip.exists():
+                        with Image.open(panel_dir(p["id"]) / shown) as im:
+                            w, h = FILM_SIZE if im.width >= im.height else FILM_SIZE[::-1]
+                            src = ImageOps.fit(im.convert("RGB"), (w, h), Image.LANCZOS)
+                        staged = morpheus.COMFY_INPUT / "morpheus" / f"anim_{time.time_ns():x}.png"
+                        staged.parent.mkdir(parents=True, exist_ok=True)
+                        src.save(staged)
+                        try:
+                            graph = morpheus.video_workflow(f"morpheus/{staged.name}", motion, "", w, h, random.randrange(2 ** 31),
+                                                            f"morpheus/anim_{p['id']}", frames=morpheus.VIDEO_FPS * 2 + 1, model="ltx")
+                            made, last = morpheus.video_part(graph, lambda: state.get("stop"), progress)
+                        finally:
+                            staged.unlink(missing_ok=True)
+                        for old in panel_dir(p["id"]).glob("anim_*.mp4"):
+                            old.unlink(missing_ok=True)  # an older clip of this panel: its picture or Motion changed
+                        shutil.move(str(made), clip)
+                        last.unlink(missing_ok=True)
+                    frames += [_letterbox(f) for f in morpheus.video_frames(clip)]
+            name = f"film_{time.time_ns():x}.mp4"
+            morpheus.video_write(frames, MANGA / name)
+            now = books()
+            for x in now:
+                if x["id"] == b["id"]:
+                    if x.get("film"):
+                        (MANGA / x["film"]).unlink(missing_ok=True)
+                    x["film"], x["film_at"] = name, time.time()
+            _books_save(now)
+        except Exception as e:
+            state["error"] = str(e)
+        state["done"] = True
+    threading.Thread(target=run, daemon=True).start()
+    return {"ok": True, "of": len(todo)}
+
+
+def book_animate_stop(req: dict) -> dict:
+    s = ANIMATING.get(str(req.get("id", "")))
+    if s and not s.get("done"):
+        s["stop"] = True
+    return {"ok": bool(s)}
 
 
 PANEL_NEGATIVE = "nsfw, nude, nipples, see-through, lingerie, cleavage, text, speech bubble, watermark, signature, extra person"  # loli, child are locked anyway
@@ -1193,7 +1308,7 @@ def panel_new(req: dict) -> dict:
 
 def panel_edit(req: dict) -> dict:
     p = panel_load(req.get("id"))
-    for k in ("title", "tags", "prompt", "negative", "characters", "width", "height", "locked", "pass_tags", "pass_negative"):
+    for k in ("title", "tags", "prompt", "negative", "characters", "width", "height", "locked", "pass_tags", "pass_negative", "motion"):
         if k == "characters" and k in req:  # a reference is set by panel_ref only; a save from the page keeps it
             old = {x["id"]: x.get("ref") for x in p.get("characters", [])}
             for x in req[k]:
@@ -1252,23 +1367,69 @@ def _look_of(c: dict) -> dict:
     return {}
 
 
+def _compose_prompt(q: dict, together: bool) -> tuple:
+    """The composition's words. With her LoRA: her trigger, plus her calibrated words, and her outfit trigger with its words
+    while her Outfit pill is on. The Yumeko run: the trigger alone drew a blue dress, thigh boots and a cape over her armor."""
+    words, negs = [], []
+    if together:
+        for c in q["characters"]:
+            lk = _look_of(c)
+            words += [c["trigger"]] + ([lk.get("identity")] if c.get("identity", True) else []) + ([lk.get("positive"), lk.get("outfit")] if c.get("outfit") else [])
+            negs += ([lk.get("identity_negative")] if c.get("identity", True) else []) + ([lk.get("outfit_negative")] if c.get("outfit") else [])
+    triggers = ", ".join(w for w in words if w) + ", " if words else ""
+    positive = _dedupe(triggers + q["tags"].replace("_", " ")) + ", " + q["prompt"]
+    negative = _dedupe(", ".join(x for x in [q["negative"]] + negs if x)) or None
+    return positive, negative
+
+
+def _pass_prompt(q: dict, c: dict) -> tuple:
+    """One character's pass: a locked composition sends its own pass tags and negative; unlocked, the scene tags without
+    the head count (a "3girls" in a pass that paints one girl inside her mask invites extra people)."""
+    scene = q.get("pass_tags") if q.get("locked") else pass_tags(q["tags"])
+    positive = _tidy(c["trigger"] + ", " + ADULT + "1girl, " + (c.get("action") or "") + ", " + (scene or "").replace("_", " "))
+    base_neg = q.get("pass_negative") if q.get("locked") else q["negative"]
+    neg = ", ".join(x.strip(", ") for x in [base_neg or "", c.get("negative") or ""] if x and x.strip(", ")) or None
+    return positive, neg
+
+
+def panel_prompt(req: dict) -> dict:
+    """What each button would send, word for word, with LoRAs and strengths: the page's "Show prompt"."""
+    q = panel_load(req.get("id"))
+    for k in ("tags", "prompt", "negative"):
+        if isinstance(req.get(k), str):
+            q[k] = req[k]
+    wf = morpheus.MODELS[MODEL]["workflow"]
+    prefix, default = wf.prefix or "", wf.negative
+    W, H = int(q["width"]), int(q["height"])
+    out = {"model": MODEL, "steps": []}
+    # Render sketch: no LoRA; with several characters one region per column, left to right
+    base = _dedupe(q["tags"].replace("_", " ")) + ", " + q["prompt"]
+    neg = _dedupe(SAFE + (q["negative"] or ""))
+    if len(q["characters"]) > 1:
+        regions = [{"where": f"column {i + 1} of {len(q['characters'])}" + (" (left)" if i == 0 else " (right)" if i == len(q["characters"]) - 1 else ""),
+                    "name": c["name"], "positive": prefix + _character_words(c).replace(c["trigger"] + ", ", "")} for i, c in enumerate(q["characters"])]
+        out["steps"].append({"step": "Render sketch", "loras": [], "positive": prefix + base, "regions": regions,
+                             "negative": _dedupe(neg + ", " + _no_nsfw(default))})
+    else:
+        out["steps"].append({"step": "Render sketch", "loras": [], "positive": prefix + base, "negative": SAFE + (q["negative"] or default)})
+    pos, n = _compose_prompt(q, True)
+    out["steps"].append({"step": "With LoRAs", "loras": [{"name": c["name"], "file": c["file"], "strength": round(float(c.get("strength", 1.0)) * 0.7, 2)} for c in q["characters"]],
+                         "positive": prefix + pos, "negative": SAFE + (default if n is None else n)})
+    for c in q["characters"]:
+        pos, n = _pass_prompt(q, c)
+        out["steps"].append({"step": f"Pass: {c['name']}" + ("" if c.get("masked") else " (no mask yet)"),
+                             "loras": [{"name": c["name"], "file": c["file"], "strength": float(c.get("strength", 1.0))}],
+                             "denoise": c.get("denoise", 0.62), "positive": prefix + pos, "negative": _dedupe(PASS_LOCKED + (n + ", " if n else "") + _no_nsfw(default))})
+    return out
+
+
 def panel_compose(req: dict) -> dict:
     """The composition: no LoRA, the scene and each character's look in words. together=true uses the LoRAs at once instead."""
     p = panel_load(req.get("id"))
     loras = [(c["file"], float(c.get("strength", 1.0)) * 0.7) for c in p["characters"]] if req.get("together") else []
 
     def work(q):
-        # with her LoRA: her trigger, plus her calibrated words, and her outfit trigger with its words while her Outfit pill is on.
-        # The Yumeko run: the trigger alone drew a blue dress, thigh boots and a cape over her armor.
-        words, negs = [], []
-        if req.get("together"):
-            for c in q["characters"]:
-                lk = _look_of(c)
-                words += [c["trigger"]] + ([lk.get("identity")] if c.get("identity", True) else []) + ([lk.get("positive"), lk.get("outfit")] if c.get("outfit") else [])
-                negs += ([lk.get("identity_negative")] if c.get("identity", True) else []) + ([lk.get("outfit_negative")] if c.get("outfit") else [])
-        triggers = ", ".join(w for w in words if w) + ", " if words else ""
-        positive = _dedupe(triggers + q["tags"].replace("_", " ")) + ", " + q["prompt"]
-        negative = _dedupe(", ".join(x for x in [q["negative"]] + negs if x)) or None
+        positive, negative = _compose_prompt(q, bool(req.get("together")))
         size = (int(q["width"]), int(q["height"]))
         name = f"comp_{time.time_ns():x}.png"
         seed = random.randrange(2 ** 31)
@@ -1433,12 +1594,7 @@ def panel_pass(req: dict) -> dict:
             q["busy"] = f"Painting {c['name']}"
             panel_save(q)
             seed = random.randrange(2 ** 31)
-            # a locked composition sends its own pass tags and negative; unlocked, the scene tags without the head count
-            # (a "3girls" in a pass that paints one girl inside her mask invites extra people)
-            scene = q.get("pass_tags") if q.get("locked") else pass_tags(q["tags"])
-            positive = _tidy(c["trigger"] + ", " + ADULT + "1girl, " + (c.get("action") or "") + ", " + (scene or "").replace("_", " "))
-            base_neg = q.get("pass_negative") if q.get("locked") else q["negative"]
-            neg = ", ".join(x.strip(", ") for x in [base_neg or "", c.get("negative") or ""] if x and x.strip(", ")) or None
+            positive, neg = _pass_prompt(q, c)
             im = _inpaint(im, Image.open(d / f"mask_{c['id']}.png"), positive, neg, c["file"], float(c.get("strength", 1.0)), float(c.get("denoise", 0.62)), seed)
             name = f"pass_{time.time_ns():x}.png"
             im.save(d / name)
@@ -1626,6 +1782,353 @@ def panel_qwen(req: dict) -> dict:
                                      "seed": seed, "denoise": QWEN_REFINE, "loras": [[l["name"], s] for l, s in hers], "control": "keep" if skeleton else "off", "from": name})
             q["current"] = again
     return _panel_background(p, "Qwen edit", work)
+
+
+SKETCH_TRIES = 6  # a sketch is cheap; one with the wrong head count or tiny people never reaches the page
+
+
+def _sketch_score(people: list, n: int, W: int, H: int) -> float | None:
+    """None when the head count is wrong; else how well the people fill the panel (the smallest one's height counts)."""
+    boxes = [x["box"] for x in people if x.get("box")]
+    if len(boxes) != n:
+        return None
+    heights = [b[3] - b[1] for b in boxes]
+    if n > 1 and min(heights) < 0.6 * max(heights):  # one of them pushed into the background: not the staging asked for
+        return None
+    return min(b[3] - b[1] for b in boxes) / H + 0.3 * min(b[2] - b[0] for b in boxes) / W
+
+
+def panel_sketch(req: dict) -> dict:
+    """The staging, without LoRAs: up to SKETCH_TRIES renders, the pose reader counts the people in each; the first one
+    with exactly the panel's characters, none of them tiny, is kept (else the best one). Cast then gives them their LoRAs."""
+    p = panel_load(req.get("id"))
+    n = len(p["characters"])
+
+    def work(q):
+        d = panel_dir(q["id"])
+        W, H = int(q["width"]), int(q["height"])
+        positive = _dedupe(q["tags"].replace("_", " ")) + ", " + q["prompt"]
+        best, tried = None, 0
+        for tried in range(1, SKETCH_TRIES + 1):
+            q["busy"] = f"Sketch {tried} of up to {SKETCH_TRIES}"
+            panel_save(q)
+            seed = random.randrange(2 ** 31)
+            name = f"comp_{time.time_ns():x}.png"
+            if n > 1:
+                cols = [(None, 1.0, _character_words(c).replace(c["trigger"] + ", ", ""), _area(b, W, H, grow=0, blur=24)) for c, b in zip(q["characters"], _columns(n, W, H))]
+                _regional(positive, _dedupe(SAFE + (q["negative"] or "")), cols, (W, H), seed, None).save(d / name)
+            else:
+                render(positive, q["negative"] or None, seed, (W, H), [], progress=_panel_progress).save(d / name)
+            try:
+                score = _sketch_score(_pose(d / name, d / "_sketch_probe.png"), n, W, H) if n else 1.0
+            except ValueError:
+                score = None
+            (d / "_sketch_probe.png").unlink(missing_ok=True)
+            if best is None or (score or -1) > (best[1] or -1):
+                if best:
+                    (d / best[0]).unlink(missing_ok=True)
+                best = (name, score, seed)
+            else:
+                (d / name).unlink(missing_ok=True)
+            if score is not None and score >= (0.45 if n < 3 else 0.3):
+                break
+        name, score, seed = best
+        q["composition"] = name
+        q["versions"].insert(0, {"file": name, "label": "Sketch" + (f" · best of {tried}" if tried > 1 else "") + ("" if score is not None else " · head count off"), "seed": seed})
+        q["current"] = name
+    return _panel_background(p, "Sketching", work)
+
+
+# ---------- Cast + Magic fix: the staged way (vault seed manga_comes_alive, 2026-11-10) ----------
+# A LoRA-free sketch decides the staging; Cast keeps only its people (pose skeleton, where each stands) and redraws the
+# whole panel in one go: the pose ControlNet holds the staging, each character's LoRA and words act only inside her own
+# person's area (hook LoRAs + masked conditioning). No attribute bleed, no pass-by-pass patching. Magic fix: a sentence
+# naming her ("Yumeko's underboob cutout is missing") -> Qwen edits inside her area with her base picture as the
+# reference, then JANKU with her LoRA goes over it lightly so it is back in style.
+
+CAST_UNPOSED = 0.72  # no pose found for everyone: redraw over the sketch this strongly, so its staging stays
+CAST_CONTROL = 0.8  # pose ControlNet strength; it lets go at 80 % of the steps so details settle freely
+
+
+def _character_words(c: dict) -> str:
+    lk = _look_of(c)
+    words = [c["trigger"], ADULT + "1girl"] + ([lk.get("identity")] if c.get("identity", True) else []) \
+        + ([lk.get("positive"), lk.get("outfit")] if c.get("outfit") else []) + [c.get("action") or ""]
+    return _dedupe(_tidy(", ".join(w for w in words if w)))
+
+
+def _in_scene(c: dict, q: dict) -> str:
+    """Her words plus the panel's scene tags (no head count): without them every character's area painted its own
+    background and a three-person panel came out as three pictures side by side."""
+    return _dedupe(_character_words(c) + ", " + (pass_tags(q["tags"]) or "").replace("_", " "))
+
+
+def _regional(positive: str, negative: str, chars: list, size: tuple, seed: int, skeleton: Path | None,
+              start: Path | None = None, denoise: float = 1.0) -> Image.Image:
+    """One render, every character's LoRA (model hook) and words (her LoRA in the text encoder) inside her own mask.
+    A character with file None gets only her words there (the sketch). start + denoise: redraw over that picture."""
+    m = morpheus.MODELS[MODEL]
+    W, H = size
+    g = m["workflow"](positive, W, H, seed, m["steps"], negative=_dedupe(negative + ", " + _no_nsfw(m["workflow"].negative)), prefix=m["workflow"].prefix)
+    folder = morpheus.COMFY_INPUT / "yumeko"
+    folder.mkdir(parents=True, exist_ok=True)
+    # the base (style prefix + scene) at full strength everywhere, and every character's words start with the same style
+    # prefix: at half strength, or without it in her area, the panel came out hazy and flat next to a plain render
+    cond = ["5", 0]
+    style = m["workflow"].prefix or ""
+    for i, (file, strength, words, mask) in enumerate(chars):
+        k = f"r{i}"
+        mask.convert("RGB").save(folder / f"region{i}.png")
+        if file:
+            g[k + "l"] = {"class_type": "LoraLoader", "inputs": {"model": ["1", 0], "clip": ["1", 1], "lora_name": file, "strength_model": 0.0, "strength_clip": strength}}
+            g[k + "h"] = {"class_type": "CreateHookLora", "inputs": {"lora_name": file, "strength_model": strength, "strength_clip": 0.0}}
+        g[k + "t"] = {"class_type": "CLIPTextEncode", "inputs": {"clip": [k + "l", 1] if file else ["1", 1], "text": style + words}}
+        g[k + "m"] = {"class_type": "LoadImageMask", "inputs": {"image": f"yumeko/region{i}.png", "channel": "red"}}
+        g[k + "c"] = {"class_type": "ConditioningSetPropertiesAndCombine", "inputs": {"cond": cond, "cond_NEW": [k + "t", 0], "strength": 1.0,
+                                                                                      "set_cond_area": "default", "mask": [k + "m", 0]} | ({"hooks": [k + "h", 0]} if file else {})}
+        cond = [k + "c", 0]
+    g["8"]["inputs"]["positive"] = cond
+    if start is not None:
+        Image.open(start).convert("RGB").resize((W, H)).save(folder / "cast_start.png")
+        g["21"] = {"class_type": "LoadImage", "inputs": {"image": "yumeko/cast_start.png"}}
+        g["23"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["1", 2]}}
+        g["8"]["inputs"]["latent_image"], g["8"]["inputs"]["denoise"] = ["23", 0], denoise
+    if skeleton is not None:
+        if not (morpheus.COMFY_MODELS / "controlnet" / CONTROLNET).exists():
+            raise ValueError(f"The pose ControlNet is missing: models/controlnet/{CONTROLNET} (see README).")
+        Image.open(skeleton).convert("RGB").resize((W, H)).save(folder / "cast_skeleton.png")
+        g["25"] = {"class_type": "LoadImage", "inputs": {"image": "yumeko/cast_skeleton.png"}}
+        g["26"] = {"class_type": "ControlNetLoader", "inputs": {"control_net_name": CONTROLNET}}
+        g["27"] = {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": cond, "negative": ["6", 0], "control_net": ["26", 0], "image": ["25", 0],
+                                                                       "strength": CAST_CONTROL, "start_percent": 0.0, "end_percent": 0.8, "vae": ["1", 2]}}
+        g["8"]["inputs"]["positive"], g["8"]["inputs"]["negative"] = ["27", 0], ["27", 1]
+    return morpheus.generate(g, progress=_panel_progress)
+
+
+def _columns(n: int, W: int, H: int, overlap: float = 0.05) -> list:
+    """Side-by-side areas, left to right, a little overlap so bodies may touch."""
+    w = W / n
+    return [(max(0, i * w - overlap * W), 0, min(W, (i + 1) * w + overlap * W), H) for i in range(n)]
+
+
+def _area(box, W: int, H: int, grow: float = 0.08, blur: int = 12) -> Image.Image:
+    x0, y0, x1, y1 = box
+    g = grow * max(x1 - x0, y1 - y0)
+    mk = Image.new("L", (W, H))
+    ImageDraw.Draw(mk).rounded_rectangle([max(0, x0 - g), max(0, y0 - 1.6 * g), min(W, x1 + g), min(H, y1 + g)], radius=40, fill=255)
+    return mk.filter(ImageFilter.GaussianBlur(blur))
+
+
+def _setting(prompt: str) -> str:
+    """The sketch prompt without its sentences about who stands where ("On the left a woman with very long hair ..."):
+    in Cast those words would reach every character (Kiri grew Nova's long hair), each one's look lives in her own area."""
+    keep = [x for x in re.split(r"(?<=[.!?])\s+", prompt) if not re.search(r"\b(left|right|middle|center|centre)\b", x, re.I)]
+    return " ".join(keep)
+
+
+def panel_cast(req: dict) -> dict:
+    """Cast the characters into the shown sketch: its people, left to right, become the panel's characters in their
+    listed order (order: character ids to change that), each in her own area with her LoRA. Saves their masks too."""
+    p = panel_load(req.get("id"))
+    if not p["characters"]:
+        raise ValueError("Add the characters first.")
+    start = str(req.get("from") or p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a sketch first.")
+    ids = [c["id"] for c in p["characters"]]
+    order = [next(c for c in p["characters"] if c["id"] == i) for i in (req.get("order") or []) if i in ids]
+    cast = order if len(order) == len(p["characters"]) else p["characters"]
+
+    def work(q):
+        d = panel_dir(q["id"])
+        q["busy"] = "Reading the sketch's people"
+        panel_save(q)
+        try:
+            people = [x["box"] for x in _pose(d / start, d / "cast_skel.png") if x.get("box")]
+        except ValueError:
+            people = []
+        W, H = int(q["width"]), int(q["height"])
+        posed = len(people) >= len(cast)  # bodies under a blanket or tangled together: the pose reader misses some
+        boxes = sorted(sorted(people, key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))[:len(cast)], key=lambda b: b[0]) if posed else _columns(len(cast), W, H)
+        chars = []
+        for c, box in zip(cast, boxes):
+            mk = _area(box, W, H) if posed else _area(box, W, H, grow=0, blur=24)
+            mk.save(d / f"mask_{c['id']}.png")
+            next(x for x in q["characters"] if x["id"] == c["id"])["masked"] = True
+            chars.append((c["file"], float(c.get("strength", 0.9)), _in_scene(c, q), mk))
+        q["busy"] = "Casting " + ", ".join(c["name"] for c in cast)
+        panel_save(q)
+        seed = random.randrange(2 ** 31)
+        positive = _dedupe(q["tags"].replace("_", " ")) + ", " + _setting(q["prompt"])
+        negative = _dedupe(SAFE + (q["negative"] or ""))
+        im = _regional(positive, negative, chars, (W, H), seed, d / "cast_skel.png") if posed else \
+            _regional(positive, negative, chars, (W, H), seed, None, start=d / start, denoise=CAST_UNPOSED)
+        name = f"cast_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": "Cast · " + ", ".join(c["name"] for c in cast), "seed": seed, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Casting", work)
+
+
+FINISH_SCALE = 1.5  # the panel is redrawn this much larger: detail the 1216 px render has no room for
+FINISH_DENOISE = 0.42  # strong enough for crisp lines, eyes and fabric, too weak to move anyone
+FINISH_FACE = 0.38
+FINISH_TAGS = "masterpiece, best quality, very aesthetic, absurdres, highres, detailed eyes, detailed face, detailed hair, detailed clothes, sharp lines, "
+
+
+def panel_finish(req: dict) -> dict:
+    """The finish: the shown picture 1.5x larger, redrawn lightly with every character's LoRA in her own area (her cast
+    mask), then each face redone up close with her LoRA. What the Lair's sheets get and the panels never had."""
+    p = panel_load(req.get("id"))
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a sketch first.")
+
+    def work(q):
+        d = panel_dir(q["id"])
+        src = Image.open(d / start).convert("RGB")
+        W, H = int(src.width * FINISH_SCALE) // 8 * 8, int(src.height * FINISH_SCALE) // 8 * 8
+        big = d / "_finish_src.png"
+        src.resize((W, H), Image.LANCZOS).save(big)
+        cast = [c for c in q["characters"] if (d / f"mask_{c['id']}.png").exists()]
+        chars = [(c["file"], float(c.get("strength", 0.9)), _in_scene(c, q), Image.open(d / f"mask_{c['id']}.png").convert("L").resize((W, H))) for c in cast]
+        if not chars and len(q["characters"]) == 1:  # a solo panel never cast: she is the whole picture
+            cast = q["characters"]
+            chars = [(cast[0]["file"], float(cast[0].get("strength", 0.9)), _character_words(cast[0]), Image.new("L", (W, H), 255))]
+        seed = random.randrange(2 ** 31)
+        positive = FINISH_TAGS + _dedupe(q["tags"].replace("_", " ")) + ", " + _setting(q["prompt"])
+        negative = _dedupe(SAFE + (q["negative"] or "") + ", blurry, lowres, jpeg artifacts, bad anatomy, bad hands")
+        q["busy"] = "Finishing: redrawing larger"
+        panel_save(q)
+        if chars:
+            im = _regional(positive, negative, chars, (W, H), seed, None, start=big, denoise=FINISH_DENOISE)
+        else:
+            im = _inpaint(Image.open(big).convert("RGB"), None, positive, negative, None, 1.0, FINISH_DENOISE, seed)
+        big.unlink(missing_ok=True)
+        for c, (_, strength, words, mk) in zip(cast, chars):
+            q["busy"] = f"Finishing: {c['name']}'s face"
+            panel_save(q)
+            im, _ = _detail(im, mk, "face", words, negative, [(c["file"], strength)], FINISH_FACE, seed, d)
+        name = f"final_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": "Finished", "seed": seed, "denoise": FINISH_DENOISE, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Finishing", work)
+
+
+def panel_stage(req: dict) -> dict:
+    """Staging by hand, for poses a sketch keeps getting wrong (one kneels among two standing, three spooning):
+    boxes {character id: [x0, y0, x1, y1] as 0..1 of the panel}. Each character is first drawn alone in her pose
+    (reliable: one person, her LoRA, plain background), her skeleton is put into her box, and the joined skeletons
+    are cast in one render like Cast does. Each solo picture is kept as stage_<id>.png to look at."""
+    p = panel_load(req.get("id"))
+    boxes = req.get("boxes") or p.get("stage") or {}
+    cast = [c for c in p["characters"] if c["id"] in boxes]
+    if len(cast) != len(p["characters"]):
+        raise ValueError("Give every character a box.")
+    p["stage"] = {c["id"]: [float(v) for v in boxes[c["id"]]] for c in cast}
+
+    def work(q):
+        d = panel_dir(q["id"])
+        W, H = int(q["width"]), int(q["height"])
+        joined = Image.new("RGB", (W, H))
+        chars = []
+        seed = random.randrange(2 ** 31)
+        for c in cast:
+            fx0, fy0, fx1, fy1 = q["stage"][c["id"]]
+            box = [fx0 * W, fy0 * H, fx1 * W, fy1 * H]
+            size = (1216, 832) if box[2] - box[0] > box[3] - box[1] else (832, 1216)
+            q["busy"] = f"Staging {c['name']} alone"
+            panel_save(q)
+            words = _character_words(c) + ", solo, full body, simple background, white background"
+            found = []
+            for attempt in range(3):  # the pose reader must see her, else draw her again
+                render(words, _dedupe(q["negative"] or ""), seed + attempt, size, [(c["file"], float(c.get("strength", 0.9)))],
+                       progress=_panel_progress).save(d / f"stage_{c['id']}.png")
+                try:
+                    found = _pose(d / f"stage_{c['id']}.png", d / f"stage_{c['id']}_skel.png", fit=box, canvas=(W, H))
+                except ValueError:
+                    found = []
+                if found:
+                    break
+            if not found:
+                raise ValueError(f"{c['name']}'s pose could not be read in three tries; change her action words.")
+            joined = ImageChops.lighter(joined, Image.open(d / f"stage_{c['id']}_skel.png").convert("RGB").resize((W, H)))
+            mk = _area(found[0]["box"], W, H)
+            mk.save(d / f"mask_{c['id']}.png")
+            next(x for x in q["characters"] if x["id"] == c["id"])["masked"] = True
+            chars.append((c["file"], float(c.get("strength", 0.9)), _in_scene(c, q), mk))
+        joined.save(d / "stage_skel.png")
+        q["busy"] = "Casting the staging"
+        panel_save(q)
+        positive = _dedupe(q["tags"].replace("_", " ")) + ", " + _setting(q["prompt"])
+        im = _regional(positive, _dedupe(SAFE + (q["negative"] or "")), chars, (W, H), seed, d / "stage_skel.png")
+        name = f"cast_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": "Staged · " + ", ".join(c["name"] for c in cast), "seed": seed})
+        q["current"] = name
+        q["composition"] = name
+    return _panel_background(p, "Staging", work)
+
+
+def _pose_safe(im: Image.Image, d: Path) -> bool:
+    f = d / "_magic_probe.png"
+    im.save(f)
+    try:
+        return bool(_pose(f, d / "pose_skel.png"))
+    except ValueError:
+        return False
+    finally:
+        f.unlink(missing_ok=True)
+
+
+def panel_magic(req: dict) -> dict:
+    """Magic fix: one sentence. A character named in it (or the only one) is fixed inside her area: Qwen edits with her
+    base picture as the look reference, then JANKU with her LoRA goes over it lightly in the same pose.
+    Nobody named in a group panel: the sentence goes to the whole picture."""
+    p = panel_load(req.get("id"))
+    text = str(req.get("text") or "").strip()
+    if not text:
+        raise ValueError("Say what is wrong or missing.")
+    start = str(p.get("current") or (p["versions"][0]["file"] if p["versions"] else ""))
+    if not start:
+        raise ValueError("Render a sketch first.")
+    d = panel_dir(p["id"])
+    low = text.lower()
+    named = [c for c in p["characters"] if c["name"].lower() in low or c["name"].rstrip("0123456789").lower() in low]
+    who = named or (p["characters"] if len(p["characters"]) == 1 else [])
+    who = [c for c in who if (d / f"mask_{c['id']}.png").exists()] or (who if len(p["characters"]) == 1 else [])
+    mask = None
+    for c in who:
+        if (d / f"mask_{c['id']}.png").exists():
+            mk = Image.open(d / f"mask_{c['id']}.png").convert("L")
+            mask = mk if mask is None else ImageChops.lighter(mask, mk)
+    one = who[0] if len(who) == 1 else None
+    # only a reference she was given for this panel: her full-body base picture made Qwen paste the whole sheet in
+    ref = (d / one["ref"]) if one and one.get("ref") else None
+    sentence = (text.rstrip(".") + "." + (" Use image 2 only as the reference for her look and outfit, not for her pose." if ref else "")
+                + " She is an adult woman: keep her pose, position, body size and proportions in image 1 exactly."
+                + " Keep everything else in image 1 exactly as it is, in the same art style.")
+
+    def work(q):
+        seed = random.randrange(2 ** 31)
+        q["busy"] = "Magic fix: " + (", ".join(c["name"] for c in who) or "whole picture")
+        panel_save(q)
+        im = _qwen_spot(Image.open(d / start).convert("RGB"), mask, sentence, ref, ["qwen-lightning"], seed)
+        q["busy"] = "Bringing it back in style"
+        panel_save(q)
+        scene = (q.get("pass_tags") if q.get("locked") else pass_tags(q["tags"])) or ""
+        loras = [(c["file"], float(c.get("strength", 0.9))) for c in who]
+        positive = _dedupe(_tidy(", ".join([_character_words(c) for c in who] + [scene.replace("_", " ")])))
+        negative = _dedupe(_tidy(", ".join(x for x in [q.get("negative") or ""] + [c.get("negative") or "" for c in who] if x))) or None
+        skeleton = Image.open(d / "pose_skel.png").convert("RGB") if _pose_safe(im, d) else None
+        im = _inpaint(im, mask, positive, negative, None, 1.0, QWEN_REFINE, seed, context=0.0 if mask is None else 0.3, loras=loras, control=skeleton)
+        name = f"magic_{time.time_ns():x}.png"
+        im.save(d / name)
+        q["versions"].insert(0, {"file": name, "label": "Magic fix" + (" · " + ", ".join(c["name"] for c in who) if who else ""), "kind": "fix",
+                                 "text": text, "seed": seed, "from": start})
+        q["current"] = name
+    return _panel_background(p, "Magic fix", work)
 
 
 def panel_qwen_ref(req: dict) -> dict:
@@ -1897,8 +2400,8 @@ ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": 
            "phase2": phase2_render, "batch": batch, "decide": _locked(decide), "unaccept": _locked(remove_accepted), "train": start_training,
            "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
            "stop": lambda r: stop_training(load(r.get("id"))), "pause": pause_training, "resume": resume_training,
-           "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_mask": panel_mask,
-           "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_qwen_ref": panel_qwen_ref, "panel_inpaint": panel_inpaint, "panel_pose_ref": panel_pose_ref,"book_new": book_new, "book_edit": book_edit, "book_delete": book_delete}
+           "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_prompt": panel_prompt, "panel_mask": panel_mask,
+           "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_cast": panel_cast, "panel_sketch": panel_sketch, "panel_finish": panel_finish, "panel_stage": panel_stage, "panel_magic": panel_magic, "panel_qwen_ref": panel_qwen_ref, "panel_inpaint": panel_inpaint, "panel_pose_ref": panel_pose_ref,"book_new": book_new, "book_edit": book_edit, "book_delete": book_delete, "book_animate": book_animate, "book_animate_stop": book_animate_stop}
 
 
 def job_view(job_id: str) -> dict:
@@ -1915,3 +2418,14 @@ def job_view(job_id: str) -> dict:
         yumeko_auto.view(job)
     wf = morpheus.MODELS[MODEL]["workflow"]
     return job | {"defaults": use_defaults(job), "sent": {"prefix": wf.prefix, "safe": SAFE, "sampler": "Euler a, normal", "steps": morpheus.MODELS[MODEL]["steps"], "cfg": 5.0, "checkpoint": CHECKPOINT.name}, "balance": {f: {e["tag"]: job["dataset"]["counts"].get(e["tag"], 0) for e in CATALOG["tags"] if e.get("facet") == f} for f in VARIED}}
+
+
+def _unstick() -> None:
+    """A panel still marked busy when the server starts was cut off by the restart: free it."""
+    for q in panels():
+        if q.get("busy"):
+            q["busy"], q["error"] = None, "Interrupted by a restart; run it again."
+            panel_save(q)
+
+
+

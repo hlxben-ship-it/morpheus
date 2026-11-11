@@ -904,7 +904,7 @@
       <button type="button" role="tab" data-f="yumeko" aria-selected="false" title="Character LoRAs and manga panels">Yumeko</button>
     </div>
     <nav id="yumeko-views" aria-label="Yumeko views" hidden>
-      <button type="button" data-y="" aria-current="true">Sets</button><button type="button" data-y="manga" aria-current="false">Create Manga</button>
+      <button type="button" data-y="" aria-current="true">Yumeko's Lair</button><button type="button" data-y="manga" aria-current="false">Stories</button>
     </nav>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
@@ -2460,7 +2460,8 @@
     document.body.classList.toggle('yumeko-mode', f === 'yumeko');
     $('yumeko').hidden = f !== 'yumeko';
     $('yumeko-views').hidden = f !== 'yumeko';
-    if (f === 'yumeko' && !$('yumeko').src) $('yumeko').src = '/yumeko';  // stays loaded, so her page keeps its place between tabs
+    if (f === 'yumeko' && !$('yumeko').src) $('yumeko').src = '/yumeko';  // stays loaded between tabs
+    else if (f === 'yumeko') { try { $('yumeko').contentWindow.location.hash = ''; } catch {} }  // the Yumeko tab always opens her start page
     $('wake').hidden = f !== 'wake';
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
     if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
