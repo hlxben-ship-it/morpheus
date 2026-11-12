@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud</title>
+<style>
+  :root { --bg:#0b0814; --line:#2e2647; --text:#ece8f7; --muted:#9a90b8; --accent:#b06bff; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.45 Inter, system-ui, sans-serif; }
+  body { display:flex; flex-direction:column; }
+  .switch { display:flex; justify-content:center; padding:14px 16px 0; }
+  .seg { display:inline-flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:999px; background:#141022; }
+  .seg button { border:0; background:transparent; color:var(--muted); padding:6px 18px; border-radius:999px; cursor:pointer; font:600 12px/1 'IBM Plex Mono', monospace; letter-spacing:.12em; text-transform:uppercase; }
+  .seg button[aria-selected="true"] { background:var(--accent); color:#fff; }
+  iframe { flex:1; width:100%; border:0; display:block; background:var(--bg); }
+  iframe[hidden] { display:none; }
+</style>
+</head>
+<body>
+  <div class="switch"><div class="seg" role="tablist" aria-label="Cloud kind">
+    <button role="tab" data-k="video" aria-selected="false">Video</button>
+    <button role="tab" data-k="image" aria-selected="false">Image</button>
+  </div></div>
+  <iframe id="video" title="Cloud video" hidden></iframe>
+  <iframe id="image" title="Cloud image" hidden></iframe>
+<script>
+// One Cloud tab, two pages: video (/test) and image (/test2). Each loads once and stays loaded, so a render keeps going
+// while the other is shown. A login in one is handed to the other (same origin, memory only, never stored).
+const SRC = { video:'/test', image:'/test2' };
+const frames = { video:document.getElementById('video'), image:document.getElementById('image') };
+function show(k) {
+  if (!SRC[k]) k = 'video';
+  for (const [n, f] of Object.entries(frames)) { f.hidden = n !== k; if (n === k && !f.src) f.src = SRC[n]; }
+  document.querySelectorAll('[data-k]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.k === k)));
+  try { localStorage.setItem('cloudKind', k); } catch {}
+}
+document.querySelectorAll('[data-k]').forEach(b => b.onclick = () => show(b.dataset.k));
+let shared = null;  // the current login, memory only: a page that loads later gets it too
+for (const f of Object.values(frames)) f.addEventListener('load', () => { if (shared) f.contentWindow.postMessage({ cloudKey:shared }, location.origin); });
+addEventListener('message', e => {
+  if (e.origin !== location.origin || !('cloudKey' in (e.data || {}))) return;
+  shared = e.data.cloudKey || null;
+  for (const f of Object.values(frames)) if (f.contentWindow && f.contentWindow !== e.source) f.contentWindow.postMessage({ cloudKey:e.data.cloudKey }, location.origin);
+});
+let start = 'video'; try { start = localStorage.getItem('cloudKind') || 'video'; } catch {}
+show(start);
+</script>
+</body>
+</html>

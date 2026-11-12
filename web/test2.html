@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test 2</title>
+<style>
+  :root { --bg:#0b0814; --panel:#141022; --raised:#1c1630; --line:#2e2647; --text:#ece8f7; --muted:#9a90b8; --accent:#b06bff; --warn:#ffb454; --bad:#ff6b8b; --ok:#6be0a8; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter, system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:20px 16px 60px; display:grid; gap:14px; }
+  h1 { font:600 18px/1.2 'IBM Plex Mono', monospace; letter-spacing:.08em; margin:0; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; display:grid; gap:10px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .note { color:var(--muted); font-size:12.5px; margin:0; }
+  label { color:var(--muted); font-size:12px; }
+  textarea, select, input[type=text] { width:100%; background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:8px 10px; font:inherit; }
+  select { width:auto; }
+  button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:7px 13px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.go { background:linear-gradient(90deg, #b06bff, #ff4f9a); border:0; font-weight:600; }
+  .drop { border:2px dashed var(--line); border-radius:12px; min-height:120px; display:grid; place-items:center; color:var(--muted); cursor:pointer; position:relative; overflow:hidden; text-align:center; padding:8px; }
+  .drop.over { border-color:var(--accent); }
+  .drop img { max-width:100%; max-height:260px; border-radius:8px; display:block; }
+  .drop .x { position:absolute; top:6px; right:6px; padding:2px 8px; }
+  .cost { font:600 15px 'IBM Plex Mono', monospace; color:var(--warn); }
+  .status { font-family:'IBM Plex Mono', monospace; font-size:13px; }
+  .bad { color:var(--bad); } .ok { color:var(--ok); }
+  video { width:100%; border-radius:10px; background:#000; display:block; }
+  .key { font-family:'IBM Plex Mono', monospace; font-size:12.5px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+  .grid2 > div { display:grid; gap:4px; } .grid2 select { width:100%; }
+  .refgrid { display:flex; flex-wrap:wrap; gap:8px; }
+  .refgrid .ref { position:relative; width:110px; height:110px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--raised); }
+  .refgrid .ref img { width:100%; height:100%; object-fit:cover; display:block; }
+  .refgrid .ref b { position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.7); padding:1px 6px; border-radius:6px; font:600 11px 'IBM Plex Mono', monospace; }
+  .refgrid .ref .x { position:absolute; top:4px; right:4px; padding:0 6px; font-size:12px; }
+  .refgrid .drop { width:110px; min-height:110px; height:110px; font-size:12px; }
+  .fake { background:#3a2a00; color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:4px 10px; font-size:12px; }
+</style>
+<style>
+  .outs { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; }
+  .outs a img { width:100%; border-radius:10px; display:block; }
+  .refgrid .drop.big { width:110px; min-height:110px; height:110px; font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row"><h1>CLOUD · IMAGE</h1><span class="fake" id="fakebadge" hidden>FAKE OpenRouter: no credit used</span></div>
+  <section class="box">
+    <div class="row" style="justify-content:space-between"><b>Account</b><span class="key" id="keyinfo">not logged in</span></div>
+    <div class="row"><button id="login">Log in with OpenRouter</button><button id="logout" hidden>Log out</button>
+      <span class="note">The key stays in this page's memory only; a reload logs out.</span></div>
+  </section>
+  <section class="box">
+    <div class="grid2">
+      <div><label for="model">Model</label><input type="text" id="model" value="minimax/minimax-h3-image"></div>
+      <div><label for="ar">Aspect</label><select id="ar"></select></div>
+      <div><label for="res">Resolution</label><select id="res"><option>1K</option><option selected>2K</option><option>4K</option></select></div>
+      <div><label for="n">Pictures</label><select id="n"></select></div>
+      <div><label for="fmt">Format</label><select id="fmt"><option>png</option><option selected>jpeg</option><option>webp</option></select></div>
+    </div>
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" rows="4" placeholder="image 1 and image 2 sit together at a breakfast table, morning light"></textarea>
+    <div id="refs"></div>
+    <div class="row"><span class="cost" id="cost">real cost shows after the render</span><span class="note">MiniMax: $1.50 / M input image tokens, $3.80 / M output image tokens</span><span style="flex:1"></span><button class="go" id="render" disabled>Render</button></div>
+  </section>
+  <section class="box" id="jobbox" hidden>
+    <div class="row" style="justify-content:space-between"><b>Result</b><span class="status" id="status"></span></div>
+    <div id="result"></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const API = 'https://openrouter.ai/api/v1';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]);
+const fake = new URLSearchParams(location.search).has('fake');  // ?fake: a pretend OpenRouter, no credit
+$('fakebadge').hidden = !fake;
+let key = null, refs = [], busy = false, lastBody = null;
+const REF_MAX = 16;  // MiniMax H3 takes up to 16
+const ARS = ['auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '21:9', '9:21', '2:1', '1:2', '2.35:1'];
+$('ar').innerHTML = ARS.map(a => `<option ${a === '16:9' ? 'selected' : ''}>${a}</option>`).join('');
+$('n').innerHTML = Array.from({ length:10 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
+try { const f = JSON.parse(localStorage.getItem('test2Form') || '{}'); ['ar', 'res', 'n', 'fmt'].forEach(k => f[k] && ($(k).value = f[k])); if (f.prompt) $('prompt').value = f.prompt; } catch {}
+
+/* a pretend OpenRouter (?fake) */
+async function fakeFetch(url, opt = {}) {
+  const j = (b, s = 200) => new Response(JSON.stringify(b), { status:s, headers:{ 'Content-Type':'application/json' } });
+  if (url === API + '/key') return j({ data:{ usage:0.3, limit:1, limit_remaining:0.7 } });
+  if (url === API + '/images') { lastBody = JSON.parse(opt.body); await new Promise(r => setTimeout(r, 600));
+    const png = await (await fetch('/yumeko-head.png')).blob(), b64 = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result.split(',')[1]); rd.readAsDataURL(png); });
+    return j({ created:0, data:Array.from({ length:lastBody.n || 1 }, () => ({ b64_json:b64, media_type:'image/png' })), usage:{ cost:0.031 } }); }
+  return fetch(url, opt);
+}
+const call = (url, opt) => (fake ? fakeFetch : fetch)(url, opt);
+const authed = (url, opt = {}) => call(url, { ...opt, headers:{ ...(opt.headers || {}), Authorization:'Bearer ' + key } });
+async function errText(r) { let m = 'HTTP ' + r.status; try { const b = await r.json(); m += ' · ' + (b?.error?.message ?? b?.message ?? JSON.stringify(b)); } catch {} return m.replace(/sk-or-[\w-]+/g, 'sk-or-…'); }
+
+/* login: PKCE in a popup, the code comes back to /test2 */
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const rnd = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+const qs = new URLSearchParams(location.search);
+if (qs.get('code') && window.opener) {
+  window.opener.postMessage({ orCode:qs.get('code'), orState:qs.get('state') }, location.origin);
+  document.body.innerHTML = '<main><p>Logged in. This window closes …</p></main>'; setTimeout(() => window.close(), 300);
+}
+let pkce = null;
+$('login').onclick = async () => {
+  if (fake) { key = 'sk-or-fake'; return afterLogin(); }
+  const verifier = rnd(32), state = rnd(16), challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  pkce = { verifier, state };
+  window.open(`https://openrouter.ai/auth?callback_url=${encodeURIComponent(location.origin + '/test2')}&code_challenge=${challenge}&code_challenge_method=S256&state=${state}`, 'orlogin', 'width=520,height=720');
+};
+addEventListener('message', async e => {
+  if (e.origin !== location.origin || !e.data?.orCode || !pkce) return;
+  if (e.data.orState !== pkce.state) { $('keyinfo').innerHTML = '<span class="bad">login state mismatch, try again</span>'; pkce = null; return; }
+  const r = await fetch(API + '/auth/keys', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ code:e.data.orCode, code_verifier:pkce.verifier, code_challenge_method:'S256' }) });
+  pkce = null;
+  if (!r.ok) { $('keyinfo').innerHTML = `<span class="bad">${esc(await errText(r))}</span>`; return; }
+  key = (await r.json()).key; afterLogin();
+});
+// inside the Cloud tab: a login here is handed to the other page, and theirs to this one
+const share = k => { if (parent !== window) parent.postMessage({ cloudKey:k }, location.origin); };
+addEventListener('message', e => { if (e.origin !== location.origin || e.source !== parent || !('cloudKey' in (e.data || {}))) return;
+  if (e.data.cloudKey) { if (key !== e.data.cloudKey) { key = e.data.cloudKey; afterLogin(false); } } else if (key) logout(false); });
+async function afterLogin(tell = true) {
+  if (tell) share(key);
+  $('login').hidden = true; $('logout').hidden = false; $('keyinfo').textContent = 'logged in'; paint();
+  try { const r = await authed(API + '/key'); if (r.ok) { const d = (await r.json()).data;
+    $('keyinfo').textContent = `logged in · used $${(+d.usage).toFixed(2)}` + (d.limit_remaining != null ? ` · left on key $${(+d.limit_remaining).toFixed(2)}` : ' · no key limit'); } } catch {}
+}
+function logout(tell = true) { key = null; $('login').hidden = false; $('logout').hidden = true; $('keyinfo').textContent = 'not logged in'; paint(); if (tell) share(null); }
+$('logout').onclick = () => logout();
+
+/* reference images: n of them, numbered as the prompt calls them */
+function paintRefs() {
+  const box = $('refs');
+  box.innerHTML = `<label>Reference images (${refs.length} of ${REF_MAX}) · call them "image 1", "image 2" … in the prompt</label>
+    <div class="refgrid">${refs.map((u, i) => `<div class="ref"><img src="${u}" alt="Reference ${i + 1}"><b>image ${i + 1}</b><button class="x" data-rx="${i}" title="Remove">✕</button></div>`).join('')}
+    ${refs.length < REF_MAX ? '<div class="drop big" id="refdrop" tabindex="0">+ Drop pictures or click</div>' : ''}</div>`;
+  box.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => { refs.splice(+b.dataset.rx, 1); paintRefs(); });
+  const d = $('refdrop'); if (!d) return;
+  const take = async fs => { const urls = await Promise.all([...fs].filter(f => f.type.startsWith('image/')).slice(0, REF_MAX - refs.length).map(f => new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(f); })));  // in the order picked: image 1, 2, 3 …
+    refs.push(...urls.slice(0, REF_MAX - refs.length)); paintRefs(); };
+  d.onclick = () => { const i = Object.assign(document.createElement('input'), { type:'file', accept:'image/*', multiple:true }); i.onchange = () => take(i.files); i.click(); };
+  d.ondragover = e => { e.preventDefault(); d.classList.add('over'); }; d.ondragleave = () => d.classList.remove('over');
+  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); take(e.dataTransfer.files); };
+}
+function paint() {
+  $('render').disabled = busy || !key || !$('prompt').value.trim() || !$('model').value.trim();
+  $('render').title = !key ? 'Log in first' : 'Spends real OpenRouter credit';
+  try { localStorage.setItem('test2Form', JSON.stringify({ ar:$('ar').value, res:$('res').value, n:$('n').value, fmt:$('fmt').value, prompt:$('prompt').value })); } catch {}
+}
+['ar', 'res', 'n', 'fmt'].forEach(id => $(id).onchange = paint); $('prompt').oninput = paint; $('model').oninput = paint;
+paintRefs(); paint();
+
+/* render: one request, the pictures come back in the answer */
+$('render').onclick = async () => {
+  const n = +$('n').value;
+  if (!fake && !confirm(`This spends real OpenRouter credit (${n} picture${n > 1 ? 's' : ''} at ${$('res').value}, ${refs.length} reference${refs.length === 1 ? '' : 's'}; usually a few cents each).\n\nRender?`)) return;
+  busy = true; paint(); $('jobbox').hidden = false; $('result').innerHTML = '';
+  const st = (t, cls = '') => $('status').innerHTML = `<span class="${cls}">${esc(t)}</span>`;
+  const t0 = Date.now(), secs = () => Math.round((Date.now() - t0) / 1000) + ' s', tick = setInterval(() => st('rendering · ' + secs()), 1000);
+  try {
+    const body = { model:$('model').value.trim(), prompt:$('prompt').value.trim(), aspect_ratio:$('ar').value, resolution:$('res').value, output_format:$('fmt').value, n };
+    if (refs.length) body.input_references = refs.map(url => ({ type:'image_url', image_url:{ url } }));
+    st('rendering …');
+    const r = await authed(API + '/images', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+    if (!r.ok) throw new Error(await errText(r));
+    const d = await r.json(), pics = d.data || [];
+    if (!pics.length) throw new Error('no picture in the answer');
+    const saved = [];
+    for (const [i, p] of pics.entries()) {
+      const type = p.media_type || 'image/' + $('fmt').value, blob = await (await fetch(`data:${type};base64,${p.b64_json}`)).blob();
+      const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const sv = await fetch(`/api/test/save?name=h3_${i + 1}&ext=${ext}`, { method:'POST', body:blob }).then(x => x.json()).catch(() => null);
+      saved.push({ url:URL.createObjectURL(blob), path:sv?.path });
+    }
+    $('result').innerHTML = `<div class="outs">${saved.map(s => `<a href="${s.url}" target="_blank" rel="noopener"><img src="${s.url}" alt=""></a>`).join('')}</div>
+      <p class="note">Cost: <b>${d.usage?.cost != null ? '$' + (+d.usage.cost).toFixed(3) : 'not reported'}</b> · ${secs()} · ${pics.length} of ${n} · ${saved.every(s => s.path) ? 'saved to output/openrouter/' : '<span class="bad">not all saved</span>'}</p>`;
+    clearInterval(tick); st(`done · ${secs()}`, 'ok');
+    if (!fake) afterLogin(false);
+  } catch (e) { clearInterval(tick); st(String(e.message || e).replace(/sk-or-[\w-]+/g, 'sk-or-…'), 'bad'); }
+  busy = false; paint();
+};
+</script>
+</body>
+</html>

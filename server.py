@@ -795,12 +795,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split("?")[0]
+        if route.startswith("/yumeko/") and "." not in route:  # a deep link into the Yumeko tab: the outer page, which opens it there
+            route = "/"
         if route == "/":  # the moods and worlds go in inline, so the page's first render already has them
             page = (WEB / "index.html").read_text(encoding="utf-8")
             data = (WEB / "glia-data.json").read_text(encoding="utf-8")
             return self.send_bytes(page.replace("/*GLIA-DATA*/null", data, 1).encode("utf-8"), "text/html; charset=utf-8")
+        if route == "/yumeko-create.js":
+            return self.send_file(WEB / "create.js", WEB)
         if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json"):
             return self.send_file(WEB / route[1:], WEB)
+        if route == "/cloud":  # the Cloud tab: a Video / Image switch around /test and /test2
+            return self.send_bytes((WEB / "cloud.html").read_bytes(), "text/html; charset=utf-8")
+        if route == "/test2":  # the Test 2 tab: OpenRouter image (MiniMax H3) with n reference pictures
+            return self.send_bytes((WEB / "test2.html").read_bytes(), "text/html; charset=utf-8")
+        if route == "/test":  # the Test tab: OpenRouter video, talks to OpenRouter from the browser
+            return self.send_bytes((WEB / "test.html").read_bytes(), "text/html; charset=utf-8")
         if route == "/yumeko":
             return self.send_bytes((WEB / "yumeko.html").read_bytes(), "text/html; charset=utf-8")
         if route == "/yumeko-head.png":
@@ -909,6 +919,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file(morpheus.OUTPUT / route.removeprefix("/output/"), morpheus.OUTPUT)
         self.send_error(404)
 
+    def test_save(self):
+        n = int(self.headers.get("Content-Length", 0))
+        if not 0 < n <= 300 * 1024 * 1024:
+            return self.send_json({"error": "no video"}, 400)
+        data = self.rfile.read(n)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        name = re.sub(r"[^A-Za-z0-9_-]", "", (q.get("name") or [""])[0])[:40] or "video"
+        out = morpheus.OUTPUT / "openrouter"
+        out.mkdir(parents=True, exist_ok=True)
+        ext = (q.get("ext") or ["mp4"])[0]
+        ext = ext if ext in ("mp4", "png", "jpg", "webp") else "mp4"
+        f = out / f"{time.strftime('%Y%m%d-%H%M%S')}_{name}.{ext}"
+        f.write_bytes(data)
+        return self.send_json({"path": f"openrouter/{f.name}"})
+
     def do_POST(self):
         if self.path.startswith("/api/yumeko/"):
             try:
@@ -919,6 +944,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 400)
+        if self.path.startswith("/api/test/save"):  # the Test tab's finished video, raw mp4 bytes
+            return self.test_save()
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
         if self.path == "/api/agent/export":  # answers with the zip itself

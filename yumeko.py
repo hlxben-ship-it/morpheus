@@ -1291,6 +1291,8 @@ def panel_new(req: dict) -> dict:
     if prev:  # masks don't carry over: the characters stand somewhere else in a new composition
         base = {k: prev[k] for k in base} | {"characters": [{k: v for k, v in c.items() if k != "masked"} for c in prev["characters"]]}
     new = {"id": pid, "title": str(req.get("title") or "New panel"), **base, "versions": [], "composition": None, "busy": None, "error": None}
+    if req.get("flow") == "create":  # the new panel flow: opens in its own editor (web/create.js); one prompt, no tags field
+        new.update(flow="create", tags="", prompt="")
     shown = prev and ((prev["versions"][0]["file"] if prev["versions"] else None) or prev.get("current"))  # the newest render
     if req.get("from_last") and shown:
         # start on the last panel's picture: it is the first version, the characters keep their masks, the composition
@@ -1421,6 +1423,97 @@ def panel_prompt(req: dict) -> dict:
                              "loras": [{"name": c["name"], "file": c["file"], "strength": float(c.get("strength", 1.0))}],
                              "denoise": c.get("denoise", 0.62), "positive": prefix + pos, "negative": _dedupe(PASS_LOCKED + (n + ", " if n else "") + _no_nsfw(default))})
     return out
+
+
+# ---------- Create: the new panel flow (web/create.js). Own functions; the old panel flow never calls these. ----------
+
+CREATE_SAFE = "loli, child, " + NO_MARKS  # the Create flow's fixed negative: SAFE without nsfw and nude (the user's call, 2026-11-11)
+
+
+def _create_words(q: dict, loras: bool = False) -> tuple:
+    """The composition, raw: the model's style prefix + the panel's prompt; CREATE_SAFE + the panel's negative. No regions.
+    With LoRAs: every listed character's trigger goes in front of the prompt (her LoRA rides along, see _create_loras)."""
+    wf = morpheus.MODELS[MODEL]["workflow"]
+    trig = ", ".join(c["trigger"] for c in _create_chars(q) if c.get("trigger")) if loras else ""
+    return (wf.prefix or "") + (trig + ", " if trig else "") + (q.get("prompt") or "").strip(), _dedupe(CREATE_SAFE + ((q.get("negative") or "").strip() or wf.negative))
+
+
+def _create_chars(q: dict) -> list:
+    return [c for c in q.get("characters") or [] if c.get("file")]
+
+
+def _create_loras(q: dict) -> list:
+    """With LoRAs: all characters' LoRAs chained at 0.7 of their strength, as the old flow's With LoRAs (several together can mix identities)."""
+    return [(c["file"], round(float(c.get("strength", 1.0)) * 0.7, 2)) for c in _create_chars(q)]
+
+
+def create_prompt(req: dict) -> dict:
+    """Show prompt: exactly the text the composition sends."""
+    q = panel_load(req.get("id"))
+    for k in ("prompt", "negative"):
+        if isinstance(req.get(k), str):
+            q[k] = req[k]
+    loras = bool(req.get("loras")) and bool(_create_chars(q))
+    pos, neg = _create_words(q, loras)
+    return {"model": MODEL, "positive": pos, "negative": neg,
+            "loras": [{"name": c["name"], "file": c["file"], "strength": round(float(c.get("strength", 1.0)) * 0.7, 2)} for c in _create_chars(q)] if loras else []}
+
+
+CREATE_SKETCHES, CREATE_SKETCHES_MAX = 6, 16  # Render sketches: one prompt, n seeds (the page's picker, 1-16), the user picks one or rolls again
+
+
+def create_compose(req: dict) -> dict:
+    """Render sketches: CREATE_SKETCHES compositions from the raw prompt (no character words, no LoRA), each its own seed.
+    They replace the last four; none is a version until the user picks it (create_pick)."""
+    p = panel_load(req.get("id"))
+    if not (p.get("prompt") or "").strip():
+        raise ValueError("Write the prompt first.")
+    try:
+        count = max(1, min(CREATE_SKETCHES_MAX, int(req.get("count") or CREATE_SKETCHES)))
+    except (TypeError, ValueError):
+        count = CREATE_SKETCHES
+    old = [s["file"] for s in p.get("sketches") or [] if s["file"] not in {v["file"] for v in p["versions"]}]
+    with_loras = bool(req.get("loras"))
+
+    def work(q):
+        d = panel_dir(q["id"])
+        for f in old:  # unpicked sketches of the last roll go
+            (d / f).unlink(missing_ok=True)
+        q["sketches"], q["sketch_picked"] = [], None
+        wf, m = morpheus.MODELS[MODEL]["workflow"], morpheus.MODELS[MODEL]
+        chain = _create_loras(q) if with_loras else []
+        pos, neg = _create_words(q, bool(chain))
+        q["sketch_count"] = count
+        for n in range(count):
+            q["busy"] = f"Sketch {n + 1} of {count}"
+            panel_save(q)
+            seed = random.randrange(2 ** 31)
+            name = f"sketch_{time.time_ns():x}.png"
+            g = wf(pos, int(q["width"]), int(q["height"]), seed, m["steps"], negative=neg, prefix="")
+            morpheus.generate(_with_loras(g, chain) if chain else g, progress=_panel_progress).save(d / name)
+            q["sketches"].append({"file": name, "seed": seed, **({"loras": True} if chain else {})})
+            panel_save(q)
+    p["sketch_count"] = count
+    return _panel_background(p, f"Sketch 1 of {count}", work)
+
+
+def create_pick(req: dict) -> dict:
+    """The chosen sketch becomes the composition: the first version, shown."""
+    p = panel_load(req.get("id"))
+    s = next((x for x in p.get("sketches") or [] if x["file"] == req.get("file")), None)
+    if not s:
+        raise ValueError("That sketch is gone; roll again.")
+    if s["file"] not in {v["file"] for v in p["versions"]}:
+        p["versions"].insert(0, {"file": s["file"], "label": "Composition", "seed": s["seed"]})
+    p["composition"] = p["current"] = p["sketch_picked"] = s["file"]
+    return panel_save(p)
+
+
+def create_unpick(req: dict) -> dict:
+    """Back to the four sketches, to pick another."""
+    p = panel_load(req.get("id"))
+    p["sketch_picked"] = None
+    return panel_save(p)
 
 
 def panel_compose(req: dict) -> dict:
@@ -2400,7 +2493,7 @@ ACTIONS = {"start_over": start_over, "outfits": _locked(set_outfits), "create": 
            "phase2": phase2_render, "batch": batch, "decide": _locked(decide), "unaccept": _locked(remove_accepted), "train": start_training,
            "stage_test": compare_stages, "stage": choose_stage, "use": use, "use_remove": _locked(use_remove),
            "stop": lambda r: stop_training(load(r.get("id"))), "pause": pause_training, "resume": resume_training,
-           "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_prompt": panel_prompt, "panel_mask": panel_mask,
+           "panel_new": panel_new, "panel_edit": panel_edit, "panel_compose": panel_compose, "panel_prompt": panel_prompt, "create_prompt": create_prompt, "create_compose": create_compose, "create_pick": create_pick, "create_unpick": create_unpick, "panel_mask": panel_mask,
            "panel_pass": panel_pass, "panel_delete": panel_delete, "panel_version_delete": panel_version_delete, "panel_fix": panel_fix, "panel_ref": panel_ref, "panel_qwen": panel_qwen, "panel_cast": panel_cast, "panel_sketch": panel_sketch, "panel_finish": panel_finish, "panel_stage": panel_stage, "panel_magic": panel_magic, "panel_qwen_ref": panel_qwen_ref, "panel_inpaint": panel_inpaint, "panel_pose_ref": panel_pose_ref,"book_new": book_new, "book_edit": book_edit, "book_delete": book_delete, "book_animate": book_animate, "book_animate_stop": book_animate_stop}
 
 

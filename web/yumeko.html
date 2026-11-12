@@ -1116,7 +1116,7 @@ async function openBook(id, page) {
     <div class="reader"><div class="paper">${[0, 1, 2, 3].map(k => { const pid = slots[k], n = (at - 1) * 4 + k;
         if (pid) return `<figure class="frame"><button class="open" data-open="${pid}" title="Edit: ${esc(byId[pid].title)}">${img(pid)}</button>
           <figcaption><span>${n + 1}. ${esc(byId[pid].title)}</span><span><button data-move="${n}" data-by="-1" ${n === 0 ? 'disabled' : ''} aria-label="Move earlier">←</button><button data-move="${n}" data-by="1" ${n === ids.length - 1 ? 'disabled' : ''} aria-label="Move later">→</button></span></figcaption></figure>`;
-        if (n === ids.length) return `<div class="frame empty"><button class="go" id="newp">New panel</button>${ids.length ? '<button id="newlast" title="The new panel starts on the last panel&#39;s picture, with its characters, masks and locked composition">Start from the last panel</button>' : ''}${others.length ? `<select id="take" aria-label="Move a panel from another manga here"><option value="">Or move a panel here …</option>${others.map(o => `<option value="${o.pid}">${esc(o.from)}: ${esc(byId[o.pid].title)}</option>`).join('')}</select>` : ''}</div>`;
+        if (n === ids.length) return `<div class="frame empty"><button class="go" id="newp">New panel</button><button class="go" id="newc" title="The new panel flow (work in progress): its own copy of the editor">Create</button>${ids.length ? '<button id="newlast" title="The new panel starts on the last panel&#39;s picture, with its characters, masks and locked composition">Start from the last panel</button>' : ''}${others.length ? `<select id="take" aria-label="Move a panel from another manga here"><option value="">Or move a panel here …</option>${others.map(o => `<option value="${o.pid}">${esc(o.from)}: ${esc(byId[o.pid].title)}</option>`).join('')}</select>` : ''}</div>`;
         return '<div class="frame none"></div>'; }).join('')}</div>
       <div class="turn"><button id="prev" ${at === 1 ? 'disabled' : ''} aria-label="Previous page">‹</button><span>Page ${at} of ${pages}</span><button id="next" ${at === pages ? 'disabled' : ''} aria-label="Next page">›</button></div></div></div>`;
   const go = n => { location.hash = `book/${id}/${n}`; };
@@ -1128,9 +1128,10 @@ async function openBook(id, page) {
   if ($('animstop')) $('animstop').onclick = async () => { await act('book_animate_stop', { id }); };
   if (anim && !anim.done) timer = setTimeout(() => { if (location.hash.startsWith('#book/' + id)) openBook(id, at); }, 3000);
   app.querySelectorAll('[data-page]').forEach(x => x.onclick = () => go(+x.dataset.page));
-  app.querySelectorAll('[data-open]').forEach(x => x.onclick = () => location.hash = 'panel/' + x.dataset.open);
+  app.querySelectorAll('[data-open]').forEach(x => x.onclick = () => location.hash = ((mangaData?.panels || []).find(q => q.id === x.dataset.open)?.flow === 'create' ? 'create/' : 'panel/') + x.dataset.open);
   app.querySelectorAll('[data-move]').forEach(x => x.onclick = async () => { const i = +x.dataset.move, j = i + +x.dataset.by, o = [...ids]; [o[i], o[j]] = [o[j], o[i]];
     await act('book_edit', { id, panels:[...o, ...b.panels.filter(pid => !byId[pid])] }); if (Math.floor(j / 4) + 1 === at) openBook(id, at); else go(Math.floor(j / 4) + 1); });
+  if ($('newc')) $('newc').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}`, flow:'create' }); if (p) location.hash = 'create/' + p.id; };
   if ($('newp')) $('newp').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}` }); if (p) location.hash = 'panel/' + p.id; };
   if ($('newlast')) $('newlast').onclick = async () => { const p = await act('panel_new', { book:id, title:`Panel ${ids.length + 1}`, from_last:true }); if (p) location.hash = 'panel/' + p.id; };
   if ($('take')) $('take').onchange = async e => { if (e.target.value) { await act('book_edit', { id, add:e.target.value }); openBook(id, at); } };
@@ -1138,7 +1139,7 @@ async function openBook(id, page) {
   onkeydown = e => { if (!location.hash.startsWith('#book/') || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
     if (e.key === 'ArrowLeft' && at > 1) go(at - 1); if (e.key === 'ArrowRight' && at < pages) go(at + 1); };
 }
-async function openPanel(id) { clearTimeout(timer); const m = mangaData = await get('/api/yumeko/manga'); panel = await get('/api/yumeko/panel/' + id); panel._loras = m.loras; drawn = {}; tool.active = panel.characters[0]?.id ?? null; paintPanel(); pollPanel(); }
+async function openPanel(id) { clearTimeout(timer); const m = mangaData = await get('/api/yumeko/manga'); panel = await get('/api/yumeko/panel/' + id); if (panel.flow === 'create') { location.replace('#create/' + id); return; } panel._loras = m.loras; drawn = {}; tool.active = panel.characters[0]?.id ?? null; paintPanel(); pollPanel(); }
 function pollPanel() { clearTimeout(timer); timer = setTimeout(async () => { if (!location.hash.includes(panel?.id)) return; const b = panel.busy, n = panel.versions.length, l = panel._loras;
   // only the render state comes from the server: replacing the whole object made edits land on a stale copy
   const fresh = await get('/api/yumeko/panel/' + panel.id); ['busy', 'error', 'versions', 'current', 'composition', 'progress'].forEach(k => panel[k] = fresh[k]); panel._loras = l; if (b !== panel.busy || n !== panel.versions.length) { const keep = captureMasks(); paintPanel(); restoreMasks(keep); } else showBusy(); pollPanel(); }, panel.busy ? 1000 : 2000); }
@@ -1465,11 +1466,24 @@ async function saveMasks() { for (const ch of panel.characters) { const m = draw
 
 // ---------- routes ----------
 if (parent !== window) document.body.classList.add('embedded');  // inside Morpheus the top bar carries this navigation
-async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel') && !h.startsWith('book')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel') || h.startsWith('book'));
+async function route() { const h = location.hash.slice(1); document.body.classList.remove('fixedpage'); if (parent !== window) parent.postMessage({ yumekoView:h.startsWith('manga') || h.startsWith('panel') || h.startsWith('create') || h.startsWith('book') ? 'manga' : '' }, location.origin); $('nav-sets').toggleAttribute('aria-current', !h.startsWith('manga') && !h.startsWith('panel') && !h.startsWith('create') && !h.startsWith('book')); $('nav-manga').toggleAttribute('aria-current', h.startsWith('manga') || h.startsWith('panel') || h.startsWith('create') || h.startsWith('book'));
   catalog ||= await get('/api/yumeko/catalog');
-  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h === 'all/lair') await gallery('lair'); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else if (h.startsWith('book/')) { const [, bid, pg] = h.split('/'); await openBook(bid, +pg || 0); } else await home(); }
-  catch (e) { app.innerHTML = ''; fail(e); } }
+  try { if (h === 'new') await newSet(); else if (h.startsWith('job/')) await openJob(h.slice(4)); else if (h === 'manga') await manga(); else if (h === 'all/lair') await gallery('lair'); else if (h.startsWith('panel/')) await openPanel(h.slice(6)); else if (h.startsWith('create/')) await createFlow.open(h.slice(7)); else if (h.startsWith('book/')) { const [, bid, pg] = h.split('/'); await openBook(bid, +pg || 0); } else await home(); }
+  catch (e) { app.innerHTML = ''; fail(e); }
+  tellPath(h); }
+// Deep links: the outer page shows /yumeko/<manga>/<panel> (or /yumeko/<view>) and lands back here on a refresh.
+async function tellPath(h) {
+  if (parent === window) return;
+  let path = '/yumeko/' + h;
+  const m = /^(panel|create)\/([0-9a-f]+)$/.exec(h) || /^book\/([0-9a-f]+)/.exec(h);
+  if (m) {
+    if (h.startsWith('book/')) path = '/yumeko/' + m[1];
+    else { try { mangaData ||= await get('/api/yumeko/manga'); } catch {} const b = mangaData?.books?.find(x => x.panels.includes(m[2])); path = b ? `/yumeko/${b.id}/${m[2]}` : `/yumeko/${m[1]}/${m[2]}`; }
+  }
+  if (location.hash.slice(1) === h) parent.postMessage({ yumekoPath:path.replace(/\/$/, '/') }, location.origin);
+}
 addEventListener('hashchange', route); route();
 </script>
+<script src="/yumeko-create.js"></script>
 </body>
 </html>

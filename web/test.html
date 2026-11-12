@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test</title>
+<style>
+  :root { --bg:#0b0814; --panel:#141022; --raised:#1c1630; --line:#2e2647; --text:#ece8f7; --muted:#9a90b8; --accent:#b06bff; --warn:#ffb454; --bad:#ff6b8b; --ok:#6be0a8; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter, system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:20px 16px 60px; display:grid; gap:14px; }
+  h1 { font:600 18px/1.2 'IBM Plex Mono', monospace; letter-spacing:.08em; margin:0; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; display:grid; gap:10px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .note { color:var(--muted); font-size:12.5px; margin:0; }
+  label { color:var(--muted); font-size:12px; }
+  textarea, select, input[type=text] { width:100%; background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:8px 10px; font:inherit; }
+  select { width:auto; }
+  button { background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:7px 13px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.go { background:linear-gradient(90deg, #b06bff, #ff4f9a); border:0; font-weight:600; }
+  .drop { border:2px dashed var(--line); border-radius:12px; min-height:120px; display:grid; place-items:center; color:var(--muted); cursor:pointer; position:relative; overflow:hidden; text-align:center; padding:8px; }
+  .drop.over { border-color:var(--accent); }
+  .drop img { max-width:100%; max-height:260px; border-radius:8px; display:block; }
+  .drop .x { position:absolute; top:6px; right:6px; padding:2px 8px; }
+  .cost { font:600 15px 'IBM Plex Mono', monospace; color:var(--warn); }
+  .status { font-family:'IBM Plex Mono', monospace; font-size:13px; }
+  .bad { color:var(--bad); } .ok { color:var(--ok); }
+  video { width:100%; border-radius:10px; background:#000; display:block; }
+  .key { font-family:'IBM Plex Mono', monospace; font-size:12.5px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+  .grid2 > div { display:grid; gap:4px; } .grid2 select { width:100%; }
+  .refgrid { display:flex; flex-wrap:wrap; gap:8px; }
+  .refgrid .ref { position:relative; width:110px; height:110px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--raised); }
+  .refgrid .ref img { width:100%; height:100%; object-fit:cover; display:block; }
+  .refgrid .ref b { position:absolute; left:4px; bottom:4px; background:rgba(0,0,0,.7); padding:1px 6px; border-radius:6px; font:600 11px 'IBM Plex Mono', monospace; }
+  .refgrid .ref .x { position:absolute; top:4px; right:4px; padding:0 6px; font-size:12px; }
+  .refgrid .drop { width:110px; min-height:110px; height:110px; font-size:12px; }
+  .fake { background:#3a2a00; color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:4px 10px; font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row"><h1>CLOUD · VIDEO</h1><span class="fake" id="fakebadge" hidden>FAKE OpenRouter: no credit used</span></div>
+
+  <section class="box">
+    <div class="row" style="justify-content:space-between"><b>Account</b><span class="key" id="keyinfo">not logged in</span></div>
+    <div class="row"><button id="login">Log in with OpenRouter</button><button id="logout" hidden>Log out</button>
+      <span class="note">The key stays in this page's memory only; a reload logs out.</span></div>
+  </section>
+
+  <section class="box">
+    <div class="grid2">
+      <div><label for="model">Model</label><select id="model"><option>loading …</option></select></div>
+      <div><label for="dur">Duration</label><select id="dur"></select></div>
+      <div><label for="res">Resolution</label><select id="res"></select></div>
+      <div><label for="ar">Aspect</label><select id="ar"></select></div>
+    </div>
+    <p class="note" id="mdesc"></p>
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" rows="4" placeholder="She turns her head toward the camera and smiles, hair moving in the wind"></textarea>
+    <div class="grid2" id="frames"></div>
+    <div id="refs"></div>
+    <div id="extras"></div>
+    <label class="row note" style="gap:6px"><input type="checkbox" id="fitar" checked> Crop the pictures to the chosen aspect before sending (avoids black bars)</label>
+    <div class="row"><span class="cost" id="cost">–</span><span class="note" id="costnote"></span><span style="flex:1"></span><button class="go" id="render" disabled>Render</button></div>
+  </section>
+
+  <section class="box" id="jobbox" hidden>
+    <div class="row" style="justify-content:space-between"><b>Job</b><span class="status" id="status"></span></div>
+    <div id="result"></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const API = 'https://openrouter.ai/api/v1';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]);
+const fake = new URLSearchParams(location.search).has('fake');  // ?fake: a pretend OpenRouter, for checking the page without credit
+$('fakebadge').hidden = !fake;
+let key = null, models = [], images = {}, refs = [], busy = false;
+const REF_MAX = 9;
+// OpenRouter's model list has no field for reference images; the description says it (Seedance 2.x, Grok Imagine Video, …)
+// The model list has no field for reference images. Offer them when the description says "reference", when the model
+// takes no start/end frame (image-to-video like HeyGen Avatar IV gets its photo as a reference), or when it prices reference input.
+const takesRefs = m => !!m && (/reference/i.test(m.description || '') || !(m.supported_frame_images || []).length || Object.keys(m.pricing_skus || {}).some(k => /reference/.test(k)));
+
+/* ---------- a pretend OpenRouter (?fake) ---------- */
+const fakeJobs = {};
+async function fakeFetch(url, opt = {}) {
+  const j = (b, s = 200) => new Response(JSON.stringify(b), { status:s, headers:{ 'Content-Type':'application/json' } });
+  const u = url.replace(API, '');
+  if (u === '/key') return j({ data:{ label:'fake', usage:0.12, limit:1, limit_remaining:0.88 } });
+  if (u === '/videos' && opt.method === 'POST') { const id = 'fake' + Date.now(); fakeJobs[id] = { t:Date.now(), body:JSON.parse(opt.body) }; return j({ id, polling_url:API + '/videos/' + id, status:'pending' }, 202); }
+  const m = u.match(/^\/videos\/([^/]+)(\/content)?/);
+  if (m && fakeJobs[m[1]]) { const age = Date.now() - fakeJobs[m[1]].t;
+    if (m[2]) return fetch('/test-fake.mp4').then(r => r.ok ? r : new Response(new Blob([new Uint8Array(64)], { type:'video/mp4' })));
+    return j(age < 2500 ? { id:m[1], status:age < 1000 ? 'pending' : 'in_progress' } : { id:m[1], status:'completed', unsigned_urls:[API + '/videos/' + m[1] + '/content?index=0'], usage:{ cost:0.16, is_byok:false } }); }
+  return fetch(url, opt);
+}
+const call = (url, opt) => (fake ? fakeFetch : fetch)(url, opt);
+const authed = (url, opt = {}) => call(url, { ...opt, headers:{ ...(opt.headers || {}), Authorization:'Bearer ' + key } });
+async function errText(r) { let m = 'HTTP ' + r.status; try { const b = await r.json(); m += ' · ' + (b?.error?.message ?? b?.message ?? JSON.stringify(b)); } catch {} return m.replace(/sk-or-[\w-]+/g, 'sk-or-…'); }
+
+/* ---------- login: PKCE in a popup, the code comes back to this page ---------- */
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const rnd = n => b64url(crypto.getRandomValues(new Uint8Array(n)));
+if (new URLSearchParams(location.search).get('code') && window.opener) {  // this is the popup, back from OpenRouter
+  window.opener.postMessage({ orCode:new URLSearchParams(location.search).get('code'), orState:new URLSearchParams(location.search).get('state') }, location.origin);
+  document.body.innerHTML = '<main><p>Logged in. This window closes …</p></main>'; setTimeout(() => window.close(), 300);
+}
+let pkce = null;
+$('login').onclick = async () => {
+  if (fake) { key = 'sk-or-fake'; return afterLogin(); }
+  const verifier = rnd(32), state = rnd(16), challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  pkce = { verifier, state };
+  const cb = location.origin + '/test';
+  window.open(`https://openrouter.ai/auth?callback_url=${encodeURIComponent(cb)}&code_challenge=${challenge}&code_challenge_method=S256&state=${state}`, 'orlogin', 'width=520,height=720');
+};
+addEventListener('message', async e => {
+  if (e.origin !== location.origin || !e.data?.orCode || !pkce) return;
+  if (e.data.orState !== pkce.state) { $('keyinfo').innerHTML = '<span class="bad">login state mismatch, try again</span>'; pkce = null; return; }
+  const r = await fetch(API + '/auth/keys', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ code:e.data.orCode, code_verifier:pkce.verifier, code_challenge_method:'S256' }) });
+  pkce = null;
+  if (!r.ok) { $('keyinfo').innerHTML = `<span class="bad">${esc(await errText(r))}</span>`; return; }
+  key = (await r.json()).key; afterLogin();
+});
+// inside the Cloud tab: a login here is handed to the other page, and theirs to this one
+const share = k => { if (parent !== window) parent.postMessage({ cloudKey:k }, location.origin); };
+addEventListener('message', e => { if (e.origin !== location.origin || e.source !== parent || !('cloudKey' in (e.data || {}))) return;
+  if (e.data.cloudKey) { if (key !== e.data.cloudKey) { key = e.data.cloudKey; afterLogin(false); } } else if (key) logout(false); });
+async function afterLogin(tell = true) {
+  if (tell) share(key);
+  $('login').hidden = true; $('logout').hidden = false; $('keyinfo').textContent = 'logged in'; paint();
+  try { const r = await authed(API + '/key'); if (r.ok) { const d = (await r.json()).data;
+    $('keyinfo').textContent = `logged in · used $${(+d.usage).toFixed(2)}` + (d.limit_remaining != null ? ` · left on key $${(+d.limit_remaining).toFixed(2)}` : ' · no key limit'); } } catch {}
+}
+function logout(tell = true) { key = null; $('login').hidden = false; $('logout').hidden = true; $('keyinfo').textContent = 'not logged in'; paint(); if (tell) share(null); }
+$('logout').onclick = () => logout();
+
+/* ---------- the form, built from what the model says it supports ---------- */
+const PREFER = 'x-ai/grok-imagine-video-1.5-lite';
+const fill = (sel, vals, pick, fmt = v => v) => { $(sel).innerHTML = (vals || []).map(v => `<option value="${esc(v)}" ${String(v) === String(pick) ? 'selected' : ''}>${esc(fmt(v))}</option>`).join(''); $(sel).disabled = !(vals || []).length; };
+const model = () => models.find(m => m.id === $('model').value);
+function pickModel() {
+  const m = model(); if (!m) return;
+  const keep = id => { try { return JSON.parse(localStorage.getItem('testForm') || '{}')[id]; } catch { return null; } };
+  fill('dur', m.supported_durations, keep('dur') ?? (m.supported_durations?.includes(5) ? 5 : m.supported_durations?.[0]), v => v + ' s');
+  fill('res', m.supported_resolutions, keep('res') ?? (m.supported_resolutions?.includes('720p') ? '720p' : m.supported_resolutions?.[0]));
+  fill('ar', m.supported_aspect_ratios, keep('ar') ?? (m.supported_aspect_ratios?.includes('16:9') ? '16:9' : m.supported_aspect_ratios?.[0]));
+  $('mdesc').textContent = (m.description || '').replace(/\s+/g, ' ');
+  const kinds = m.supported_frame_images || [];
+  for (const k of Object.keys(images)) if (!kinds.includes(k)) delete images[k];
+  $('frames').innerHTML = kinds.length ? kinds.map(k => `<div><label>${k === 'first_frame' ? 'Start image (first frame)' : 'End image (last frame)'}</label><div class="drop" data-k="${k}" tabindex="0">${images[k] ? `<img src="${images[k]}" alt=""><button class="x" title="Remove">✕</button>` : 'Drop a picture or click'}</div></div>`).join('')
+    : '<p class="note">This model takes no images, text only.</p>';
+  document.querySelectorAll('.drop').forEach(d => { const k = d.dataset.k;
+    const take = f => { if (!f || !f.type.startsWith('image/')) return; const rd = new FileReader(); rd.onload = () => { images[k] = rd.result; pickModel(); }; rd.readAsDataURL(f); };
+    d.onclick = e => { if (e.target.closest('.x')) { delete images[k]; pickModel(); return; } const i = Object.assign(document.createElement('input'), { type:'file', accept:'image/*' }); i.onchange = () => take(i.files[0]); i.click(); };
+    d.ondragover = e => { e.preventDefault(); d.classList.add('over'); }; d.ondragleave = () => d.classList.remove('over');
+    d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); take(e.dataTransfer.files[0]); }; });
+  paintRefs();
+  const allow = m.allowed_passthrough_parameters || [];
+  $('extras').innerHTML = allow.length ? `<label for="extra">Extra options for ${esc(m.id.split('/')[0])} (JSON) · allowed: ${allow.map(esc).join(', ')}</label><textarea id="extra" rows="2" placeholder='{"${esc(allow[0])}": "…"}'></textarea>` : '';
+  if ($('extra')) $('extra').oninput = () => { $('extra').style.borderColor = extras() === false ? 'var(--bad)' : ''; };
+  paint();
+}
+// the model's own options (voice_id, motion_prompt, watermark …), sent under provider.options.<maker>; false = not JSON
+function extras() { const t = $('extra')?.value.trim(); if (!t) return null; try { const v = JSON.parse(t); return v && typeof v === 'object' && !Array.isArray(v) ? v : false; } catch { return false; } }
+function paintRefs() {
+  const m = model(), box = $('refs');
+  if (!takesRefs(m)) { refs = []; box.innerHTML = ''; return; }
+  box.innerHTML = `<label>Reference images (${refs.length} of ${REF_MAX}) · call them "image 1", "image 2" … in the prompt</label>
+    <div class="refgrid">${refs.map((u, i) => `<div class="ref"><img src="${u}" alt="Reference ${i + 1}"><b>image ${i + 1}</b><button class="x" data-rx="${i}" title="Remove">✕</button></div>`).join('')}
+    ${refs.length < REF_MAX ? '<div class="drop" id="refdrop" tabindex="0">+ Drop pictures or click</div>' : ''}</div>
+    ${refs.length && Object.keys(images).length ? '<p class="note" style="color:var(--warn)">Start/end image set: OpenRouter then ignores the references. Remove the start image to use them.</p>' : ''}`;
+  box.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => { refs.splice(+b.dataset.rx, 1); paintRefs(); paint(); });
+  const d = $('refdrop'); if (!d) return;
+  const take = async fs => { const urls = await Promise.all([...fs].filter(f => f.type.startsWith('image/')).slice(0, REF_MAX - refs.length).map(f => new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(f); })));  // in the order picked: image 1, 2, 3 …
+    refs.push(...urls.slice(0, REF_MAX - refs.length)); paintRefs(); paint(); };
+  d.onclick = () => { const i = Object.assign(document.createElement('input'), { type:'file', accept:'image/*', multiple:true }); i.onchange = () => take(i.files); i.click(); };
+  d.ondragover = e => { e.preventDefault(); d.classList.add('over'); }; d.ondragleave = () => d.classList.remove('over');
+  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); take(e.dataTransfer.files); };
+}
+// with no duration (the length follows the speech): the price of one second
+const perSecond = () => { const d = $('dur'), had = d.value; d.innerHTML += '<option value="1" id="tmp1"></option>'; d.value = '1'; const v = estimate(); $('tmp1').remove(); d.value = had; return v ?? 0; };
+function estimate() {
+  const m = model(); if (!m) return null; const p = m.pricing_skus || {}, res = $('res').value, s = +$('dur').value || 0;
+  const withRefs = refs.length && !Object.keys(images).length;  // references only count when no start/end image overrides them
+  const dollars = k => p[k] != null ? +p[k] * 100 : null;  // HeyGen style: dollars per second, a dearer rate with references
+  const perSec = p['cents_per_video_output_second_' + res] ?? p['cents_per_video_output_second'] ?? (p['per-video-second-' + res] ?? p['per-video-second']) * 100;
+  let ps = isNaN(perSec) ? (withRefs ? dollars('reference_duration_seconds_' + res) : null) ?? dollars('duration_seconds_' + res) ?? dollars('duration_seconds') : perSec;
+  if (withRefs && p.reference_input_images) return (s * +ps + refs.length * +p.reference_input_images * 100) / 100;
+  if ((ps == null || isNaN(ps)) && p.video_tokens) {  // ByteDance bills video tokens: width × height × 24 fps / 1024 per second
+    const short = parseInt(res) || 720, [a, b] = ($('ar').value || '16:9').split(':').map(Number), long = Math.round(short * Math.max(a, b) / Math.min(a, b));
+    ps = short * long * 24 / 1024 * +p.video_tokens * 100; }
+  if (ps == null || isNaN(ps)) return null;
+  return (s * +ps + Object.keys(images).length * +(p.cents_per_image_input || 0)) / 100;
+}
+function paint() {
+  const c = estimate(), perSecOnly = !+$('dur').value; $('cost').textContent = c == null ? 'price unknown' : perSecOnly ? '$' + perSecond().toFixed(2) + ' / s' : '≈ $' + c.toFixed(2);
+  $('costnote').textContent = c == null ? '' : !+$('dur').value ? 'per second of video; the length follows the speech' : `${$('dur').value} s at ${$('res').value}` + (Object.keys(images).length ? ' + image' : '') + (refs.length ? ` + ${refs.length} ref${refs.length > 1 ? 's' : ''}` : '');
+  $('render').disabled = busy || !key || !model() || !$('prompt').value.trim();
+  $('render').title = !key ? 'Log in first' : !$('prompt').value.trim() ? 'Write a prompt' : 'Spends real OpenRouter credit';
+  try { localStorage.setItem('testForm', JSON.stringify({ model:$('model').value, dur:$('dur').value, res:$('res').value, ar:$('ar').value })); } catch {}
+}
+['dur', 'res', 'ar'].forEach(id => $(id).onchange = paint); $('prompt').oninput = paint;
+$('model').onchange = () => { try { localStorage.removeItem('testForm'); } catch {} pickModel(); };
+(async () => {
+  try { const r = await fetch(API + '/videos/models'); models = ((await r.json()).data || []).sort((a, b) => a.name.localeCompare(b.name)); }
+  catch (e) { $('model').innerHTML = '<option>could not load the model list</option>'; return; }
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('testForm') || '{}').model; } catch {}
+  const pick = models.find(m => m.id === saved) ? saved : PREFER;
+  $('model').innerHTML = models.map(m => `<option value="${esc(m.id)}" ${m.id === pick ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  pickModel();
+})();
+
+/* ---------- render: submit, poll, fetch the video with the key, keep it in Morpheus ---------- */
+// centre crop of a picture to an aspect like "16:9", as a JPEG data URL (long side at most 1920)
+function cropTo(url, ar) {
+  const [a, b] = (ar || '').split(':').map(Number); if (!a || !b) return Promise.resolve(url);
+  return new Promise(res => { const im = new Image(); im.onload = () => {
+    const W = im.naturalWidth, H = im.naturalHeight, want = a / b; let w = W, h = H;
+    if (W / H > want) w = Math.round(H * want); else h = Math.round(W / want);
+    if (Math.abs(w - W) < 2 && Math.abs(h - H) < 2) return res(url);
+    const k = Math.min(1, 1920 / Math.max(w, h)), c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(im, (W - w) / 2, (H - h) / 2, w, h, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', .92)); };
+    im.onerror = () => res(url); im.src = url; });
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+$('render').onclick = async () => {
+  const c = estimate();
+  if (!fake && !confirm(`This spends real OpenRouter credit: about $${c == null ? '?' : c.toFixed(2)}.\n\nRender?`)) return;
+  busy = true; paint(); $('jobbox').hidden = false; $('result').innerHTML = '';
+  const st = (t, cls = '') => $('status').innerHTML = `<span class="${cls}">${esc(t)}</span>`;
+  const t0 = Date.now(), secs = () => Math.round((Date.now() - t0) / 1000) + ' s';
+  try {
+    const body = { model:$('model').value, prompt:$('prompt').value.trim() };
+    if (+$('dur').value) body.duration = +$('dur').value;
+    if ($('res').value) body.resolution = $('res').value;
+    if ($('ar').value) body.aspect_ratio = $('ar').value;
+    const ex = extras(); if (ex === false) throw new Error('Extra options: not valid JSON');
+    if (ex && Object.keys(ex).length) body.provider = { options:{ [body.model.split('/')[0]]:ex } };
+    const fit = $('fitar').checked ? u => cropTo(u, $('ar').value) : async u => u;
+    const fr = await Promise.all(Object.entries(images).map(async ([k, url]) => ({ type:'image_url', image_url:{ url:await fit(url) }, frame_type:k })));
+    const rf = await Promise.all(refs.map(fit));
+    if (fr.length) body.frame_images = fr;
+    if (refs.length && !fr.length) body.input_references = rf.map(url => ({ type:'image_url', image_url:{ url } }));
+    st('submitting …');
+    const r = await authed(API + '/videos', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+    if (!r.ok) throw new Error(await errText(r));
+    const job = await r.json(); let d = job;
+    while (true) {
+      st(`${d.status || 'pending'} · ${secs()}`);
+      if (d.status === 'completed') break;
+      if (d.status === 'failed' || d.status === 'cancelled' || d.status === 'expired') throw new Error(`${d.status}: ${typeof d.error === 'string' ? d.error : JSON.stringify(d.error ?? '')}`);
+      await sleep(fake ? 700 : 10000);
+      const p = await authed(job.polling_url || API + '/videos/' + job.id); if (!p.ok) throw new Error(await errText(p)); d = await p.json();
+    }
+    st(`done · ${secs()} · fetching the video …`);
+    const v = await authed(d.unsigned_urls?.[0] || `${API}/videos/${job.id}/content?index=0`); if (!v.ok) throw new Error(await errText(v));
+    const blob = await v.blob();
+    const sv = await fetch('/api/test/save?name=' + encodeURIComponent(job.id), { method:'POST', body:blob }).then(x => x.json()).catch(() => null);
+    $('result').innerHTML = `<video controls autoplay loop playsinline src="${URL.createObjectURL(blob)}"></video>
+      <p class="note">Cost: <b>${d.usage?.cost != null ? '$' + (+d.usage.cost).toFixed(3) : 'not reported'}</b> · ${secs()} · ${sv?.path ? 'saved to output/' + esc(sv.path) : '<span class="bad">not saved</span>'}</p>`;
+    st(`completed · ${secs()}`, 'ok');
+    if (!fake) afterLogin(false);
+  } catch (e) { st(String(e.message || e).replace(/sk-or-[\w-]+/g, 'sk-or-…'), 'bad'); }
+  busy = false; paint();
+};
+</script>
+</body>
+</html>
