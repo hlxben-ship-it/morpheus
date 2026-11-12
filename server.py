@@ -795,7 +795,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split("?")[0]
-        if route.startswith("/yumeko/") and "." not in route:  # a deep link into the Yumeko tab: the outer page, which opens it there
+        if (route.startswith("/yumeko/") or route == "/dawnforge" or route.startswith("/dawnforge/")) and "." not in route:  # a deep link into the Yumeko or Dawnforge tab: the outer page, which opens it there
             route = "/"
         if route == "/":  # the moods and worlds go in inline, so the page's first render already has them
             page = (WEB / "index.html").read_text(encoding="utf-8")
@@ -955,6 +955,7 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/soul/new": self.soul_new, "/api/soul/chat": self.soul_chat, "/api/wake": self.wake,
                     "/api/wake/stop": self.wake_stop, "/api/wake/delete": self.wake_delete,
                     "/api/board/save": morpheus.board_store, "/api/board/delete": self.board_delete,
+                    "/api/board/star": self.board_star,
                     "/api/board/render": self.board_render, "/api/board/picture": self.board_picture}
         if self.path not in handlers:
             return self.send_error(404)
@@ -1565,6 +1566,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def board_picture(self, req):
         return {"source": self.keep_upload(str(req.get("upload", "")))}
+
+    def board_star(self, req):
+        morpheus.board_star(str(req.get("id", "")), bool(req.get("starred")))
+        return {"ok": True}
 
     def board_delete(self, req):
         morpheus.board_delete(str(req.get("id", "")))

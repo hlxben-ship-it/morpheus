@@ -594,12 +594,41 @@
   .sb textarea { display: block; width: 100%; padding: 10px 12px; line-height: 1.5; resize: vertical; }
   .sb :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .sb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-  .sb-views { display: flex; padding: 3px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
-  .sb-views button { padding: 5px 12px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 14px; }
-  .sb-views button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
   .sb-bar-board { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }
   .sb-bar-board select { max-width: 280px; font-weight: 600; }
   .sb-saved { font-size: 12px; color: var(--muted); }
+  /* Dawnforge home: the same shelves and peek tiles as Yumeko's start page (yumeko.html .shelf / .peek) */
+  .sbh { padding: 6px 0 30px; }
+  .sbh-shelf { margin: 0 0 30px; }
+  .sbh-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px; }
+  .sbh-head h2 { margin: 0; font: 400 15px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 14px var(--glow, rgba(177, 77, 255, .4)); }
+  .sbh-head .count { color: var(--muted); font-size: 12px; }
+  .sbh-head .add { margin-left: auto; background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 7px 13px; color: var(--text); cursor: pointer; font: inherit; font-size: 14px; }
+  .sbh-head .add:hover { border-color: var(--accent); }
+  .sbh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 210px), 1fr)); gap: 14px; }
+  .sbh-card { position: relative; display: block; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: inherit; text-decoration: none; cursor: pointer;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; transform-origin: var(--x, center) var(--y, center); }
+  .sbh-card.l { --x: left; } .sbh-card.r { --x: right; } .sbh-card.t { --y: top; }  /* edge tiles grow inwards, the top row grows down */
+  .sbh-card:hover, .sbh-card:focus-visible { z-index: 6; transform: scale(1.55); border-color: var(--accent); box-shadow: 0 0 34px var(--glow, rgba(177, 77, 255, .4)), 0 18px 44px rgba(0, 0, 0, .75); }
+  .sbh-pic { position: relative; display: block; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 11px 11px 0 0; background: var(--raised); }
+  .sbh-pic img, .sbh-pic video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
+  .sbh-pic video { opacity: 0; transition: opacity .25s; }
+  .sbh-pic video.on { opacity: 1; }
+  .sbh-none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 38px; }
+  .sbh-tag { position: absolute; top: 7px; left: 7px; z-index: 1; font: 400 10px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .08em; padding: 4px 7px; border-radius: 999px; background: var(--accent); color: #fff; box-shadow: 0 0 12px var(--glow, rgba(177, 77, 255, .4)); }
+  .sbh-tag.old { background: var(--danger); }
+  .sbh-acts { position: absolute; top: 6px; right: 6px; z-index: 1; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+  .sbh-card:hover .sbh-acts, .sbh-card:focus-within .sbh-acts, .sbh-acts .on { opacity: 1; }
+  .sbh-acts button { width: 26px; height: 26px; padding: 0; border-radius: 7px; display: grid; place-items: center; font-size: 14px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); color: #fff; cursor: pointer; }
+  .sbh-acts button:hover { border-color: var(--accent); }
+  .sbh-acts button.on { color: #ffd84a; opacity: 1; }
+  .sbh-cap { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px 9px; }
+  .sbh-cap b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sbh-cap small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sbh-empty { color: var(--muted); font-size: 14px; margin: 0; }
+  @media (max-width: 560px) { .sbh-grid { --tile: 150px; } }
+  @media (hover: none), (max-width: 560px) { .sbh-card:hover, .sbh-card:focus-visible { transform: none; } .sbh-acts { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .sbh-card, .sbh-acts { transition: none; } .sbh-card:hover, .sbh-card:focus-visible { transform: none; } }
   .sb-quiet { display: inline-block; padding: 7px 10px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; text-align: center; text-decoration: none; }
   .sb-quiet:hover:not(:disabled) { background: var(--raised); color: var(--text); }
   .sb-quiet:disabled { opacity: .4; cursor: not-allowed; }
@@ -2456,6 +2485,7 @@
     if (f === 'yumeko' && !$('yumeko').src) $('yumeko').src = '/yumeko' + yumekoDeep();  // stays loaded between tabs; a deep link lands where it points
     else if (f === 'yumeko') { try { $('yumeko').contentWindow.location.hash = ''; } catch {} }  // the Yumeko tab always opens her start page
     if (f !== 'yumeko' && location.pathname.startsWith('/yumeko')) history.replaceState(null, '', '/');
+    if (f !== 'wake' && location.pathname.startsWith('/dawnforge')) history.replaceState(null, '', '/');
     document.body.classList.toggle('cloud-mode', f === 'cloud');
     $('cloudtab').hidden = f !== 'cloud';
     if (f === 'cloud' && !$('cloudtab').src) $('cloudtab').src = '/cloud';  // stays loaded between tabs: the key lives in its memory
@@ -2466,7 +2496,10 @@
     renderThread();
     if (f === 'wake') renderWake();
   }
-  document.querySelectorAll('.forge button').forEach(b => b.onclick = () => setForge(b.dataset.f));
+  document.querySelectorAll('.forge button').forEach(b => b.onclick = () => {
+    if (b.dataset.f === 'wake') { wake.view = 'home'; store.set('wake.view', 'home'); wake.push = true; }  // the Dawnforge tab always opens on its scenes
+    setForge(b.dataset.f);
+  });
   $('new-agent').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); $('input').focus(); };
   $('gallery-link').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); };
 
@@ -2814,13 +2847,13 @@
     if (!state.saved) await loadHistory();
     if (!$('sb-board')) {
       $('wake').innerHTML = `<div class="sb">
-        <div class="sb-bar"><div class="sb-views" role="tablist" aria-label="Dawnforge views">
-          <button type="button" role="tab" data-v="board">Storyboard</button><button type="button" role="tab" data-v="clips">Clips</button></div>
+        <div class="sb-bar"><button type="button" class="sb-quiet" id="sb-back">← Scenes</button>
           <div class="sb-bar-board" id="sb-bar"></div><span id="sb-saved" class="sb-saved" aria-live="polite"></span></div>
+        <div id="sb-home" class="sbh"></div>
         <div id="sb-board"></div>
         <div id="sb-clips" class="sb-clips"><div class="wake-strip" id="wake-strip"></div><div id="wake-player"></div></div>
       </div><dialog class="wake-dialog" id="wake-dialog"></dialog>`;
-      document.querySelectorAll('.sb-views button').forEach(b => b.onclick = () => { wake.view = b.dataset.v; store.set('wake.view', wake.view); paintView(); });
+      $('sb-back').onclick = () => showWake('home');
     }
     if (!wake.board) {
       const id = store.get('wake.board', null);
@@ -2830,8 +2863,12 @@
     if (wake.job) followWake();
   }
   async function paintView() {
-    document.querySelectorAll('.sb-views button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === wake.view));
+    $('sb-back').hidden = wake.view === 'home';
+    if (wake.view === 'board' && !wake.board) await openBoard(wake.boards[0]?.id);
     $('sb-board').hidden = $('sb-bar').hidden = wake.view !== 'board';
+    $('sb-home').hidden = wake.view !== 'home';
+    wakeUrl();
+    if (wake.view === 'home') paintHome();
     $('sb-clips').hidden = wake.view !== 'clips';
     if (wake.view === 'clips') {
       const singles = await (await fetch('/api/wake/clips')).json();
@@ -2841,6 +2878,83 @@
       paintClips();
     }
   }
+  // ---------- Dawnforge home: all scenes. Address: /dawnforge, /dawnforge/<board>, /dawnforge/clips ----------
+  function showWake(view, push = true) {
+    wake.view = view; store.set('wake.view', view);
+    wake.push = push;
+    paintView();
+  }
+  function wakeUrl() {
+    if (state.forge !== 'wake') return;
+    const path = wake.view === 'home' ? '/dawnforge' : wake.view === 'clips' ? '/dawnforge/clips' : '/dawnforge/' + (wake.board?.id || '');
+    if (location.pathname !== path) history[wake.push ? 'pushState' : 'replaceState'](null, '', path);
+    wake.push = false;
+  }
+  const canPeek = () => matchMedia('(hover: hover) and (min-width: 641px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function sbhEdges(el) {  // as Yumeko's edges(): tiles on the left/right edge and the top row grow inwards
+    const n = Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length);
+    [...el.children].forEach((t, i) => { t.classList.toggle('l', i % n === 0); t.classList.toggle('r', i % n === n - 1); t.classList.toggle('t', i < n); });
+  }
+  function paintHome() {
+    const box = $('sb-home');
+    const order = list => [...list.filter(b => b.starred), ...list.filter(b => !b.starred)];
+    const when = t => t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    const tile = b => {
+      const film = b.scene, secs = film?.length ? ` · ${Math.round(film.length)} s` : '';
+      return `<a class="sbh-card" href="/dawnforge/${esc(b.id)}" data-id="${esc(b.id)}">
+        <span class="sbh-pic">${b.thumb ? `<img src="${esc(url(b.thumb))}" alt="" loading="lazy">` : '<span class="sbh-none">▦</span>'}
+          ${film ? `<video muted loop playsinline preload="none" data-src="${esc(url(film.video))}?v=${esc(film.sig || '')}"></video>` : ''}</span>
+        ${film?.outdated ? '<span class="sbh-tag old" title="The board changed after this film was joined">Out of date</span>' : film ? '<span class="sbh-tag">Film</span>' : ''}
+        <span class="sbh-acts"><button type="button" data-a="star" class="${b.starred ? 'on' : ''}" aria-label="${b.starred ? 'Remove from favourites' : 'Favourite'}" title="Favourite">${b.starred ? '★' : '☆'}</button><button type="button" data-a="del" aria-label="Delete" title="Delete">✕</button></span>
+        <span class="sbh-cap"><b>${esc(b.title)}</b><small>${b.shots} shot${b.shots === 1 ? '' : 's'}${secs} · ${when(b.updated || b.created)}</small></span>
+      </a>`;
+    };
+    const all = order(wake.boards);
+    box.innerHTML = `<section class="sbh-shelf"><div class="sbh-head"><h2>Scenes</h2><span class="count">${all.length} ${all.length === 1 ? 'scene' : 'scenes'}</span>
+        <button type="button" class="sb-quiet" id="sbh-clips" style="margin-left:auto">All clips</button><button type="button" class="add" data-new style="margin-left:0">+ New scene</button></div>
+        ${all.length ? `<div class="sbh-grid">${all.map(tile).join('')}</div>` : '<p class="sbh-empty">No scene yet.</p>'}</section>`;
+    $('sbh-clips').onclick = () => showWake('clips');
+    box.querySelectorAll('[data-new]').forEach(n => n.onclick = async () => { await openBoard(null); showWake('board'); });
+    box.querySelectorAll('.sbh-grid').forEach(sbhEdges);
+    box.querySelectorAll('.sbh-card').forEach(c => {
+      const b = wake.boards.find(x => x.id === c.dataset.id), v = c.querySelector('video');
+      c.onclick = async e => {
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a) e.preventDefault();
+        if (a === 'star') {
+          b.starred = !b.starred;
+          try { await post('/api/board/star', { id: b.id, starred: b.starred }); } catch (err) { b.starred = !b.starred; alert(err.message); }
+          return paintHome();
+        }
+        if (a === 'del') {
+          if (!confirm(`Delete "${b.title}" and all its renders? This can't be undone.`)) return;
+          await post('/api/board/delete', { id: b.id });
+          if (wake.board?.id === b.id) wake.board = null;
+          await listBoards(); return paintHome();
+        }
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;  // a new tab follows the link itself
+        e.preventDefault();
+        await openBoard(b.id); showWake('board');
+      };
+      if (!v) return;
+      const play = () => { if (!canPeek()) return; if (!v.src) v.src = v.dataset.src; v.play().then(() => v.classList.add('on')).catch(() => {}); };
+      const stop = () => { v.pause(); v.classList.remove('on'); try { v.currentTime = 0; } catch {} };
+      c.addEventListener('mouseenter', play); c.addEventListener('mouseleave', stop);
+      c.addEventListener('focus', play); c.addEventListener('blur', stop);
+    });
+  }
+  let sbhResize; addEventListener('resize', () => { clearTimeout(sbhResize); sbhResize = setTimeout(() => document.querySelectorAll('#sb-home .sbh-grid').forEach(sbhEdges), 120); });
+  addEventListener('popstate', () => {
+    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+))?/);
+    if (!m) return;
+    if (state.forge !== 'wake') setForge('wake');
+    const part = m[1];
+    if (!part) return showWake('home', false);
+    if (part === 'clips') return showWake('clips', false);
+    if (wake.board?.id !== part) openBoard(part).then(() => showWake('board', false));
+    else showWake('board', false);
+  });
+
   async function openBoard(id) {
     wake.models ??= await (await fetch('/api/video_models')).json();
     if (id) wake.board = await (await fetch('/api/board/' + id)).json();
@@ -2853,6 +2967,7 @@
     wake.shot = wake.board.shots[0]?.id;
     store.set('wake.board', wake.board.id);
     paintBoard();
+    if (wake.view === 'board') wakeUrl();  // the board picker moves the address along
   }
   // edits save themselves; the answer only updates what the server owns, so typing is never disturbed
   let saving;
@@ -3562,6 +3677,14 @@
     return '#' + parts.join('/');
   }
   if (location.pathname.startsWith('/yumeko/')) state.forge = 'yumeko';
+  {
+    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+))?/);
+    if (m) {
+      state.forge = 'wake';
+      wake.view = !m[1] ? 'home' : m[1] === 'clips' ? 'clips' : 'board';
+      if (wake.view === 'board') store.set('wake.board', m[1]);
+    }
+  }
   setForge(state.forge);
   if (soul.job) followSoul();
 </script>

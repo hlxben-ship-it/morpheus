@@ -1175,7 +1175,13 @@ def board_list() -> list[dict]:
     for f in BOARD_DIR.glob("*/board.json"):
         try:
             b = json.loads(f.read_text(encoding="utf-8"))
-            boards.append({"id": b["id"], "title": b["title"], "shots": len(b["shots"]), "updated": b.get("updated", ""), "scene": b.get("scene")})
+            first = b["shots"][0] if b["shots"] else {}
+            scene = b.get("scene")
+            if scene:
+                scene = {**scene, "outdated": scene.get("sig") != scene_sig(b)}
+            boards.append({"id": b["id"], "title": b["title"], "shots": len(b["shots"]), "updated": b.get("updated", ""),
+                           "created": b.get("created", ""), "starred": bool(b.get("starred")), "scene": scene,
+                           "thumb": (scene or {}).get("thumb") or first.get("thumb") or first.get("source")})
         except (OSError, json.JSONDecodeError, KeyError):
             continue
     return sorted(boards, key=lambda b: b["updated"], reverse=True)
@@ -1212,6 +1218,17 @@ def board_store(req: dict) -> dict:
         old.update(title=str(req.get("title") or "Untitled board").strip()[:80], shots=shots)
         board_write(old)
         return board_view(old)
+
+
+def board_star(board_id: str, starred: bool) -> None:
+    """A favourite flag only: it does not count as an edit, so the board keeps its place in "newest first"."""
+    with BOARD_LOCK:
+        board = board_load(board_id)
+        board["starred"] = bool(starred)
+        path = board_file(board_id)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(board, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(path)
 
 
 def board_delete(board_id: str) -> None:
