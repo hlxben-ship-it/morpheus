@@ -1,0 +1,37 @@
+{
+  "_doc": "Model schema of the Dawnforge Playground. What the keys mean: see the top of playground_models.py. Edit and reload the page, no restart.",
+  "models": [
+    {
+      "id": "ltx23",
+      "label": "LTX 2.3 (WanGP)",
+      "note": "More main-pass steps: finer detail and, with motion LoRAs, stronger motion, but a longer render. 8 is the fast minimum, 30 the best.",
+      "resolutions": [
+        { "id": "720p", "label": "720p", "target": "720p" },
+        { "id": "1080p", "label": "1080p (native)", "target": "1080p" },
+        { "id": "1080p_from_720p", "label": "1080p (upscaled from 720p)", "target": "1080p", "render": "720p" },
+        { "id": "2k_from_1080p", "label": "2K (upscaled from 1080p)", "target": "2k", "render": "1080p" },
+        { "id": "2k", "label": "2K (native)", "target": "2k" }
+      ],
+      "stages": [
+        { "id": "main", "label": "Main pass", "kind": "sample", "size": "reduced", "steps": { "min": 8, "max": 30, "default": 8 } },
+        { "id": "refine", "label": "Refine", "kind": "sample", "hint": "after the automatic ×2 latent upscale to the render size", "steps": { "min": 1, "max": 8, "default": 3 } }
+      ],
+      "options": []
+    },
+    {
+      "id": "h3_minimax",
+      "label": "H3 MiniMax Flash (WanGP)",
+      "note": "HyperFlow Flash: 4 steps in our tests, 6 or 8 are allowed. A single pass, no refine and no upscale stage.",
+      "resolutions": [
+        { "id": "720p", "label": "720p", "target": "720p" },
+        { "id": "1080p", "label": "1080p (native)", "target": "1080p" },
+        { "id": "1080p_from_720p", "label": "1080p (upscaled from 720p)", "target": "1080p", "render": "720p" },
+        { "id": "2k_from_1080p", "label": "2K (upscaled from 1080p)", "target": "2k", "render": "1080p" }
+      ],
+      "stages": [
+        { "id": "main", "label": "Single pass", "kind": "sample", "steps": { "choices": [4, 6, 8], "default": 4 } }
+      ],
+      "options": []
+    }
+  ]
+}

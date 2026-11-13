@@ -25,6 +25,7 @@ from PIL import Image
 
 import agents
 import morpheus
+import playground
 import yumeko
 import yumeko_auto
 import soulforge
@@ -857,6 +858,18 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/wake/options":
             return self.send_json({"presets": [{"key": k, "label": v["label"], "note": v["note"]} for k, v in morpheus.VIDEO_PRESETS.items()],
                                    "negative": morpheus.VIDEO_NEGATIVE, "installed": morpheus.video_installed()})
+        if route == "/api/playground/options":
+            try:
+                return self.send_json(playground.options())
+            except ValueError as e:  # a broken playground_models.json: say what is wrong instead of hanging up
+                return self.send_json({"error": str(e)}, 500)
+        if route == "/api/playground/clips":
+            return self.send_json(playground.clips())
+        if route.startswith("/api/playground/"):
+            try:
+                return self.send_json(playground.load(route.removeprefix("/api/playground/")))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
         if route == "/api/boards":
             return self.send_json(morpheus.board_list())
         if route.startswith("/api/board/"):
@@ -956,7 +969,8 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/wake/stop": self.wake_stop, "/api/wake/delete": self.wake_delete,
                     "/api/board/save": morpheus.board_store, "/api/board/delete": self.board_delete,
                     "/api/board/star": self.board_star,
-                    "/api/board/render": self.board_render, "/api/board/picture": self.board_picture}
+                    "/api/board/render": self.board_render, "/api/board/picture": self.board_picture,
+                    **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()}}
         if self.path not in handlers:
             return self.send_error(404)
         try:

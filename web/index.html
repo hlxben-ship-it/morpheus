@@ -626,6 +626,86 @@
   .sbh-cap b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sbh-cap small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sbh-empty { color: var(--muted); font-size: 14px; margin: 0; }
+  /* Dawnforge Playground: fills the window like an app (no page scroll) from 1000x720 up, flows and scrolls below */
+  .pl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 6px 0 24px; }
+  .pl-left, .pl-right { display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .pl-box { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+  .pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .pl-grid.two { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .pl label.pl-l { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .pl select, .pl textarea { width: 100%; box-sizing: border-box; }
+  .pl textarea { min-height: 130px; resize: vertical; }
+  #sb-play-bar { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 12px; }
+  #sb-play-bar .pl-title { margin: 0; font: 600 20px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .04em; }
+  .pl-pipe { display: grid; gap: 8px; }
+  .pl-stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .pl-stage { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 50%); align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .pl-stage .n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--raised); color: var(--muted); font-size: 12px; }
+  .pl-stage .what { display: grid; line-height: 1.25; min-width: 0; } .pl-stage .what small { color: var(--muted); font-size: 11px; }
+  .pl-stage .ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; font-size: 12px; white-space: nowrap; }
+  .pl-stage .ctl input[type=range] { flex: 1; min-width: 60px; } .pl-stage .ctl output { min-width: 7ch; text-align: right; font-weight: 600; }
+  .pl-stage .fixed { color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { padding: 5px 12px; border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button:hover { color: var(--text); } .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .pl-opt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; } .pl-opt .pl-l { margin: 0; } .pl-opt .pl-hint { flex-basis: 100%; }
+  .pl-hint { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .pl-id { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+  .pl-frame { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+  .pl-drop { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 13px; text-align: center; padding: 0 10px; cursor: pointer; overflow: hidden; }
+  .pl-drop.over, .pl-drop:hover { border-color: var(--accent); }
+  .pl-drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .pl-drop .x { position: absolute; top: 6px; right: 6px; z-index: 1; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); color: #fff; cursor: pointer; }
+  .pl-lora { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .pl-lora .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pl-lora .path { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); }
+  .pl-lora .path.bad { color: var(--danger); }
+  .pl-lora input[type=range] { flex: 1; min-width: 120px; }
+  .pl-sum { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 0; font-size: 12px; line-height: 1.4; }
+  .pl-sum dt { color: var(--muted); } .pl-sum dd { margin: 0; overflow-wrap: anywhere; }
+  .pl-raw summary { cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
+  .pl-raw summary:hover { color: var(--text); }
+  .pl-dbg { margin: 6px 0 0; max-height: 240px; overflow: auto; scrollbar-width: none; padding: 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); color: var(--text); font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pl-render { width: 100%; padding: 18px 12px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: 600 17px/1 Montserrat, sans-serif; letter-spacing: .08em; cursor: pointer; box-shadow: 0 0 24px var(--glow, rgba(177, 77, 255, .4)); transition: filter .15s, transform .05s; }
+  .pl-render:hover:not(:disabled) { filter: brightness(1.12); } .pl-render:active:not(:disabled) { transform: translateY(1px); }
+  .pl-render:disabled { opacity: .55; cursor: progress; box-shadow: none; }
+  .pl-prog { position: relative; height: 40px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; display: grid; place-items: center; }
+  .pl-prog i { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #fff)); opacity: .5; transition: width .6s ease; }
+  .pl-prog.running i { background-size: 28px 28px; background-image: linear-gradient(135deg, rgba(255, 255, 255, .16) 25%, transparent 25% 50%, rgba(255, 255, 255, .16) 50% 75%, transparent 75%); animation: pl-stripes 1s linear infinite; }
+  @keyframes pl-stripes { to { background-position: 28px 0; } }
+  .pl-prog span { position: relative; font-size: 13px; color: var(--muted); padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .pl-prog.running span { color: var(--text); }
+  .pl-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; min-height: 138px; }
+  .pl-strip::-webkit-scrollbar { display: none; }
+  .pl-strip > :first-child { margin-left: auto; } .pl-strip > :last-child { margin-right: auto; }
+  .pl-strip .empty { margin: auto; color: var(--muted); font-size: 13px; align-self: center; }
+  .pl-clip { flex: 0 0 auto; width: 132px; display: grid; gap: 4px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); cursor: grab; font: inherit; text-align: left; overflow: hidden; transition: transform .15s, border-color .15s, box-shadow .15s; }
+  .pl-clip:hover, .pl-clip:focus-visible { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 0 18px var(--glow, rgba(177, 77, 255, .4)); outline: 0; }
+  .pl-clip:active { cursor: grabbing; }
+  .pl-clip .pic { position: relative; display: grid; place-items: center; height: 96px; background: var(--raised); color: var(--muted); }
+  .pl-clip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .pl-clip .pic b { position: relative; font-size: 22px; color: #fff; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .15s; }
+  .pl-clip:hover .pic b, .pl-clip:focus-visible .pic b { opacity: 1; }
+  .pl-clip small { padding: 0 8px 7px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl-modal video { display: block; width: 100%; max-height: 66vh; border-radius: 10px; background: #000; }
+  .pl-modal .wake-open.danger { color: var(--danger); }
+  .pl-modal .hint { margin: 10px 0 0; }
+  @media (min-width: 1000px) and (min-height: 720px) {
+    #wake.pl-on { overflow: hidden; padding: 10px 16px 12px; }
+    #wake.pl-on .sb { max-width: none; height: 100%; grid-template-rows: auto minmax(0, 1fr); }
+    .pl:not([hidden]) { height: 100%; min-height: 0; padding: 0; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
+    .pl-left, .pl-right { display: flex; flex-direction: column; min-height: 0; }
+    .pl-prompt { flex: 2 1 0; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+    .pl-prompt textarea { height: 100%; min-height: 0; resize: none; }
+    .pl-frames { flex: 3 1 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+    .pl-frames .pl-grid { grid-template-columns: 1fr 1fr; min-height: 0; }
+    .pl-drop { aspect-ratio: auto; height: 100%; }
+    .pl-loras { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; align-content: start; }
+    .pl-loras::-webkit-scrollbar { display: none; }
+    .pl-prog, .pl-strip { grid-column: 1 / -1; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pl-prog.running i { animation: none; } .pl-clip { transition: none; } }
   @media (max-width: 560px) { .sbh-grid { --tile: 150px; } }
   @media (hover: none), (max-width: 560px) { .sbh-card:hover, .sbh-card:focus-visible { transform: none; } .sbh-acts { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .sbh-card, .sbh-acts { transition: none; } .sbh-card:hover, .sbh-card:focus-visible { transform: none; } }
@@ -2848,9 +2928,10 @@
     if (!$('sb-board')) {
       $('wake').innerHTML = `<div class="sb">
         <div class="sb-bar"><button type="button" class="sb-quiet" id="sb-back">← Scenes</button>
-          <div class="sb-bar-board" id="sb-bar"></div><span id="sb-saved" class="sb-saved" aria-live="polite"></span></div>
+          <div class="sb-bar-board" id="sb-bar"></div><div id="sb-play-bar" hidden></div><span id="sb-saved" class="sb-saved" aria-live="polite"></span></div>
         <div id="sb-home" class="sbh"></div>
         <div id="sb-board"></div>
+        <div id="sb-play" class="pl" hidden></div>
         <div id="sb-clips" class="sb-clips"><div class="wake-strip" id="wake-strip"></div><div id="wake-player"></div></div>
       </div><dialog class="wake-dialog" id="wake-dialog"></dialog>`;
       $('sb-back').onclick = () => showWake('home');
@@ -2867,8 +2948,11 @@
     if (wake.view === 'board' && !wake.board) await openBoard(wake.boards[0]?.id);
     $('sb-board').hidden = $('sb-bar').hidden = wake.view !== 'board';
     $('sb-home').hidden = wake.view !== 'home';
+    $('sb-play').hidden = $('sb-play-bar').hidden = wake.view !== 'play';
+    $('wake').classList.toggle('pl-on', wake.view === 'play');
     wakeUrl();
     if (wake.view === 'home') paintHome();
+    if (wake.view === 'play') paintPlay();
     $('sb-clips').hidden = wake.view !== 'clips';
     if (wake.view === 'clips') {
       const singles = await (await fetch('/api/wake/clips')).json();
@@ -2881,12 +2965,13 @@
   // ---------- Dawnforge home: all scenes. Address: /dawnforge, /dawnforge/<board>, /dawnforge/clips ----------
   function showWake(view, push = true) {
     wake.view = view; store.set('wake.view', view);
+    if (view === 'play') wake.playClips = null;  // the shelf is read again each time the page is opened
     wake.push = push;
     paintView();
   }
   function wakeUrl() {
     if (state.forge !== 'wake') return;
-    const path = wake.view === 'home' ? '/dawnforge' : wake.view === 'clips' ? '/dawnforge/clips' : '/dawnforge/' + (wake.board?.id || '');
+    const path = wake.view === 'home' ? '/dawnforge' : wake.view === 'clips' ? '/dawnforge/clips' : wake.view === 'play' ? '/dawnforge/playground/' + (wake.playId || '') : '/dawnforge/' + (wake.board?.id || '');
     if (location.pathname !== path) history[wake.push ? 'pushState' : 'replaceState'](null, '', path);
     wake.push = false;
   }
@@ -2911,9 +2996,10 @@
     };
     const all = order(wake.boards);
     box.innerHTML = `<section class="sbh-shelf"><div class="sbh-head"><h2>Scenes</h2><span class="count">${all.length} ${all.length === 1 ? 'scene' : 'scenes'}</span>
-        <button type="button" class="sb-quiet" id="sbh-clips" style="margin-left:auto">All clips</button><button type="button" class="add" data-new style="margin-left:0">+ New scene</button></div>
+        <button type="button" class="sb-quiet" id="sbh-clips" style="margin-left:auto">All clips</button><button type="button" class="add" id="sbh-play" style="margin-left:0">Playground</button><button type="button" class="add" data-new style="margin-left:0">+ New scene</button></div>
         ${all.length ? `<div class="sbh-grid">${all.map(tile).join('')}</div>` : '<p class="sbh-empty">No scene yet.</p>'}</section>`;
     $('sbh-clips').onclick = () => showWake('clips');
+    $('sbh-play').onclick = async () => { wake.playId = (await post('/api/playground/new', {})).id; wake.play = null; showWake('play'); };
     box.querySelectorAll('[data-new]').forEach(n => n.onclick = async () => { await openBoard(null); showWake('board'); });
     box.querySelectorAll('.sbh-grid').forEach(sbhEdges);
     box.querySelectorAll('.sbh-card').forEach(c => {
@@ -2945,15 +3031,266 @@
   }
   let sbhResize; addEventListener('resize', () => { clearTimeout(sbhResize); sbhResize = setTimeout(() => document.querySelectorAll('#sb-home .sbh-grid').forEach(sbhEdges), 120); });
   addEventListener('popstate', () => {
-    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+))?/);
+    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+)(?:\/([^/]+))?)?/);
     if (!m) return;
     if (state.forge !== 'wake') setForge('wake');
     const part = m[1];
     if (!part) return showWake('home', false);
     if (part === 'clips') return showWake('clips', false);
+    if (part === 'playground') { if (!m[2]) return showWake('home', false); wake.playId = m[2]; return showWake('play', false); }
     if (wake.board?.id !== part) openBoard(part).then(() => showWake('board', false));
     else showWake('board', false);
   });
+
+  // ---------- Dawnforge Playground: /dawnforge/playground/<id>, state saved in output/playground/<id>/ ----------
+  // UI only for now: Render saves the page and says so. The render seed feeds plProgress({ phase, step, total, since })
+  // while a render runs (null when it is over) and writes the finished clip to output/playground/<id>/clips/ (see
+  // playground.clips() for the sidecar); the shelf below picks it up.
+  const plFmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  let plTick;
+  function paintPlayProgress() {
+    const bar = $('pl-bar'), r = wake.playRun;
+    if (!bar) return;
+    $('pl-prog').classList.toggle('running', !!r);
+    $('pl-render').disabled = !!r;
+    if (!r) { bar.style.width = '0'; return; }
+    const elapsed = (Date.now() - (r.since || Date.now())) / 1000, left = r.step > 0 && r.total ? elapsed / r.step * (r.total - r.step) : null;
+    bar.style.width = `${r.total ? 100 * r.step / r.total : 0}%`;
+    $('pl-prog-text').textContent = [r.phase || 'Starting', r.total ? `step ${r.step} of ${r.total}` : '', `${plFmt(elapsed)} so far`,
+      left == null ? 'estimating …' : `about ${plFmt(left)} left`, left == null ? '' : `${plFmt(elapsed + left)} in total`].filter(Boolean).join(' · ');
+  }
+  window.plProgress = run => {
+    wake.playRun = run || null;
+    clearInterval(plTick);
+    if (run) plTick = setInterval(paintPlayProgress, 1000);
+    else if ($('pl-prog-text')) $('pl-prog-text').textContent = 'Done.';
+    paintPlayProgress();
+  };
+  // the last picture of a clip, read in the browser (same origin, so the canvas stays clean)
+  const plLastFrame = src => new Promise((resolve, reject) => {
+    const v = document.createElement('video'), fail = () => { clearTimeout(t); reject(new Error('Could not read this clip.')); };
+    const t = setTimeout(fail, 20000);
+    v.muted = true; v.preload = 'auto'; v.playsInline = true; v.onerror = fail;
+    v.onloadedmetadata = () => { v.currentTime = Math.max(0, v.duration - 0.02); };
+    v.onseeked = () => {
+      clearTimeout(t);
+      const c = Object.assign(document.createElement('canvas'), { width: v.videoWidth, height: v.videoHeight });
+      c.getContext('2d').drawImage(v, 0, 0);
+      resolve(c.toDataURL('image/png'));
+      v.removeAttribute('src'); v.load();
+    };
+    v.src = src;
+  });
+  async function paintPlay() {
+    const box = $('sb-play'), bar = $('sb-play-bar');
+    if (!wake.playOpts) {
+      const d = await (await fetch('/api/playground/options')).json();
+      if (d.error) { bar.innerHTML = ''; box.innerHTML = `<p class="sbh-empty">${esc(d.error)}</p>`; return; }
+      wake.playOpts = d;
+    }
+    const o = wake.playOpts;
+    if (wake.play?.id !== wake.playId) {
+      const r = await fetch('/api/playground/' + encodeURIComponent(wake.playId || '-'));
+      const d = await r.json();
+      if (!r.ok) { wake.play = null; bar.innerHTML = ''; box.innerHTML = `<p class="sbh-empty">${esc(d.error)}</p>`; return; }
+      wake.play = d; wake.playClips = null;
+    }
+    wake.playClips ??= await (await fetch('/api/playground/clips')).json();
+    const p = wake.play, dir = `playground/${p.id}/`, shelf = wake.playClips;
+    const opt = (list, v, lab = x => x) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? lab(x))}</option>`).join('');
+    const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
+    if (!curModel().resolutions.some(r => r.id === p.resolution)) p.resolution = curModel().resolutions[0].id;  // the server resolves this too
+    const frame = (k, hint) => `<div class="pl-frame"><label class="pl-l">${k === 'start' ? 'Start frame' : 'End frame'}</label><div class="pl-drop" data-k="${k}" tabindex="0">${p[k] ? `<img src="${esc(url(dir + p[k]))}" alt=""><button type="button" class="x" title="Remove">✕</button>` : hint}</div></div>`;
+    const lora = i => `<div class="pl-lora" data-i="${i}"><div class="row"><b>LoRA ${i + 1}</b><button type="button" class="sb-quiet" data-a="pick">Open a file …</button>
+        <span class="path ${p.loras[i].missing ? 'bad' : ''}">${p.loras[i].path ? esc(p.loras[i].path) + (p.loras[i].missing ? ' — file missing' : '') : 'No file'}</span>
+        <button type="button" class="sb-quiet danger" data-a="clear" title="Remove this LoRA" aria-label="Remove LoRA ${i + 1}" ${p.loras[i].path ? '' : 'hidden'}>✕</button></div>
+      <div class="row"><label class="pl-l" style="margin:0">Strength</label><input type="range" min="0" max="2" step="0.05" value="${p.loras[i].strength}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>
+      <dl class="pl-sum" hidden></dl><details class="pl-raw" hidden><summary>Raw header</summary><pre class="pl-dbg"></pre></details></div>`;
+    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b></span><small>${esc(c.label)}</small></button>`;
+    bar.innerHTML = `<h2 class="pl-title">Playground</h2><span class="pl-id">${esc(p.id)}</span><span class="sb-saved" id="pl-saved" style="margin-left:auto" aria-live="polite"></span>`;
+    box.innerHTML = `<div class="pl-left">
+        <section class="pl-box pl-prompt"><label class="pl-l" for="pl-prompt" style="margin:0">Prompt</label><textarea id="pl-prompt" placeholder="What happens in the clip …">${esc(p.prompt)}</textarea></section>
+        <section class="pl-box pl-frames"><div class="pl-grid two">${frame('start', 'Drop a picture, or drag a clip here for its last frame')}${frame('end', 'Drop a picture or click')}</div>
+          <input type="file" id="pl-file" accept="image/png,image/jpeg,image/webp" hidden></section>
+      </div>
+      <div class="pl-right">
+        <section class="pl-box"><div class="pl-grid">
+          <div><label class="pl-l" for="pl-model">Model</label><select id="pl-model">${opt(o.models, p.model)}</select></div>
+          <div><label class="pl-l" for="pl-duration">Duration</label><select id="pl-duration">${opt(o.durations, p.duration, x => x + ' s')}</select></div>
+          <div><label class="pl-l" for="pl-resolution">Resolution</label><select id="pl-resolution">${opt(curModel().resolutions, p.resolution)}</select></div>
+          <div><label class="pl-l" for="pl-aspect">Aspect</label><select id="pl-aspect">${opt(o.aspects, p.aspect)}</select></div></div>
+          <div class="pl-pipe"><label class="pl-l">Pipeline</label><ol class="pl-stages" id="pl-stages"></ol><div id="pl-opts"></div><p class="pl-hint" id="pl-note"></p></div></section>
+        <section class="pl-box pl-loras"><b>LoRAs</b>${lora(0)}${lora(1)}</section>
+        <button type="button" class="pl-render" id="pl-render">Render</button>
+      </div>
+      <div class="pl-prog" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
+      <div class="pl-strip" id="pl-strip">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your Playground renders show up here. Drag one onto the start frame to continue from its last frame.</span>'}</div>
+      <dialog class="wake-dialog pl-modal" id="pl-modal"></dialog>`;
+    const saved = t => $('pl-saved').textContent = t;
+    let timer;
+    const persist = () => {
+      clearTimeout(timer); saved('Saving …');
+      timer = setTimeout(async () => {
+        try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
+        catch (e) { saved(e.message); }
+      }, 400);
+    };
+    // the pipeline block is drawn from the model schema (playground_models.json); the same rules as playground_models.resolve
+    const modelNow = curModel;
+    // the resolutions belong to the model: a switch keeps the choice where the new model has it, else its first. (Steps and
+    // options belong to the pipeline: a switch starts them from the new model's defaults.)
+    const paintResolutions = () => {
+      const rs = modelNow().resolutions;
+      if (!rs.some(r => r.id === p.resolution)) p.resolution = rs[0].id;
+      $('pl-resolution').innerHTML = opt(rs, p.resolution);
+    };
+    const specsOf = m => {
+      const s = {};
+      for (const st of m.stages) if (st.kind === 'sample') {
+        const x = st.steps;
+        s[`${st.id}.steps`] = x.fixed ? { type: 'fixed', default: x.default } : x.choices ? { type: 'choices', choices: x.choices, default: x.default } : { type: 'range', min: x.min, max: x.max, default: x.default };
+      }
+      for (const op of m.options || []) s[op.id] = { type: 'choices', choices: op.choices.map(c => c.id), default: op.default };
+      return s;
+    };
+    const resolveParams = m => {
+      const out = {};
+      for (const [k, s] of Object.entries(specsOf(m))) {
+        let v = p.params?.[k] ?? s.default;
+        if (s.type === 'fixed') v = s.default;
+        else if (s.type === 'range') v = Number.isInteger(v) ? Math.min(Math.max(v, s.min), s.max) : s.default;
+        else if (!s.choices.includes(v)) v = s.default;
+        out[k] = v;
+      }
+      p.params = out;
+    };
+    const paintNote = () => {
+      const m = modelNow(), total = m.stages.reduce((n, st) => n + (st.kind === 'sample' ? p.params[`${st.id}.steps`] : 0), 0);
+      $('pl-note').textContent = `${total} steps in total. ${m.note || ''}`;
+    };
+    const paintPipe = () => {
+      const m = modelNow();
+      resolveParams(m);
+      const seg = (k, list) => `<span class="seg" data-k="${esc(k)}">${list.map(([v, lab]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${p.params[k] === v}">${esc(lab)}</button>`).join('')}</span>`;
+      $('pl-stages').innerHTML = m.stages.map((st, i) => {
+        const k = `${st.id}.steps`, x = st.steps;
+        const what = st.kind === 'upscale'
+          ? `<b>${st.factor ? '×' + st.factor + ' ' : ''}${esc(st.label)}</b><small>${st.to === 'target' ? 'to target size' : ''}</small>`
+          : `<b>${esc(st.label)}</b><small>${esc(st.hint || (st.size === 'reduced' ? 'at reduced size' : st.size === 'target' ? 'at target size' : ''))}</small>`;
+        const ctl = st.kind === 'upscale' ? '' : x.fixed ? `<span class="fixed">${x.default} steps</span>`
+          : x.choices ? `${seg(k, x.choices.map(c => [c, String(c)]))}<span class="fixed">steps</span>`
+          : `<input type="range" step="1" min="${x.min}" max="${x.max}" value="${p.params[k]}" data-k="${esc(k)}" aria-label="${esc(st.label)} steps"><output>${p.params[k]} steps</output>`;
+        return `<li class="pl-stage"><span class="n">${i + 1}</span><span class="what">${what}</span><span class="ctl">${ctl}</span></li>`;
+      }).join('');
+      $('pl-opts').innerHTML = (m.options || []).map(op => `<div class="pl-opt"><label class="pl-l">${esc(op.label)}</label>${seg(op.id, op.choices.map(c => [c.id, c.label]))}${op.note ? `<p class="pl-hint">${esc(op.note)}</p>` : ''}</div>`).join('');
+      paintNote();
+    };
+    paintPipe();
+    $('pl-stages').oninput = e => {
+      const r = e.target.closest('input[type=range]');
+      if (!r) return;
+      p.params[r.dataset.k] = +r.value; r.nextElementSibling.textContent = `${r.value} steps`; paintNote(); persist();
+    };
+    box.querySelector('.pl-pipe').onclick = e => {
+      const b = e.target.closest('.seg button');
+      if (!b) return;
+      const k = b.closest('.seg').dataset.k;
+      p.params[k] = specsOf(modelNow())[k].choices.find(c => String(c) === b.dataset.v);
+      paintPipe(); persist();
+    };
+    for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0], ['aspect', 0]])
+      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
+    $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
+    // frames: click or drop a picture, or drop a clip on the start frame (its last picture); it goes to the playground folder
+    let pick;
+    const send = file => {
+      if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) return saved('A PNG, JPEG or WebP picture, please.');
+      const fr = new FileReader(), k = pick;
+      fr.onload = async () => {
+        // only the frame comes back into the page: the rest may hold edits the debounced save has not sent yet
+        try { p[k] = (await post('/api/playground/frame', { id: p.id, kind: k, data: fr.result }))[k]; paintPlay(); }
+        catch (e) { saved(e.message); }
+      };
+      fr.readAsDataURL(file);
+    };
+    const useLast = async c => {
+      saved('Taking the last frame …');
+      try { p.start = (await post('/api/playground/frame', { id: p.id, kind: 'start', data: await plLastFrame(url(c.video)) })).start; paintPlay(); }
+      catch (e) { saved(e.message); }
+    };
+    box.querySelectorAll('.pl-drop').forEach(d => {
+      const k = d.dataset.k, isClip = e => [...e.dataTransfer.types].includes('text/x-pl-clip');
+      d.onclick = e => {
+        if (e.target.closest('.x')) { p[k] = null; post('/api/playground/save', { id: p.id, [k]: null }).then(() => paintPlay()); return; }
+        pick = k; $('pl-file').value = ''; $('pl-file').click();
+      };
+      d.ondragover = e => { if (isClip(e) && k !== 'start') return; e.preventDefault(); d.classList.add('over'); };
+      d.ondragleave = () => d.classList.remove('over');
+      d.ondrop = e => {
+        e.preventDefault(); d.classList.remove('over');
+        if (isClip(e)) return useLast(shelf[+e.dataTransfer.getData('text/x-pl-clip')]);
+        pick = k; send(e.dataTransfer.files[0]);
+      };
+    });
+    $('pl-file').onchange = e => send(e.target.files[0]);
+    // LoRAs: a native file dialog on this PC gives the full path; a readable summary, the raw header folded away
+    const showHeader = async (el, i) => {
+      const sum = el.querySelector('.pl-sum'), raw = el.querySelector('.pl-raw'), path = p.loras[i].path;
+      sum.hidden = raw.hidden = true;
+      if (!path) return;
+      try {
+        const { summary, ...rest } = await post('/api/playground/inspect', { path });
+        sum.innerHTML = summary.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join(''); sum.hidden = false;
+        el.querySelector('.pl-dbg').textContent = JSON.stringify(rest, null, 1); raw.hidden = false;
+      } catch (e) { sum.innerHTML = `<dt>Header</dt><dd>${esc(e.message)}</dd>`; sum.hidden = false; }
+    };
+    box.querySelectorAll('.pl-lora').forEach(el => {
+      const i = +el.dataset.i, range = el.querySelector('input'), out = el.querySelector('output');
+      range.oninput = () => { p.loras[i].strength = +range.value; out.textContent = (+range.value).toFixed(2); persist(); };
+      el.querySelector('[data-a="pick"]').onclick = async () => {
+        saved('Waiting for the file dialog on this PC …');
+        try {
+          const { path } = await post('/api/playground/pick_lora', {});
+          if (!path) return saved('');
+          p.loras[i].path = path; p.loras[i].missing = false;
+          persist(); paintPlay();
+        } catch (e) { saved(e.message); }
+      };
+      el.querySelector('[data-a="clear"]').onclick = () => { p.loras[i] = { path: '', strength: 1.0 }; persist(); paintPlay(); };
+      if (p.loras[i].path && !p.loras[i].missing) showHeader(el, i);
+    });
+    // the shelf: click a clip for the big player, drag it onto the start frame
+    const openClip = c => {
+      const dlg = $('pl-modal');
+      dlg.innerHTML = `<div class="gal-head"><h2 class="h">${esc(c.label)}</h2><span style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="wake-open" data-a="use">Use last frame as start</button><button type="button" class="wake-open" data-a="full">Fullscreen</button>
+          <button type="button" class="wake-open danger" data-a="del">Delete</button><button type="button" class="wake-open" data-a="close">Close</button></span></div>
+        <video src="${esc(url(c.video))}" controls autoplay loop playsinline></video><p class="hint">${esc(c.prompt)}</p>`;
+      const v = dlg.querySelector('video');
+      dlg.onclose = () => v.pause();
+      dlg.onclick = async e => {
+        if (e.target === dlg) return dlg.close();
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a === 'close') dlg.close();
+        if (a === 'full') v.requestFullscreen?.();
+        if (a === 'use') { dlg.close(); useLast(c); }
+        if (a === 'del') {
+          if (!confirm('Delete this clip? This can\'t be undone.')) return;
+          try { await post('/api/playground/delete_clip', { id: c.playground, video: c.video }); }
+          catch (err) { return alert(err.message); }
+          dlg.close(); wake.playClips = null; paintPlay();
+        }
+      };
+      dlg.showModal();
+    };
+    $('pl-strip').querySelectorAll('.pl-clip').forEach(b => {
+      const c = shelf[+b.dataset.i];
+      b.onclick = () => openClip(c);
+      b.ondragstart = e => { e.dataTransfer.setData('text/x-pl-clip', b.dataset.i); e.dataTransfer.effectAllowed = 'copy'; };
+    });
+    $('pl-render').onclick = () => { persist(); $('pl-prog-text').textContent = 'Saved to the playground folder. Rendering is not wired yet, that is a later seed.'; };
+    paintPlayProgress();
+  }
 
   async function openBoard(id) {
     wake.models ??= await (await fetch('/api/video_models')).json();
@@ -3678,10 +4015,11 @@
   }
   if (location.pathname.startsWith('/yumeko/')) state.forge = 'yumeko';
   {
-    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+))?/);
+    const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+)(?:\/([^/]+))?)?/);
     if (m) {
       state.forge = 'wake';
-      wake.view = !m[1] ? 'home' : m[1] === 'clips' ? 'clips' : 'board';
+      wake.view = !m[1] ? 'home' : m[1] === 'clips' ? 'clips' : m[1] === 'playground' ? (m[2] ? 'play' : 'home') : 'board';
+      if (wake.view === 'play') wake.playId = m[2];
       if (wake.view === 'board') store.set('wake.board', m[1]);
     }
   }
