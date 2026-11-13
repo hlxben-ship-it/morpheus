@@ -1,9 +1,13 @@
 // <morpheus-agent-chat> — the prompt-writer chat, for any Morpheus page.
 //   attributes: task="LTX 2.3 video prompt for the Playground"  (context the agent gets with every message)
 //               fake                                           (no pi, no OpenRouter, no cost)
+//               model="deepseek/deepseek-v4.1-flash"          (start model; the server default otherwise)
+//               use                                            (a Use button next to Copy, see "prompt-use")
 //   el.addImage(dataUrl)   hand over a picture from the host page (setImage(null) clears them)
 //   pictures are named img1, img2 … in upload order across the chat; the agent picks the flow from how you use them
 //   event "prompt-copy"    detail: {prompt} — fired when the user copies a prompt
+//   event "prompt-use"     detail: {prompt} — fired by the Use button; the host puts the prompt where it belongs
+//   el.sent                how many pictures went out so far (the next one is img<sent + 1>)
 // Talks to /api/agentchat/{open,send,close}; the key and the agent process stay on the server.
 const ICON = {  // Lucide (ISC), inlined
   image: '<path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/><circle cx="9" cy="9" r="2"/>',
@@ -44,6 +48,10 @@ header small { color:#9a90b8; font-size:11px; margin-left:auto; font-family:'IBM
   background:#1c1630; border:1px solid #2e2647; border-radius:8px; color:#9a90b8; cursor:pointer; transition:.15s; }
 .copy:hover { color:#ece8f7; border-color:#8A6CD8; }
 .copy.done { color:#6be0a8; border-color:#6be0a8; }
+.prompt.usable { padding-right:44px; padding-bottom:44px; }
+.use { position:absolute; bottom:7px; right:7px; height:30px; padding:0 11px; border:0; border-radius:8px; cursor:pointer;
+  color:#fff; background:linear-gradient(135deg,#8A6CD8,#F08AA8); font:600 11.5px 'IBM Plex Mono', monospace; }
+.use:hover { filter:brightness(1.1); }
 footer { padding:12px; }
 .box { background:#1c1630; border:1px solid #2e2647; border-radius:14px; padding:8px; transition:border-color .15s, box-shadow .15s; }
 .box:focus-within, .box.drag { border-color:#8A6CD8; box-shadow:0 0 0 3px rgba(138,108,216,.18); }
@@ -125,7 +133,7 @@ class AgentChat extends HTMLElement {
 
   async open() {
     try {
-      const j = await this.api("open", { fake: this.hasAttribute("fake") });
+      const j = await this.api("open", { fake: this.hasAttribute("fake"), model: this.getAttribute("model") || undefined });
       this.session = j.session;
       this.models = j.models; this.fake = j.fake; this.skills = j.skills;
       this.showModel(j.model);
@@ -232,6 +240,12 @@ class AgentChat extends HTMLElement {
         this.dispatchEvent(new CustomEvent("prompt-copy", { detail: { prompt: p.trim() }, bubbles: true }));
       };
       box.append(b);
+      if (this.hasAttribute("use")) {
+        const u = document.createElement("button");
+        u.className = "use"; u.title = "Put this prompt into the page"; u.textContent = "Use";
+        u.onclick = () => this.dispatchEvent(new CustomEvent("prompt-use", { detail: { prompt: p.trim() }, bubbles: true }));
+        box.classList.add("usable"); box.append(u);
+      }
       el.append(box);
     });
     this.$(".log").append(el);

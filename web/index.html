@@ -731,6 +731,17 @@
     .pl-loras::-webkit-scrollbar { display: none; }
     .pl-prog, .pl-strip { grid-column: 1 / -1; }
   }
+  /* prompt writer (web/agent-chat.js): a drawer over the right side; a third column on wide screens */
+  .pl-writer { align-self: flex-start; color: var(--accent); }
+  .pl-chat { position: fixed; z-index: 60; top: 10px; right: 10px; bottom: 10px; width: min(460px, calc(100vw - 20px)); display: flex; box-shadow: 0 12px 40px rgba(0, 0, 0, .55); border-radius: 16px; }
+  .pl-chat[hidden] { display: none; }
+  .pl-chat morpheus-agent-chat { flex: 1; min-width: 0; }
+  .pl-chat-x { position: absolute; z-index: 1; top: -9px; right: -9px; border-radius: 50%; width: 26px; height: 26px; padding: 0; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+  .pl-chat-x svg { width: 14px; height: 14px; }
+  @media (min-width: 1400px) and (min-height: 720px) {
+    .pl.chat-on:not([hidden]) { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(360px, 1fr); }
+    .pl.chat-on .pl-chat { position: relative; inset: auto; grid-column: 3; grid-row: 1; width: auto; min-height: 0; box-shadow: none; }
+  }
   @media (prefers-reduced-motion: reduce) { .pl-prog.running i { animation: none; } .pl-clip { transition: none; } }
   @media (max-width: 560px) { .sbh-grid { --tile: 150px; } }
   @media (hover: none), (max-width: 560px) { .sbh-card:hover, .sbh-card:focus-visible { transform: none; } .sbh-acts { opacity: 1; } }
@@ -2245,6 +2256,7 @@
     (document.querySelector('dialog[open]') || document.body).append(t);  // over an open dialog, not hidden behind it
     setTimeout(() => t.classList.add('out'), 2600);
     setTimeout(() => t.remove(), 3000);
+    return t;
   }
 
   // Delete a picture for good: the server removes picture, raw version and sidecar from output/.
@@ -3203,16 +3215,19 @@
           <div class="pl-asp"><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect">${plAspectIcon(p.aspect)}<span>${esc(p.aspect)}</span></button>
             <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${plAspects(o.aspects, p.aspect)}<button type="button" class="ratio pl-asp-x" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}<span>Close</span></button></div></div></div>
           <div class="pl-pipe"><label class="pl-l">Pipeline</label><ol class="pl-stages" id="pl-stages"></ol><div id="pl-opts"></div><p class="pl-hint" id="pl-note"></p></div></section>
+        <button type="button" class="sb-quiet pl-writer" id="pl-writer" title="A chat that writes the prompt; it knows the model and sees the frames">✦ Write prompt</button>
         <section class="pl-box pl-loras"><b>LoRAs</b>${lora(0)}${lora(1)}</section>
         <button type="button" class="pl-render" id="pl-render">Render</button>
         <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
       </div>
       <div class="pl-prog" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
       <div class="pl-strip" id="pl-strip">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your Playground renders show up here. Drag one onto the start frame to continue from its last frame.</span>'}</div>
+      <div class="pl-chat" id="pl-chat" hidden><button type="button" class="pl-chat-x" id="pl-chat-x" title="Close (the chat stays)" aria-label="Close prompt writer">${ACT_ICON.close}</button></div>
       <dialog class="wake-dialog pl-modal" id="pl-modal"></dialog>`;
     const saved = t => $('pl-saved').textContent = t;
     let timer;
     const persist = () => {
+      wake.plTask?.();  // the prompt writer sees model, duration, aspect and prompt as they are now
       clearTimeout(timer); saved('Saving …');
       timer = setTimeout(async () => {
         try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
@@ -3306,6 +3321,57 @@
     for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0]])
       $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
     $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
+    // prompt writer: one chat per page session, kept in wake.plChat across repaints; what it knows lives in its task
+    // attribute (re-read on every message); frames go over once each as pictures, a changed frame once more
+    const writerTask = () => {
+      const m = modelNow(), h3 = m.id.startsWith('h3'), f = wake.plFrames || {};
+      const fr = (k, pic) => f[k]?.file === p[k] && p[k] ? `${f[k].img} (= <Picture ${pic}> in the H3 render)` : 'none';
+      return [`Video prompt for the Dawnforge Playground. Model: ${m.label} — ${h3 ? 'MiniMax H3 Ref2VA format, h3-prompt-writing skill' : 'LTX 2.3, ltx23-prompt-writing skill'}.`,
+        `Duration ${p.duration} s, aspect ${p.aspect}, ${p.resolution}.`,
+        `Start frame: ${fr('start', 1)}. End frame: ${fr('end', 2)}. The newest picture of a frame wins; older ones are outdated.`,
+        p.prompt.trim() ? `Current prompt in the Playground:\n${p.prompt.trim()}` : 'The Playground prompt is empty.'].join('\n');
+    };
+    wake.plTask = () => wake.plChat?.setAttribute('task', writerTask());
+    const handFrames = async () => {
+      const el = wake.plChat, f = (wake.plFrames ||= {});
+      if (!el) return;
+      for (const k of ['start', 'end']) {
+        if (!p[k] || f[k]?.file === p[k]) continue;
+        if (el.model && !el.model.vision) continue;
+        try {
+          const b = await (await fetch(url(dir + p[k]))).blob();
+          const data = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(b); });
+          f[k] = { file: p[k], img: `img${el.sent + el.images.length + 1}` };
+          el.addImage(data);
+        } catch { /* no picture this time; the task says "none" */ }
+      }
+      wake.plTask();
+    };
+    const writer = $('pl-chat');
+    const showWriter = open => { writer.hidden = !open; box.classList.toggle('chat-on', open); wake.plChatOpen = open; };
+    $('pl-writer').onclick = () => {
+      if (!wake.plChat) {
+        wake.plChat = document.createElement('morpheus-agent-chat');
+        wake.plChat.setAttribute('model', 'deepseek/deepseek-v4.1-flash');
+        wake.plChat.setAttribute('use', '');
+        if (new URLSearchParams(location.search).has('fake')) wake.plChat.setAttribute('fake', '');
+        wake.plChat.addEventListener('prompt-use', e => wake.plUse?.(e.detail.prompt));
+        import('/agent-chat.js');
+        writer.append(wake.plChat);
+      }
+      showWriter(writer.hidden);
+      handFrames();
+    };
+    $('pl-chat-x').onclick = () => showWriter(false);
+    wake.plUse = text => {
+      const old = p.prompt;
+      p.prompt = $('pl-prompt').value = text; persist();
+      const t = toast('Prompt replaced');
+      const u = Object.assign(document.createElement('button'), { type: 'button', className: 'sb-quiet', textContent: 'Undo' });
+      u.onclick = () => { p.prompt = $('pl-prompt').value = old; persist(); t.remove(); };
+      t.append(' ', u);
+    };
+    if (wake.plChat) { writer.append(wake.plChat); showWriter(!!wake.plChatOpen); handFrames(); }
     // frames: click or drop a picture, or drop a clip on the start frame (its last picture); it goes to the playground folder
     let pick;
     const send = file => {
