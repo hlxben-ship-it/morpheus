@@ -377,7 +377,7 @@ def clips() -> list:
         out.append({"video": rel(mp4), "thumb": rel(thumb) if thumb.is_file() else "", "prompt": meta.get("prompt", ""),
                     "created": meta.get("created") or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(mp4.stat().st_mtime)),
                     "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name,
-                    "size": size_label(mp4)})
+                    "size": size_label(mp4), "looped": bool(meta.get("loop"))})
     out.sort(key=lambda c: c["created"], reverse=True)
     return out[:60]
 
@@ -394,4 +394,31 @@ def delete_clip(req: dict) -> dict:
     return {"ok": True}
 
 
-ACTIONS = {"new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
+def loop_clip(req: dict) -> dict:
+    """"Loop it": a new clip that plays the source forward, then in reverse (ping-pong), so it ends where it starts.
+    The seam frames are dropped (the last source frame isn't shown twice at the turn, the first one isn't shown again
+    at the end) so the loop plays without a stutter. No audio: reversed sound is noise. ffmpeg only, no GPU."""
+    play_id, video = str(req.get("id", "")), str(req.get("video", ""))
+    mp4, meta = clip_meta(play_id, video)
+    if meta.get("loop"):
+        raise ValueError("This clip is already a loop.")
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ValueError("ffmpeg is not on PATH.")
+    tmp = mp4.with_name(f"{mp4.stem}_loop.tmp.mp4")
+    graph = ("[0:v]split[a][b];[b]trim=start_frame=1,setpts=PTS-STARTPTS,reverse,trim=start_frame=1,setpts=PTS-STARTPTS[r];"
+             "[a][r]concat=n=2:v=1:a=0[v]")
+    run = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(mp4), "-filter_complex", graph, "-map", "[v]", "-an",
+                          "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", str(tmp)],
+                         capture_output=True, text=True)
+    if run.returncode or not tmp.is_file():
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"ffmpeg failed: {run.stderr.strip()[-300:]}")
+    snap = {k: v for k, v in meta.items() if k not in ("video", "created", "render_seconds")}
+    if snap.get("duration"):
+        snap["duration"] = round(float(snap["duration"]) * 2, 1)
+    snap["loop"] = {"source": video}
+    return add_clip(play_id, tmp, snap, seed=meta.get("seed"), seconds=meta.get("render_seconds"))
+
+
+ACTIONS = {"loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}

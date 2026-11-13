@@ -1607,6 +1607,7 @@
     trash: svg('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'),
     full: svg('<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>'),
     upscale: svg('<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4"/>'),
+    loop: svg('<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'),
     lastframe: svg('<path d="M6 4v16"/><path d="M10 4l10 8-10 8z"/>'),
   };
 
@@ -3367,7 +3368,7 @@
     const openClip = c => {
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head"><h2 class="h">${esc(c.label)}</h2><span style="display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button>
+          <button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button>${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button>
           <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete clip" aria-label="Delete clip">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span></span></div>
         <div class="pl-up" id="pl-up" hidden>
           <div class="row"><span class="pl-l">Method</span><span class="seg" data-k="method"><button type="button" data-v="relayvsr" aria-pressed="true">RelayVSR · quick</button><button type="button" data-v="seedvr2" aria-pressed="false">SeedVR2 · real detail</button></span>
@@ -3383,6 +3384,12 @@
         if (a === 'close') dlg.close();
         if (a === 'full') v.requestFullscreen?.();
         if (a === 'use') { dlg.close(); useLast(c); }
+        if (a === 'loop') {
+          const b = e.target.closest('[data-a]'); b.disabled = true; b.lastChild.textContent = 'Looping …';
+          try { await post('/api/playground/loop', { id: c.playground, video: c.video }); }
+          catch (err) { b.disabled = false; b.lastChild.textContent = 'Loop it'; return alert(err.message); }
+          dlg.close(); wake.playClips = null; paintPlay();
+        }
         if (a === 'up') { const box = dlg.querySelector('.pl-up'), b = dlg.querySelector('[data-a="up"]'); box.hidden = !box.hidden; b.setAttribute('aria-pressed', String(!box.hidden)); upInfo(); }
         const seg = e.target.closest('.pl-up .seg button');
         if (seg) { up[seg.parentElement.dataset.k] = seg.parentElement.dataset.k === 'factor' ? +seg.dataset.v : seg.dataset.v; upInfo(); }
