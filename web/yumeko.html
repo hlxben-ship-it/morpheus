@@ -249,7 +249,7 @@
   .bigbtn { all:unset; display:contents; cursor:zoom-in; } .bigbtn:focus-visible img { outline:2px solid var(--accent); }
   dialog.pv { width:min(1200px,96vw); max-width:none; height:min(860px,92vh); padding:16px; }
   dialog.pv[open] { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr); gap:18px; }
-  dialog.pv img { width:100%; height:100%; min-height:0; object-fit:cover; object-position:top; display:block; }
+  dialog.pv img { width:100%; height:100%; min-height:0; object-fit:contain; display:block; background:#000; }
   .pvside { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-width:0; position:relative; padding-top:28px; }
   .pvside .x { position:absolute; top:0; right:0; } .pvside pre { white-space:pre-wrap; margin:0; }
   @media (max-width:760px) { dialog.pv { height:auto; max-height:94vh; overflow-y:auto; } dialog.pv[open] { grid-template-columns:1fr; } dialog.pv img { height:auto; max-height:55vh; } }
@@ -260,19 +260,20 @@
   .livebar i { display:block; height:100%; width:0; background:var(--accent); transition:width .5s; }
   .livetxt { position:absolute; left:12px; bottom:22px; margin:0; font-size:12px; color:#fff; text-shadow:0 1px 3px #000; }
   @media (prefers-reduced-motion: reduce) { .livebar i { transition:none; } }
-  .gtile { position:relative; } .gtile .pic img { width:100%; aspect-ratio:2/3; object-fit:cover; display:block; }
+  .gtile { position:relative; } #gl { grid-auto-flow:dense; } .gtile.wide { grid-column:span 2; } .gtile.wide .pic img { aspect-ratio:4/3; height:100%; }
+  .gtile .pic { display:block; width:100%; height:100%; padding:0; } .gtile .pic img { width:100%; aspect-ratio:var(--ar, 2/3); object-fit:cover; display:block; }
   .gdel { position:absolute; top:6px; right:6px; padding:2px 8px; font-size:12px; background:rgba(8,6,20,.75); opacity:0; transition:opacity .15s; }
   .gtile:hover .gdel, .gdel:focus-visible, .gdel[data-sure] { opacity:1; } .gdel[data-sure] { background:var(--danger, #c0304a); color:#fff; }
   @media (hover:none) { .gdel { opacity:1; } }
   .pvpic { position:relative; min-height:0; } .pvpic .nav { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:64px; font-size:24px; padding:0; background:rgba(8,6,20,.6); }
   .pvpic .prev { left:6px; } .pvpic .next { right:6px; }
   .slides { position:fixed; inset:0; z-index:100; background:#000; cursor:pointer; }
-  .slides img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; transition:opacity .8s; }
+  .slides img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; transition:opacity .8s; }
   .slides img.back { opacity:0; } .slides .x { position:absolute; top:14px; right:16px; opacity:.5; } .slides .x:hover { opacity:1; }
   @media (prefers-reduced-motion: reduce) { .slides img { transition:none; } }
-  .viewer .big img { width:100%; height:100%; object-fit:cover; object-position:top; display:block; }
+  .viewer .big img { width:100%; height:100%; object-fit:contain; display:block; }
   .strip { display:flex; gap:8px; overflow-x:auto; flex:none; padding-bottom:4px; }
-  .strip button { padding:0; width:66px; height:96px; flex:none; overflow:hidden; border-width:2px; }
+  .strip button { padding:0; height:96px; aspect-ratio:var(--ar, 2/3); flex:none; overflow:hidden; border-width:2px; }
   .strip button[aria-current=true] { border-color:var(--accent); } .strip img { width:100%; height:100%; object-fit:cover; display:block; }
   .side { display:flex; flex-direction:column; gap:10px; overflow-x:hidden; min-width:0; } .side .tagsearch ul:empty { height:0; }
   @media (max-width:860px) { .use { grid-template-columns:minmax(0,1fr); height:auto; } .viewer .big { height:60vh; } }
@@ -1000,7 +1001,7 @@ function p5(el) {
     $('r').onclick = () => { job.viewing = null; const [width, height] = f.size.split(',').map(Number); act('use', { id:j.id, prompt:f.prompt, block_nudity:f.block, identity:f.identity !== false, explicit:true, trained:f.trained, quality:f.quality, negative:f.negative, seed:f.seed, width, height, strength:f.strength }).then(refresh); };
     $('p').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('r').click(); } };
     if ($('open')) $('open').onclick = () => picModal(j, shown, () => { fillUse(j, shown); paintJob(); $('p')?.focus(); });
-    j.gallery.forEach(g => { const b = document.createElement('button'); b.title = g.prompt; b.setAttribute('aria-current', g === shown); b.innerHTML = `<img src="${file(j.id, g.file)}" alt="">`; b.onclick = () => { job.viewing = g.file; paintJob(); }; $('g').append(b); });
+    j.gallery.forEach(g => { const b = document.createElement('button'); b.title = g.prompt; b.setAttribute('aria-current', g === shown); b.style.setProperty('--ar', `${g.width || 832}/${g.height || 1216}`); b.innerHTML = `<img src="${file(j.id, g.file)}" alt="">`; b.onclick = () => { job.viewing = g.file; paintJob(); }; $('g').append(b); });
   } else { $('t').onclick = () => act('stage_test', { id:j.id }).then(refresh);
     Object.entries(j.stage_tests || {}).forEach(([s, f]) => { const b = document.createElement('button'); b.className = 'pic'; b.innerHTML = `<img src="${file(j.id, f)}" alt=""><div class="bar">Keep stage ${s}</div>`; b.onclick = () => act('stage', { id:j.id, stage:+s }).then(refresh); $('st').append(b); }); }
 }
@@ -1034,8 +1035,8 @@ function galleryView(el) {
   const j = job, g = j.gallery;
   el.innerHTML = g.length ? `<div class="row" style="justify-content:space-between;margin-bottom:12px"><p class="note" style="margin:0">${g.length} pictures</p><button class="go" id="show">Slideshow</button></div><div class="gal" id="gl"></div>` : '<p class="note">No pictures yet. Render some in Use.</p>';
   if (!g.length) return;
-  g.forEach((x, i) => { const t = document.createElement('div'); t.className = 'gtile';
-    t.innerHTML = `<button class="pic" title="${esc(x.prompt)}"><img src="${file(j.id, x.file)}" alt="" loading="lazy"></button><button class="gdel" aria-label="Delete picture">✕</button>`;
+  g.forEach((x, i) => { const t = document.createElement('div'); t.className = (x.width || 832) > (x.height || 1216) ? 'gtile wide' : 'gtile';
+    t.innerHTML = `<button class="pic" title="${esc(x.prompt)}" style="--ar:${x.width || 832}/${x.height || 1216}"><img src="${file(j.id, x.file)}" alt="" loading="lazy"></button><button class="gdel" aria-label="Delete picture">✕</button>`;
     t.querySelector('.pic').onclick = () => galView(j, i);
     const del = t.querySelector('.gdel');
     del.onclick = async () => { if (!del.dataset.sure) { del.dataset.sure = 1; del.textContent = 'Delete?'; return; }
