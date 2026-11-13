@@ -15,3 +15,10 @@ agents/
 
 .venv-train/
 tools/sd-scripts/
+
+# the render engine (engine/PROVENANCE.md): its model *code* is in git, the downloaded ffmpeg is not
+!engine/wangp/models/
+engine/wangp/ffmpeg_bins/
+
+# the agent chat's OpenRouter key (agent_chat.py)
+.env

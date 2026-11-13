@@ -1,0 +1,13 @@
+{
+  "model_type": "__system_flashvsr",
+  "model_label": "WanGP System Video Postprocessing",
+  "system_handler": "dlss5",
+  "target_ratio": "dlss5*1",
+  "chunk_size_seconds": 3.0,
+  "sliding_window_overlap": 0,
+  "prompt": "",
+  "process": {
+    "task": "upscale",
+    "summary": "NVIDIA DLSS 5 neural rendering: refines at x1, upscales above; needs Windows and a compatible RTX GPU."
+  }
+}

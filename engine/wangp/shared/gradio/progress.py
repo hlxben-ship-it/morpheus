@@ -1,0 +1,445 @@
+# Copyright (c) 2026 DeepBeepMeep - part of WanGP, WanGP Community License 2.0 (see LICENSE.txt)
+"""WanGP progress values and rendering, shared by Gradio and the web app."""
+
+import inspect
+import json
+import re
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from contextvars import ContextVar, copy_context
+from functools import wraps
+from html import escape
+from pathlib import Path
+
+from shared.utils.cancellation import cancellation_context
+from shared.utils.download_progress import download_operation
+
+
+_tracked_progress = ContextVar("wangp_tqdm_progress", default=None)
+_duration = r"(?:(?:\d+h )?(?:\d+m )?\d+(?:\.\d+)?s|\d+:\d{2}(?::\d{2})?)"
+_timing = re.compile(rf"{_duration}(?: / {_duration})?")
+
+
+class ProgressUpdates:
+    """Coalesce notified changes; wake only for new data or a display deadline."""
+    def __init__(self, wake=None):
+        self.event = threading.Event()
+        self._wake = self.event.set if wake is None else wake
+        self._lock = threading.RLock()
+        self._dirty = self._immediate = False
+        self._published = 0
+        self._deadline = None
+
+    def changed(self, immediate=False):
+        with self._lock:
+            self._dirty = True
+            self._immediate |= immediate
+        self._wake()
+
+    def delay(self):
+        with self._lock:
+            now = time.monotonic()
+            deadlines = []
+            if self._dirty:
+                deadlines.append(now if self._immediate else self._published + 1 / 3)
+            if self._deadline is not None:
+                deadlines.append(self._deadline)
+            return max(0, min(deadlines) - now) if deadlines else None
+
+    def consume(self, force=False):
+        with self._lock:
+            delay = self.delay()
+            if not force and (delay is None or delay > 0):
+                return False
+            self._dirty = self._immediate = False
+            self._deadline = None
+            self._published = time.monotonic()
+            return True
+
+    def hold(self, delay):
+        with self._lock:
+            self._deadline = time.monotonic() + delay if delay > 0 else None
+
+
+def _progress_locked(fn):
+    @wraps(fn)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return fn(self, *args, **kwargs)
+    return locked
+
+
+def _phase(description):
+    title, separator, timing = description.rpartition(' | ')
+    return title if separator and _timing.fullmatch(timing) else description
+
+
+def _format_bytes(value):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
+class WangpProgress:
+    def __init__(self, track_tqdm=False, *, on_change=None):
+        self._lock = threading.RLock()
+        self._on_change = on_change
+        self.track_tqdm = track_tqdm
+        self.description = ""
+        self.timing = ""
+        self.position = None
+        self.download = None
+        self._bars = []
+        self._completion = None
+        self._download_finished_at = None
+        self.gen = {"abort": False, "download_progress_callback": self.set_download}
+
+    def check_cancelled(self):
+        if self.gen["abort"]:
+            raise InterruptedError("Operation Stopped")
+
+    def changed(self, immediate=False):
+        if self._on_change is not None:
+            self._on_change(immediate=immediate)
+
+    @_progress_locked
+    def __call__(self, progress, desc=None, total=None, unit="steps", _tqdm=None):
+        previous = (self.position, self.description, self.timing)
+        phase = (_phase(self.description), self.position[1:3] if self.position else None)
+        self.timing = ""
+        if desc is not None:
+            self.description = desc
+        if progress is None:
+            self.position = None
+            self.download = None
+            self._completion = None
+        elif isinstance(progress, tuple):
+            index, total = progress
+            self.position = (index, total, unit, None)
+        else:
+            self.position = (None, total, unit, progress)
+        complete = False
+        if self.download is None and self.position is not None:
+            index, count, unit, fraction = self.position
+            complete = fraction == 1 or bool(count and index == count)
+            if complete and previous != (self.position, self.description, self.timing):
+                self._completion = (self.position, None, self.description, None)
+        if previous != (self.position, self.description, self.timing):
+            self.changed(immediate=complete or phase != (_phase(self.description), self.position[1:3] if self.position else None))
+
+    @_progress_locked
+    def status(self, description):
+        previous = (self.position, self.description, self.timing)
+        self.timing = ""
+        self.description = description
+        self.position = (None, None, "", None)
+        if previous != (self.position, self.description, self.timing):
+            self.changed(immediate=True)
+
+    @_progress_locked
+    def stream_tokens(self, *, token_count, max_tokens, prefill_seconds, tokens_per_second, description="Enhancing Prompt", **kwargs):
+        self((token_count, max_tokens), desc=description, unit="tokens")
+        self.timing = f"Prefill {prefill_seconds:.2f}s · {tokens_per_second:.1f} tk/s"
+        self.changed()
+
+    @_progress_locked
+    def set_download(self, data):
+        previous = self.download
+        self.download = data
+        if data is not None and data.get("finished_at") is not None and data["finished_at"] != self._download_finished_at:
+            self._download_finished_at = data["finished_at"]
+            self._completion = (self.position, data, self.description, None)
+        if previous != data:
+            self.changed(immediate=previous is None or data is None or previous['filename'] != data['filename'] or data.get('finished_at') is not None)
+
+    @property
+    @_progress_locked
+    def completion_delay(self):
+        if self._completion is None:
+            return 0
+        return .2 if self._completion[3] is None else max(0, self._completion[3] - time.monotonic())
+
+    @_progress_locked
+    def render(self, *, compact=False, aborting=False, active=True, hold_complete=False, bar_text=None, model_name=""):
+        aborting = aborting or self.gen["abort"]
+        # A standalone worker may publish its next update while the UI renders.
+        position, download, title = self.position, self.download, self.description
+        if hold_complete and not aborting and self.completion_delay:
+            completion = self._completion
+            position, download, title, deadline = completion
+            if deadline is None and self._completion is completion:
+                self._completion = (position, download, title, time.monotonic() + .2)
+            active = True
+        if position is None and download is None:
+            return ""
+        if download is not None and model_name:
+            title = "Downloading..."
+        elif download is not None and not title.lower().startswith("downloading"):
+            if title == "Loading...":
+                title = "Downloading..."
+            elif title.lower().startswith("loading "):
+                title = "Downloading" + title[len("Loading"):]
+            else:
+                title = f"Downloading files — {title}" if title else "Downloading files"
+        if title.lower().startswith(("downloading ", "loading model")):
+            title = title.removesuffix("...").removesuffix("…").rstrip()
+        if download is not None and active and (download.get("file_count") or 0) > 1:
+            suffix = title[len("Downloading"):]
+            if suffix.lower().startswith(" files"):
+                suffix = suffix[len(" files"):]
+            title = f'Downloading File {download["file_index"]}/{download["file_count"]}{suffix or "..."}'
+        if aborting:
+            title = f"Stopping… {title}"
+        filename = amount = speed = ""
+        timing = self.timing
+        if download is not None and active:
+            data = download
+            completed, total = data["completed"], data["total"]
+            ratio = 1 if data.get("finished_at") is not None else completed / total if total else None
+            amount = _format_bytes(completed) + (f" / {_format_bytes(total)}" if total is not None else "")
+            speed = f'{_format_bytes(data["speed"])}/s'
+            filename = data["filename"] or ""
+        elif position is not None and active:
+            index, total, unit, ratio = position
+            if index is not None:
+                ratio = index / total if total else None
+                amount = f"{index}" + (f" / {total}" if total is not None else "") + f" {unit}"
+            elif total is None and ratio == 0:
+                ratio = None
+            if title.removeprefix("Stopping… ").startswith("Loading ") and " - " in title:
+                title, subtask = title.rsplit(" - ", 1)
+                title += "..."
+                if bar_text is None:
+                    bar_text = subtask
+            phase, separator, suffix = title.rpartition(" | ")
+            if separator and _timing.fullmatch(suffix):
+                title, timing = phase, suffix
+        else:
+            ratio = None
+        percentage = max(0, min(100, ratio * 100)) if ratio is not None else None
+        classes = "wangp-progress" + (" compact" if compact else "")
+        if model_name:
+            classes += " has-model"
+        if self.timing:
+            classes += " token-progress"
+        if not active:
+            classes += " finished status-only"
+        elif download is None and position == (None, None, "", None):
+            classes += " status-only"
+        text = filename if bar_text is None else bar_text
+        text_html = f'<span class="progress-filename">{escape(text)}</span>' if text else ""
+        width = f"{percentage:.2f}%" if percentage is not None else "0%"
+        value = f' aria-valuenow="{percentage:.1f}"' if percentage is not None else ""
+        track = "progress-track" + (" indeterminate" if percentage is None and active and "status-only" not in classes else "")
+        has_subtask_label = bool(text) and title.removeprefix("Stopping… ").lower().startswith(("downloading", "loading"))
+        percent = f"{percentage:.0f}%" if percentage is not None and not has_subtask_label else ""
+        complete = percentage == 100 and (download is None or download.get("finished_at") is not None)
+        tooltip = escape(title + ("\n" + text if text else ""))
+        details = escape(" · ".join(item for item in (amount, speed, timing) if item))
+        metadata = ' · '.join(f'<span class="progress-{name}">{escape(value)}</span>' for name, value in (("amount", amount), ("speed", speed)) if value)
+        model_words = " ".join(f"<span>{escape(word)}</span>" for word in model_name.split())
+        model_html = f'<span class="progress-model" title="{escape(model_name)}">{model_words}</span>' if model_name else ""
+        return f'''<div class="{classes}" data-complete="{str(complete).lower()}" style="--progress:{width}">
+            <div class="progress-heading" title="{tooltip}">{model_html}<div class="progress-caption"><span class="progress-title">{escape(title)}</span><span class="progress-percent">{' - ' + percent if percent else ''}</span></div><span class="progress-timing" title="{escape(timing)}">{escape(timing)}</span></div>
+            <div class="{track}" role="progressbar" aria-label="{escape(title or 'Progress')}" aria-valuemin="0" aria-valuemax="100"{value} title="{tooltip}">
+                <div class="progress-fill"></div><div class="progress-label">{text_html}</div><div class="progress-label progress-covered" aria-hidden="true">{text_html}</div>
+            </div>
+            <div class="progress-details" title="{details}">{metadata}</div>
+        </div>'''
+
+    @staticmethod
+    def css():
+        return Path(__file__).with_suffix(".css").read_text(encoding="utf-8")
+
+    @staticmethod
+    def theme_css(theme):
+        """Give the standalone component the same tokens as a Gradio theme."""
+        values = theme.to_dict()["theme"]
+
+        def declarations(dark=False):
+            rules = []
+            for key in ("color_accent", "color_accent_soft", "body_text_color", "block_background_fill", "border_color_primary", "block_border_width", "block_border_color", "block_radius", "block_shadow", "text_md", "text_sm"):
+                value = values.get(key + "_dark", values[key]) if dark else values[key]
+                while value.startswith("*"):
+                    value = values[value[1:]]
+                rules.append(f"--{key.replace('_', '-')}: {value};")
+            return " ".join(rules)
+
+        return f'.wangp-progress {{ {declarations()} }} @media (prefers-color-scheme: dark) {{ .wangp-progress {{ {declarations(True)} }} }} .dark .wangp-progress {{ {declarations(True)} }}'
+
+    @contextmanager
+    def track(self):
+        """Track this operation's tqdm bars without suppressing their console output."""
+        if self.track_tqdm:
+            _install_tqdm_tracking()
+        token = _tracked_progress.set(self if self.track_tqdm else None)
+        try:
+            yield self
+        finally:
+            try:
+                for bar in self._bars[:]:
+                    bar.close()
+            finally:
+                _tracked_progress.reset(token)
+
+    def tqdm(self, iterable=None, desc=None, total=None, unit="steps", _tqdm=None):
+        from tqdm.auto import tqdm
+
+        _install_tqdm_tracking()
+        token = _tracked_progress.set(self)
+        try:
+            return tqdm(iterable, desc=desc, total=total, unit=unit)
+        finally:
+            _tracked_progress.reset(token)
+
+    def update(self, n=1):
+        self._bars[-1].update(n)
+
+    def close(self, _tqdm):
+        _tqdm.close()
+
+    @staticmethod
+    def component(*, visible=False, stop=False, **kwargs):
+        import gradio as gr
+
+        initial = WangpProgress()
+        initial.status("Ready")
+        if stop:
+            with gr.Group(elem_classes=["wangp-progress-with-action"]):
+                component = WangpProgress.component(visible=visible, **kwargs)
+                button = gr.Button("Stop", size="sm", elem_classes=["wangp-progress-stop"])
+            component._progress_runs = {}
+
+            def request_stop(request: gr.Request):
+                progress = component._progress_runs.get(request.session_hash)
+                if progress is not None:
+                    progress.gen["abort"] = True
+                    progress.changed(immediate=True)
+
+            button.click(request_stop, queue=False, show_progress="hidden", api_name=False)
+            return component
+        kwargs.setdefault("value", initial.render(active=False) if visible else "")
+        return gr.HTML(visible=visible, container=True, padding=False, elem_classes=["wangp-progress-container"], **kwargs)
+
+    @classmethod
+    def bind(cls, event, fn, *, inputs, outputs, component, hide=(), **kwargs):
+        """Bind an operation, optionally swapping controls with its progress in one update."""
+        import gradio as gr
+
+        signature = inspect.signature(fn)
+        track_tqdm = signature.parameters["progress"].default.track_tqdm
+        runs = getattr(component, "_progress_runs", None)
+
+        root = gr.context.Context.root_block
+        if root is not None:
+            reset = gr.Textbox(visible=False)
+            reset.elem_id = f'wangp-progress-reset-{reset._id}'
+            updates = [*({'__type__': 'update', 'visible': True} for _ in hide), {'__type__': 'update', 'value': '', 'visible': False}]
+            reset.input(fn=None, inputs=None, outputs=[*hide, component], js=f'() => {json.dumps(updates)}', queue=False, show_progress='hidden', api_name=False)
+            root.load(fn=None, js=f'() => window.WanGPGenerationState?.registerOperation({json.dumps(reset.elem_id)}, {json.dumps(component.elem_id or f"component-{component._id}")})')
+
+        @wraps(fn)
+        def run(*args, **kw):
+            changes = ProgressUpdates()
+            progress = cls(track_tqdm=track_tqdm, on_change=changes.changed)
+            if runs is None:
+                progress.status("Preparing…")
+            else:
+                progress(0, desc="Preparing")
+            if runs is not None:
+                *args, request = args
+                runs[request.session_hash] = progress
+
+            def work():
+                with progress.track(), download_operation(progress.gen), cancellation_context(progress.check_cancelled if runs is not None else None):
+                    return fn(*args, **kw, progress=progress)
+
+            unchanged = [gr.update() for _ in outputs]
+            keep_hidden = [gr.update() for _ in hide]
+            restore = [gr.update(visible=True) for _ in hide]
+            try:
+                if hide:
+                    yield *unchanged, *(gr.update(visible=False) for _ in hide), gr.update(value=progress.render(), visible=True)
+                with ThreadPoolExecutor(max_workers=1, thread_name_prefix="wangp-progress") as worker:
+                    future = worker.submit(copy_context().run, work)
+                    future.add_done_callback(lambda _: changes.changed(immediate=True))
+                    previous = None
+                    while not future.done():
+                        changes.event.clear()
+                        if changes.consume():
+                            html = progress.render(hold_complete=True)
+                            changes.hold(0 if progress.gen['abort'] else progress.completion_delay)
+                            if html != previous:
+                                yield *unchanged, *keep_hidden, gr.update(value=html, visible=bool(html))
+                                previous = html
+                        if not future.done():
+                            changes.event.wait(changes.delay())
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        yield *unchanged, *restore, gr.update(value="", visible=False)
+                        if progress.gen["abort"]:
+                            return
+                        from shared.utils.download import DownloadError
+                        if isinstance(exc, DownloadError):
+                            gr.Warning(str(exc))
+                            return
+                        raise
+                values = [result] if len(outputs) == 1 else result
+                if progress.completion_delay:
+                    changes.event.clear()
+                    yield *values, *keep_hidden, gr.update(value=progress.render(hold_complete=True), visible=True)
+                    if not progress.gen['abort']:
+                        changes.event.wait(progress.completion_delay)
+                yield *values, *restore, gr.update(value="", visible=False)
+            finally:
+                if runs is not None:
+                    runs.pop(request.session_hash, None)
+
+        # Gradio must not replace our per-invocation tracker with gr.Progress.
+        parameters = [param for name, param in signature.parameters.items() if name != "progress"]
+        if runs is not None:
+            parameters.append(inspect.Parameter("request", inspect.Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=gr.Request))
+            run.__annotations__ = {**fn.__annotations__, "request": gr.Request}
+        run.__signature__ = signature.replace(parameters=parameters)
+        kwargs.setdefault("concurrency_id", f"wangp-progress-{component._id}")
+        return event(fn=run, inputs=inputs, outputs=[*outputs, *hide, component], show_progress="hidden", **kwargs)
+
+
+def _install_tqdm_tracking():
+    from tqdm import tqdm
+
+    if getattr(tqdm.__init__, "_wangp_progress", False):
+        return
+    original_init, original_update, original_close = tqdm.__init__, tqdm.update, tqdm.close
+
+    @wraps(original_init)
+    def init(bar, *args, **kwargs):
+        original_init(bar, *args, **kwargs)
+        bar._wangp_progress = None if bar.disable else _tracked_progress.get()
+        if bar._wangp_progress is not None:
+            bar._wangp_progress._bars.append(bar)
+            bar._wangp_progress((bar.n, bar.total), desc=(bar.desc or None) if bar._wangp_progress.download is None else None, unit=bar.unit)
+
+    @wraps(original_update)
+    def update(bar, n=1):
+        result = original_update(bar, n)
+        progress = getattr(bar, "_wangp_progress", None)
+        if progress is not None:
+            progress((bar.n, bar.total), desc=(bar.desc or None) if progress.download is None else None, unit=bar.unit)
+        return result
+
+    @wraps(original_close)
+    def close(bar):
+        progress = getattr(bar, "_wangp_progress", None)
+        if progress is not None and bar in progress._bars:
+            progress._bars.remove(bar)
+            current = progress._bars[-1] if progress._bars else bar
+            progress((current.n, current.total), desc=(current.desc or None) if progress.download is None else None, unit=current.unit)
+        return original_close(bar)
+
+    init._wangp_progress = True
+    tqdm.__init__, tqdm.update, tqdm.close = init, update, close

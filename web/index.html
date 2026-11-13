@@ -631,6 +631,17 @@
   .pl-left, .pl-right { display: grid; gap: 12px; align-content: start; min-width: 0; }
   .pl-box { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
   .pl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+  .pl-grid.pl-main { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 96px; }
+  @media (max-width: 560px) { .pl-grid.pl-main { grid-template-columns: 1fr 1fr; } }
+  .pl-asp { position: relative; }
+  .pl-asp-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; white-space: nowrap; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; line-height: 19px; cursor: pointer; }
+  .pl-asp-btn:hover, .pl-asp-btn[aria-expanded="true"] { border-color: var(--accent); }
+  .pl-asp-btn i { display: block; margin-top: 1px; border: 2px solid var(--accent); border-radius: 2px; flex: none; }
+  .pl-asp-pop { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: 300px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
+  .pl-asp-pop[hidden] { display: none; }
+  .pl-asp-pop .ratio { min-width: 0; height: 64px; justify-content: center; padding: 6px 4px; }
+  .pl-asp-pop .ratio span { white-space: nowrap; }
+  .pl-asp-pop .pl-asp-x svg { width: 18px; height: 18px; color: var(--muted); }
   .pl-grid.two { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .pl label.pl-l { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
   .pl select, .pl textarea { width: 100%; box-sizing: border-box; }
@@ -670,6 +681,15 @@
   .pl-render { width: 100%; padding: 18px 12px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: 600 17px/1 Montserrat, sans-serif; letter-spacing: .08em; cursor: pointer; box-shadow: 0 0 24px var(--glow, rgba(177, 77, 255, .4)); transition: filter .15s, transform .05s; }
   .pl-render:hover:not(:disabled) { filter: brightness(1.12); } .pl-render:active:not(:disabled) { transform: translateY(1px); }
   .pl-render:disabled { opacity: .55; cursor: progress; box-shadow: none; }
+  .pl-stop { width: 100%; margin-top: 8px; }
+  .pl-up { display: grid; gap: 10px; margin: 0 0 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+  .pl-up .row { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; } .pl-up .row .pl-l { margin: 0; }
+  .pl-up .row .seg + .pl-l { margin-left: 14px; }
+  .pl-clip .pic .res { position: absolute; top: 4px; right: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; font: 600 10px/1.4 'IBM Plex Mono', monospace; font-style: normal; letter-spacing: .02em; pointer-events: none; }
+  .pl-up .seg button { padding: 7px 14px; font-size: 13px; }
+  .pl-up .go { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; } .pl-up .go .hint { margin: 0; }
+  .pl-up .pl-up-go { width: auto; padding: 11px 22px; font-size: 14px; }
+  .pl-modal .pl-act[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   .pl-prog { position: relative; height: 40px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; display: grid; place-items: center; }
   .pl-prog i { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #fff)); opacity: .5; transition: width .6s ease; }
   .pl-prog.running i { background-size: 28px 28px; background-image: linear-gradient(135deg, rgba(255, 255, 255, .16) 25%, transparent 25% 50%, rgba(255, 255, 255, .16) 50% 75%, transparent 75%); animation: pl-stripes 1s linear infinite; }
@@ -690,6 +710,12 @@
   .pl-clip small { padding: 0 8px 7px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pl-modal video { display: block; width: 100%; max-height: 66vh; border-radius: 10px; background: #000; }
   .pl-modal .wake-open.danger { color: var(--danger); }
+  .pl-modal .pl-act { display: inline-flex; align-items: center; gap: 7px; }
+  .pl-modal .pl-act svg { width: 16px; height: 16px; flex: none; }
+  .pl-modal .pl-icons { display: inline-flex; gap: 6px; margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+  .pl-modal .pl-ico { width: 38px; height: 38px; padding: 0; display: inline-grid; place-items: center; }
+  .pl-modal .pl-ico svg { width: 18px; height: 18px; }
+  .pl-drop .x { display: grid; place-items: center; } .pl-drop .x svg { width: 15px; height: 15px; }
   .pl-modal .hint { margin: 10px 0 0; }
   @media (min-width: 1000px) and (min-height: 720px) {
     #wake.pl-on { overflow: hidden; padding: 10px 16px 12px; }
@@ -1576,6 +1602,12 @@
     copy: svg('<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>'),
     open: svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
     check: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
+    // Lucide (lucide.dev, ISC): x, trash-2, maximize, sparkles, step-forward
+    close: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+    trash: svg('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'),
+    full: svg('<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>'),
+    upscale: svg('<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4"/>'),
+    lastframe: svg('<path d="M6 4v16"/><path d="M10 4l10 8-10 8z"/>'),
   };
 
   function videoCard(v) {
@@ -2913,7 +2945,7 @@
   };
   // a new shot takes model and character from the shot before it, so a cast or model change carries forward
   const newShot = (start, prev) => ({ id: `s${Date.now().toString(36)}`, label: '', start, source: null, prompt: '', negative: wake.options.negative, seed: null, length: 2,
-    model: prev?.model || 'q4', character: prev?.character || '' });
+    model: prev?.model || 'ltx', character: prev?.character || '' });
   const modelOptions = (value, same) => (same ? `<option value="">${esc(same)}</option>` : '')
     + (wake.models || []).map(m => `<option value="${esc(m.id)}" ${m.id === value ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
   const currentShot = () => wake.board.shots.find(s => s.id === wake.shot) || wake.board.shots[0];
@@ -3043,9 +3075,10 @@
   });
 
   // ---------- Dawnforge Playground: /dawnforge/playground/<id>, state saved in output/playground/<id>/ ----------
-  // UI only for now: Render saves the page and says so. The render seed feeds plProgress({ phase, step, total, since })
-  // while a render runs (null when it is over) and writes the finished clip to output/playground/<id>/clips/ (see
-  // playground.clips() for the sidecar); the shelf below picks it up.
+  // Render and Upscale run in the engine worker as a background job (/api/playground/render | upscale, polled through
+  // /api/job/<id>, kept in localStorage 'pl.job' so a reload finds it again). plProgress({ phase, step, total, since })
+  // paints the bar while it runs (null when it is over); the finished clip lands in output/playground/<id>/clips/ and the
+  // shelf below picks it up.
   const plFmt = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
   let plTick;
   function paintPlayProgress() {
@@ -3053,6 +3086,7 @@
     if (!bar) return;
     $('pl-prog').classList.toggle('running', !!r);
     $('pl-render').disabled = !!r;
+    $('pl-stop').hidden = !r;
     if (!r) { bar.style.width = '0'; return; }
     const elapsed = (Date.now() - (r.since || Date.now())) / 1000, left = r.step > 0 && r.total ? elapsed / r.step * (r.total - r.step) : null;
     bar.style.width = `${r.total ? 100 * r.step / r.total : 0}%`;
@@ -3063,9 +3097,43 @@
     wake.playRun = run || null;
     clearInterval(plTick);
     if (run) plTick = setInterval(paintPlayProgress, 1000);
-    else if ($('pl-prog-text')) $('pl-prog-text').textContent = 'Done.';
     paintPlayProgress();
   };
+  // one engine job at a time (the server holds the GPU lock anyway); started by Render or Upscale
+  async function plStart(path, body, what) {
+    if (wake.plJob) return;
+    try {
+      const out = await post(path, { ...body, background: true });
+      wake.plJob = { id: out.job, since: Date.now(), what }; store.set('pl.job', wake.plJob);
+    } catch (e) { if ($('pl-prog-text')) $('pl-prog-text').textContent = e.message; return; }
+    plFollow();
+  }
+  async function plFollow() {
+    if (wake.plFollowing || !wake.plJob) return;
+    wake.plFollowing = true;
+    const j = wake.plJob;
+    let msg = 'Done: the clip is in the shelf.';
+    try {
+      while (true) {
+        const r = await fetch('/api/job/' + j.id);
+        if (r.status === 404) throw new Error('The job got lost, probably because the server restarted. Please start it again.');
+        const job = await r.json();
+        if (job.state === 'error') throw new Error(job.error);
+        if (job.state === 'done') break;
+        window.plProgress({ phase: `${j.what}: ${job.phase || 'Starting'}`, step: job.step || 0, total: job.total || 0, since: j.since });
+        tabTitle(job.total ? `${Math.round(100 * (job.step || 0) / job.total)}% · Morpheus` : '⋯ Morpheus');
+        await new Promise(res => setTimeout(res, 1000));
+      }
+      tabTitle(document.hidden ? '✓ Ready · Morpheus' : null);
+    } catch (e) { msg = e.message === 'Stopped.' ? 'Stopped.' : e.message; tabTitle(null); }
+    wake.plJob = null; wake.plFollowing = false; store.set('pl.job', null);
+    window.plProgress(null);
+    wake.playClips = null;
+    if (wake.view === 'play' && $('sb-play')) await paintPlay();
+    if ($('pl-prog-text')) $('pl-prog-text').textContent = msg;
+  }
+  wake.plJob = store.get('pl.job', null);
+  if (wake.plJob) plFollow();
   // the last picture of a clip, read in the browser (same origin, so the canvas stays clean)
   const plLastFrame = src => new Promise((resolve, reject) => {
     const v = document.createElement('video'), fail = () => { clearTimeout(t); reject(new Error('Could not read this clip.')); };
@@ -3081,6 +3149,19 @@
     };
     v.src = src;
   });
+  // the aspect tiles, drawn like the image tab's Format picker; the schema's aspects in a fixed, readable order
+  const PL_ASPECT = { '1:1': 'Square', '4:3': 'Classic 4:3', '3:2': 'Landscape 3:2', '16:9': 'Wide 16:9', '21:9': 'Cinema 21:9',
+                      '3:4': 'Classic 3:4', '2:3': 'Portrait 2:3', '9:16': 'Tall 9:16' };
+  function plAspectIcon(a) {
+    const [w, h] = String(a).split(':').map(Number), k = 18 / Math.max(w || 1, h || 1);
+    return `<i style="width:${(w || 1) * k}px;height:${(h || 1) * k}px"></i>`;
+  }
+  function plAspects(list, cur) {
+    return Object.keys(PL_ASPECT).filter(a => list.includes(a)).concat(list.filter(a => !PL_ASPECT[a])).map(a => {
+      const [w, h] = a.split(':').map(Number), k = 22 / Math.max(w, h);
+      return `<button type="button" class="ratio" data-v="${esc(a)}" aria-pressed="${a === cur}" title="${esc(a)}"><i style="width:${w * k}px;height:${h * k}px"></i><span>${esc(PL_ASPECT[a] || a)}</span></button>`;
+    }).join('');
+  }
   async function paintPlay() {
     const box = $('sb-play'), bar = $('sb-play-bar');
     if (!wake.playOpts) {
@@ -3100,13 +3181,13 @@
     const opt = (list, v, lab = x => x) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? lab(x))}</option>`).join('');
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
     if (!curModel().resolutions.some(r => r.id === p.resolution)) p.resolution = curModel().resolutions[0].id;  // the server resolves this too
-    const frame = (k, hint) => `<div class="pl-frame"><label class="pl-l">${k === 'start' ? 'Start frame' : 'End frame'}</label><div class="pl-drop" data-k="${k}" tabindex="0">${p[k] ? `<img src="${esc(url(dir + p[k]))}" alt=""><button type="button" class="x" title="Remove">✕</button>` : hint}</div></div>`;
+    const frame = (k, hint) => `<div class="pl-frame"><label class="pl-l">${k === 'start' ? 'Start frame' : 'End frame'}</label><div class="pl-drop" data-k="${k}" tabindex="0">${p[k] ? `<img src="${esc(url(dir + p[k]))}" alt=""><button type="button" class="x" title="Remove" aria-label="Remove ${k} frame">${ACT_ICON.close}</button>` : hint}</div></div>`;
     const lora = i => `<div class="pl-lora" data-i="${i}"><div class="row"><b>LoRA ${i + 1}</b><button type="button" class="sb-quiet" data-a="pick">Open a file …</button>
         <span class="path ${p.loras[i].missing ? 'bad' : ''}">${p.loras[i].path ? esc(p.loras[i].path) + (p.loras[i].missing ? ' — file missing' : '') : 'No file'}</span>
         <button type="button" class="sb-quiet danger" data-a="clear" title="Remove this LoRA" aria-label="Remove LoRA ${i + 1}" ${p.loras[i].path ? '' : 'hidden'}>✕</button></div>
       <div class="row"><label class="pl-l" style="margin:0">Strength</label><input type="range" min="0" max="2" step="0.05" value="${p.loras[i].strength}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>
       <dl class="pl-sum" hidden></dl><details class="pl-raw" hidden><summary>Raw header</summary><pre class="pl-dbg"></pre></details></div>`;
-    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b></span><small>${esc(c.label)}</small></button>`;
+    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}</span><small>${esc(c.label)}</small></button>`;
     bar.innerHTML = `<h2 class="pl-title">Playground</h2><span class="pl-id">${esc(p.id)}</span><span class="sb-saved" id="pl-saved" style="margin-left:auto" aria-live="polite"></span>`;
     box.innerHTML = `<div class="pl-left">
         <section class="pl-box pl-prompt"><label class="pl-l" for="pl-prompt" style="margin:0">Prompt</label><textarea id="pl-prompt" placeholder="What happens in the clip …">${esc(p.prompt)}</textarea></section>
@@ -3114,14 +3195,16 @@
           <input type="file" id="pl-file" accept="image/png,image/jpeg,image/webp" hidden></section>
       </div>
       <div class="pl-right">
-        <section class="pl-box"><div class="pl-grid">
+        <section class="pl-box"><div class="pl-grid pl-main">
           <div><label class="pl-l" for="pl-model">Model</label><select id="pl-model">${opt(o.models, p.model)}</select></div>
           <div><label class="pl-l" for="pl-duration">Duration</label><select id="pl-duration">${opt(o.durations, p.duration, x => x + ' s')}</select></div>
           <div><label class="pl-l" for="pl-resolution">Resolution</label><select id="pl-resolution">${opt(curModel().resolutions, p.resolution)}</select></div>
-          <div><label class="pl-l" for="pl-aspect">Aspect</label><select id="pl-aspect">${opt(o.aspects, p.aspect)}</select></div></div>
+          <div class="pl-asp"><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect">${plAspectIcon(p.aspect)}<span>${esc(p.aspect)}</span></button>
+            <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${plAspects(o.aspects, p.aspect)}<button type="button" class="ratio pl-asp-x" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}<span>Close</span></button></div></div></div>
           <div class="pl-pipe"><label class="pl-l">Pipeline</label><ol class="pl-stages" id="pl-stages"></ol><div id="pl-opts"></div><p class="pl-hint" id="pl-note"></p></div></section>
         <section class="pl-box pl-loras"><b>LoRAs</b>${lora(0)}${lora(1)}</section>
         <button type="button" class="pl-render" id="pl-render">Render</button>
+        <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
       </div>
       <div class="pl-prog" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
       <div class="pl-strip" id="pl-strip">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your Playground renders show up here. Drag one onto the start frame to continue from its last frame.</span>'}</div>
@@ -3198,7 +3281,28 @@
       p.params[k] = specsOf(modelNow())[k].choices.find(c => String(c) === b.dataset.v);
       paintPipe(); persist();
     };
-    for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0], ['aspect', 0]])
+    // aspect: a compact button beside Resolution; the 3×3 panel holds the 8 ratios and a close button
+    const aspPop = $('pl-aspect'), aspBtn = $('pl-asp-btn');
+    const aspShow = open => {
+      aspPop.hidden = !open; aspBtn.setAttribute('aria-expanded', String(open));
+      document.removeEventListener('pointerdown', aspAway, true);
+      if (open) { document.addEventListener('pointerdown', aspAway, true); aspPop.querySelector('[aria-pressed="true"]')?.focus(); }
+    };
+    function aspAway(e) { if (!e.target.closest('.pl-asp')) aspShow(false); }
+    aspBtn.onclick = () => aspShow(aspPop.hidden);
+    aspPop.onkeydown = e => { if (e.key === 'Escape') { e.preventDefault(); aspShow(false); aspBtn.focus(); } };
+    aspPop.onclick = e => {
+      const b = e.target.closest('.ratio');
+      if (!b) return;
+      if (b.dataset.v) {
+        p.aspect = b.dataset.v;
+        aspPop.querySelectorAll('.ratio[data-v]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        aspBtn.innerHTML = `${plAspectIcon(p.aspect)}<span>${esc(p.aspect)}</span>`;
+        persist();
+      }
+      aspShow(false); aspBtn.focus();
+    };
+    for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0]])
       $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
     $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
     // frames: click or drop a picture, or drop a clip on the start frame (its last picture); it goes to the playground folder
@@ -3263,9 +3367,14 @@
     const openClip = c => {
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head"><h2 class="h">${esc(c.label)}</h2><span style="display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="wake-open" data-a="use">Use last frame as start</button><button type="button" class="wake-open" data-a="full">Fullscreen</button>
-          <button type="button" class="wake-open danger" data-a="del">Delete</button><button type="button" class="wake-open" data-a="close">Close</button></span></div>
-        <video src="${esc(url(c.video))}" controls autoplay loop playsinline></video><p class="hint">${esc(c.prompt)}</p>`;
+          <button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button>
+          <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete clip" aria-label="Delete clip">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span></span></div>
+        <div class="pl-up" id="pl-up" hidden>
+          <div class="row"><span class="pl-l">Method</span><span class="seg" data-k="method"><button type="button" data-v="relayvsr" aria-pressed="true">RelayVSR · quick</button><button type="button" data-v="seedvr2" aria-pressed="false">SeedVR2 · real detail</button></span>
+            <span class="pl-l">Factor</span><span class="seg" data-k="factor">${[1.5, 2, 3, 4].map(f => `<button type="button" data-v="${f}" aria-pressed="${f === 1.5}">×${f}</button>`).join('')}</span></div>
+          <div class="go"><span class="hint" id="pl-up-info"></span><button type="button" class="pl-render pl-up-go" data-a="up-go"></button></div>
+        </div>
+        <video src="${esc(url(c.video))}" controls autoplay loop muted playsinline></video><p class="hint">${esc(c.prompt)}</p>`;
       const v = dlg.querySelector('video');
       dlg.onclose = () => v.pause();
       dlg.onclick = async e => {
@@ -3274,6 +3383,10 @@
         if (a === 'close') dlg.close();
         if (a === 'full') v.requestFullscreen?.();
         if (a === 'use') { dlg.close(); useLast(c); }
+        if (a === 'up') { const box = dlg.querySelector('.pl-up'), b = dlg.querySelector('[data-a="up"]'); box.hidden = !box.hidden; b.setAttribute('aria-pressed', String(!box.hidden)); upInfo(); }
+        const seg = e.target.closest('.pl-up .seg button');
+        if (seg) { up[seg.parentElement.dataset.k] = seg.parentElement.dataset.k === 'factor' ? +seg.dataset.v : seg.dataset.v; upInfo(); }
+        if (a === 'up-go') { dlg.close(); plStart('/api/playground/upscale', { id: c.playground, video: c.video, method: up.method, factor: up.factor }, 'Upscale'); }
         if (a === 'del') {
           if (!confirm('Delete this clip? This can\'t be undone.')) return;
           try { await post('/api/playground/delete_clip', { id: c.playground, video: c.video }); }
@@ -3281,6 +3394,17 @@
           dlg.close(); wake.playClips = null; paintPlay();
         }
       };
+      // upscale panel: the size it makes and a rough time (spike, 720p→1080p 3 s: RelayVSR ≈ 2 min, SeedVR2 ≈ 15 min; grows with pixels)
+      const up = { method: 'relayvsr', factor: 1.5 };
+      function upInfo() {
+        dlg.querySelectorAll('.pl-up .seg').forEach(sg => sg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(String(up[sg.dataset.k]) === b.dataset.v))));
+        const w = v.videoWidth, h = v.videoHeight, secs = v.duration || 3, grow = (up.factor / 1.5) ** 2;
+        const min = (up.method === 'relayvsr' ? 2 : 15) * secs / 3 * grow;
+        $('pl-up-info').textContent = [w ? `${w}×${h} → ${Math.round(w * up.factor)}×${Math.round(h * up.factor)}` : '', `≈ ${min < 1.5 ? '1–2' : Math.round(min)} min`,
+          up.factor > 2 ? 'big factors looked worse in the blind test' : 'new clip next to this one'].filter(Boolean).join(' · ');
+        dlg.querySelector('.pl-up-go').textContent = `Upscale ×${up.factor}`;
+      }
+      v.addEventListener('loadedmetadata', upInfo);
       dlg.showModal();
     };
     $('pl-strip').querySelectorAll('.pl-clip').forEach(b => {
@@ -3288,7 +3412,13 @@
       b.onclick = () => openClip(c);
       b.ondragstart = e => { e.dataTransfer.setData('text/x-pl-clip', b.dataset.i); e.dataTransfer.effectAllowed = 'copy'; };
     });
-    $('pl-render').onclick = () => { persist(); $('pl-prog-text').textContent = 'Saved to the playground folder. Rendering is not wired yet, that is a later seed.'; };
+    $('pl-render').onclick = async () => {
+      clearTimeout(timer);  // render what is on screen, not what was last autosaved
+      try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
+      catch (e) { return saved(e.message); }
+      plStart('/api/playground/render', { id: p.id }, 'Render');
+    };
+    $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').textContent = 'Stopping …'; post('/api/playground/stop', { job: wake.plJob?.id }); };
     paintPlayProgress();
   }
 
@@ -3300,7 +3430,7 @@
       await listBoards();
     }
     // older boards kept model and character board-wide: hand them down to every shot
-    for (const s of wake.board.shots) { s.model ||= wake.board.model || 'q4'; s.character ??= wake.board.character || ''; }
+    for (const s of wake.board.shots) { s.model ||= wake.board.model || 'ltx'; s.character ??= wake.board.character || ''; }
     wake.shot = wake.board.shots[0]?.id;
     store.set('wake.board', wake.board.id);
     paintBoard();

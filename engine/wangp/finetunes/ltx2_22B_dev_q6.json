@@ -1,0 +1,9 @@
+{
+ "model": {
+  "name": "LTX 2.3 dev Q6_K (GGUF, Morpheus)",
+  "architecture": "ltx2_22B",
+  "description": "Stock LTX 2.3 dev as a Q6_K GGUF (Unsloth). Two-stage pipeline; stage 2 needs the distilled LoRA.",
+  "URLs": ["ltx-2.3-22b-dev-Q6_K.gguf"],
+  "preload_URLs": "ltx2_22B"
+ }
+}

@@ -785,20 +785,18 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
 
 # ---------- Wake your dream: a picture and a motion prompt become a 2 s clip (Wan 2.2 14B DaSiWa, see the vault seed) ----------
 VIDEO_DIR = OUTPUT / "videos"
-VIDEO_HIGH = "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q4_K_M-fix.gguf"
-VIDEO_LOW = "DaSiWa_Wan22_I2V_14B_LOW_v11_Q4_K_M-fix.gguf"
-# The same DaSiWa v11 pair at two precisions. Its author rates Q4 "medium-good", Q6 "like FP8, very good" (finer hair,
-# hands, less background jitter); Q6 is 12 GB per expert instead of 9.7, still one expert on the card at a time.
+# Wan 2.2 (DaSiWa Q4/Q6) and DaSiWa LTX DragonLeap are gone (2026-11-12): the WanGP spike found DragonLeap dissolves
+# props and stock LTX 2.3 dev Q6 + the distill LoRA holds them. "ltx" is now the only model; boards that still say
+# "q4"/"q6" fall back to it (video_model()).
 VIDEO_MODELS = {
-    "q4": {"label": "DaSiWa Q4 · faster", "high": VIDEO_HIGH, "low": VIDEO_LOW},
-    "q6": {"label": "DaSiWa Q6 · sharper", "high": "DaSiWa_Wan22_I2V_14B_HIGH_v11_Q6_K-fix.gguf", "low": "DaSiWa_Wan22_I2V_14B_LOW_v11_Q6_K-fix.gguf"},
-    # LTX 2.3 DragonLeap, two passes like the author's OmniForge workflow (spike 2026-11-10: livelier than Wan, 3 s at 640x960 in 3 min)
-    "ltx": {"label": "DaSiWa LTX Q4 · lively", "ltx": True},
+    "ltx": {"label": "LTX 2.3 dev Q6", "ltx": True},
 }
-LTX_FILES = {"unet": "DaSiWa-LTX23-DragonLeap-v4_Q4_K.gguf", "text_encoders": "gemma-3-12b-it-heretic.Q4_K_M.gguf",
+VIDEO_DEFAULT = "ltx"
+LTX_FILES = {"unet": "ltx-2.3-22b-dev-Q6_K.gguf", "text_encoders": "gemma-3-12b-it-heretic.Q4_K_M.gguf",
              "text_projection": "ltx-2.3_text_projection_bf16.safetensors", "vae": "LTX23_video_vae_bf16.safetensors",
-             "audio_vae": "LTX23_audio_vae_bf16.safetensors", "upscaler": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"}
-LTX_DIRS = {"unet": "unet", "text_encoders": "text_encoders", "text_projection": "text_encoders", "vae": "vae",
+             "audio_vae": "LTX23_audio_vae_bf16.safetensors", "upscaler": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+             "lora": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors"}  # dev needs the distill LoRA for 8 steps at CFG 1
+LTX_DIRS = {"lora": "loras", "unet": "unet", "text_encoders": "text_encoders", "text_projection": "text_encoders", "vae": "vae",
             "audio_vae": "checkpoints", "upscaler": "latent_upscale_models"}
 VIDEO_PRESETS = {"low": {"label": "Low", "note": "480 × 832 (480p) · about 2 min", "size": (480, 832)},
                  "high": {"label": "High", "note": "720 × 1280 · about 13 min", "size": (720, 1280)}}
@@ -810,7 +808,7 @@ VIDEO_MIN_RAM = 3 * 1024**3  # below this ComfyUI goes, not the desktop
 
 
 def video_workflow(image: str, prompt: str, negative: str, width: int, height: int, seed: int, prefix: str, end: str | None = None,
-                   frames: int = VIDEO_FRAMES, model: str = "q4", motion: str = "normal") -> dict:
+                   frames: int = VIDEO_FRAMES, model: str = VIDEO_DEFAULT, motion: str = "normal") -> dict:
     """The two-expert graph: HIGH for the first two steps, LOW for the last two. The speed-up is baked into both.
     With end, the clip must also arrive on that picture (a bridge between two shots)."""
     def expert(name):
@@ -822,7 +820,7 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
             "add_noise": "enable" if first else "disable", "noise_seed": seed if first else 0, "steps": 4, "cfg": 1.0,
             "sampler_name": "euler", "scheduler": "simple", "start_at_step": start, "end_at_step": end,
             "return_with_leftover_noise": "enable" if first else "disable"}}
-    if VIDEO_MODELS.get(model, {}).get("ltx"):
+    if VIDEO_MODELS[video_model(model)].get("ltx"):
         return ltx_workflow(image, prompt, width, height, seed, prefix, frames, end)
     mo = VIDEO_MOTION.get(motion, VIDEO_MOTION["normal"])
     graph = {
@@ -855,7 +853,7 @@ def video_workflow(image: str, prompt: str, negative: str, width: int, height: i
 
 
 def ltx_workflow(image: str, prompt: str, width: int, height: int, seed: int, prefix: str, frames: int, end: str | None = None) -> dict:
-    """DaSiWa LTX 2.3 DragonLeap Q4: pass 1 at ~0.77 of the board size (8 steps), LTX's latent upscaler x2, pass 2 refines (4 steps, denoise 0.4).
+    """LTX 2.3 dev Q6 + distill LoRA: pass 1 at ~0.77 of the board size (8 steps), LTX's latent upscaler x2, pass 2 refines (4 steps, denoise 0.4).
     Rendered at 16 fps so it cuts with the Wan shots; the audio track is made (the model wants it) and dropped.
     Both passes need sizes divisible by 32, so the render can be a bit larger and is scaled to the board size at the end.
     No negative: at CFG 1 ComfyUI skips it anyway. Same output node ids as video_workflow (10 clip, 11 last frame).
@@ -867,7 +865,8 @@ def ltx_workflow(image: str, prompt: str, width: int, height: int, seed: int, pr
     half_w, half_h = max(32, round(width * 0.77 / 32) * 32), max(32, round(height * 0.77 / 32) * 32)
     f = LTX_FILES
     g = {
-        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": f["unet"]}},
+        "1g": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": f["unet"]}},
+        "1": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["1g", 0], "lora_name": f["lora"], "strength_model": 1.0}},
         "2": {"class_type": "DualCLIPLoaderGGUF", "inputs": {"clip_name1": f["text_encoders"], "clip_name2": f["text_projection"], "type": "ltxv"}},
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": f["vae"]}},
         "4": {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": f["audio_vae"]}},
@@ -930,7 +929,7 @@ def shot_motion(board: dict, s: dict) -> str:
 
 def shot_model(board: dict, s: dict) -> str:
     """Per shot; boards from before keep their board-wide model as the fallback."""
-    return s.get("model") if s.get("model") in VIDEO_MODELS else board.get("model", "q4")
+    return s.get("model") if s.get("model") in VIDEO_MODELS else video_model(board.get("model"))
 
 
 def shot_character(board: dict, s: dict) -> str:
@@ -942,8 +941,12 @@ def bridge_model(board: dict, s: dict) -> str:
     return m if m in VIDEO_MODELS else shot_model(board, s)
 
 
-def video_installed(model: str = "q4") -> bool:
-    m = VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])
+def video_model(m) -> str:
+    return m if m in VIDEO_MODELS else VIDEO_DEFAULT
+
+
+def video_installed(model: str = VIDEO_DEFAULT) -> bool:
+    m = VIDEO_MODELS[video_model(model)]
     if m.get("ltx"):
         return all((COMFY_MODELS / LTX_DIRS[k] / f).is_file() for k, f in LTX_FILES.items())
     return all((COMFY_MODELS / "unet" / f).is_file() for f in (m["high"], m["low"]))
@@ -1148,7 +1151,7 @@ def board_sigs(board: dict) -> list[str]:
         length = s.get("length", 2)  # a 2 s shot keeps the fingerprint it had before lengths existed
         model = shot_model(board, s)
         text = json.dumps([shot_character(board, s), s["prompt"], s["negative"], s["seed"], before if chained else s["source"]]
-                          + ([length] if length != 2 else []) + ([model] if model != "q4" else [])
+                          + ([length] if length != 2 else []) + ([model] if model != "q4" else [])  # fingerprint as before: old q4 shots now show as changed (true: new model)
                           + ([shot_motion(board, s)] if shot_motion(board, s) != "normal" else [])
                           + ([s["tempo"]] if s.get("tempo", 1) != 1 else []))
         before = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
@@ -1205,7 +1208,7 @@ def board_store(req: dict) -> dict:
             s["length"] = s["length"] if s["length"] in SHOT_LENGTHS else 2
             s["motion"] = s["motion"] if s["motion"] in VIDEO_MOTION else old.get("motion", "normal")
             s["tempo"] = s["tempo"] if s["tempo"] in SHOT_TEMPOS else 1
-            s["model"] = s["model"] if s["model"] in VIDEO_MODELS else old.get("model", "q4")
+            s["model"] = s["model"] if s["model"] in VIDEO_MODELS else video_model(old.get("model"))
             s["character"] = str(s["character"]) if s["character"] is not None else old.get("character", "")
             s["locked"] = bool(raw["locked"]) if "locked" in raw else bool(before.get(s["id"], {}).get("locked"))
             s.update({k: before[s["id"]][k] for k in RENDER_FIELDS if k in before.get(s["id"], {})})

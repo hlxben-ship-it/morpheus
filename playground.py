@@ -1,8 +1,8 @@
 """Dawnforge Playground: one free local-video page per folder, output/playground/<id>/.
 
-Only the page's state lives here (model, selects, prompt, frames, two LoRA paths + strengths) and the LoRA
-header read. Rendering is a later seed. The id is the folder name, so /dawnforge/playground/<id> can be
-rebuilt from a folder on disk.
+The page's state lives here (model, selects, prompt, frames, two LoRA paths + strengths), the LoRA header read and the
+clip shelf. Rendering runs in the engine worker (engine/), started by server.py. The id is the folder name, so
+/dawnforge/playground/<id> can be rebuilt from a folder on disk.
 """
 import base64
 import json
@@ -20,7 +20,7 @@ ROOT = morpheus.OUTPUT / "playground"
 ID = re.compile(r"[0-9a-z_]{1,40}")
 # The models (stages, steps, options) are the schema in playground_models.json. The rest is shared by all models.
 LISTS = {"durations": [2, 3, 4, 5, 6, 8, 10],
-         "aspects": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"]}
+         "aspects": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"]}
 FRAMES = ("start", "end")
 HEADER_MAX = 64 << 20  # a safetensors header is JSON; far above this is not a LoRA
 
@@ -39,7 +39,7 @@ def options() -> dict:
 def fresh_state(play_id: str) -> dict:
     model = pm.models()[0]
     return {"id": play_id, "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
-            "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "16:9",
+            "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "21:9",
             "prompt": "", "start": None, "end": None,
             "loras": [{"path": "", "strength": 1.0}, {"path": "", "strength": 1.0}]}
 
@@ -304,6 +304,52 @@ def add_clip(play_id: str, video: Path, snap: dict, seed=None, seconds=None) -> 
     return meta
 
 
+def clip_meta(play_id: str, video: str) -> tuple[Path, dict]:
+    """A shelf clip of this playground (video = "playground/<id>/clips/<name>.mp4" as clips() lists it) and its meta."""
+    clips_dir = (folder(play_id) / "clips").resolve()
+    mp4 = (morpheus.OUTPUT / str(video)).resolve()
+    if mp4.parent != clips_dir or mp4.suffix != ".mp4" or not mp4.is_file():
+        raise ValueError("This clip is gone.")
+    try:
+        meta = json.loads(mp4.with_suffix(".json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        meta = {}
+    return mp4, meta
+
+
+def upscaled_snap(source: dict, video: str, method: str, label: str, factor: float) -> dict:
+    """The meta of an upscaled clip: what the source was rendered with, plus the upscale and a link back to the source."""
+    snap = {k: v for k, v in source.items() if k not in ("video", "created", "render_seconds", "upscale")}
+    res = source.get("resolution")
+    base = res.get("label") if isinstance(res, dict) else res
+    snap["resolution"] = {**(res if isinstance(res, dict) else {}), "label": f"{base or 'clip'} ↑ {label} ×{factor:g}"}
+    snap["upscale"] = {"method": method, "factor": factor, "source": video, "source_upscale": source.get("upscale")}
+    return snap
+
+
+SIZES: dict = {}  # (path, mtime) -> "720p" | "1080p" | "2K": read once per file
+
+
+def size_label(mp4: Path) -> str:
+    """The clip's real output size as the shelf badge shows it, from the file (so upscaled clips are right too):
+    by the shorter side, under 600 px = 480p, under 900 px = 720p (1248×704, 1280×704), under 1300 = 1080p (1920×1088, ×1.5 upscales),
+    else 2K (×2 upscales and up). Empty when the file can't be read."""
+    key = (str(mp4), mp4.stat().st_mtime)
+    if key not in SIZES:
+        label = ""
+        try:
+            import cv2
+            cap = cv2.VideoCapture(str(mp4))
+            w, h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            cap.release()
+            short = min(w, h)
+            label = "" if not short else "480p" if short < 600 else "720p" if short < 900 else "1080p" if short < 1300 else "2K"
+        except Exception:
+            pass
+        SIZES[key] = label
+    return SIZES[key]
+
+
 def clips() -> list:
     """The clip shelf, newest first: every Playground render, from all playgrounds (what add_clip() wrote:
     output/playground/<id>/clips/<name>.mp4 + <name>.json meta, optional <name>_thumb.jpg)."""
@@ -330,7 +376,8 @@ def clips() -> list:
                                             name(meta.get("resolution"))) if x)
         out.append({"video": rel(mp4), "thumb": rel(thumb) if thumb.is_file() else "", "prompt": meta.get("prompt", ""),
                     "created": meta.get("created") or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(mp4.stat().st_mtime)),
-                    "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name})
+                    "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name,
+                    "size": size_label(mp4)})
     out.sort(key=lambda c: c["created"], reverse=True)
     return out[:60]
 

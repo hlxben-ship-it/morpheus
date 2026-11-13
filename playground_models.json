@@ -1,32 +1,29 @@
 {
-  "_doc": "Model schema of the Dawnforge Playground. What the keys mean: see the top of playground_models.py. Edit and reload the page, no restart.",
+  "_doc": "Model schema of the Dawnforge Playground. What the keys mean: see the top of playground_models.py. Edit and reload the page, no restart. Native resolutions only: upscaling is a separate job on a finished clip (Upscale in the clip player). The values behind each entry are in engine/jobs.py.",
   "models": [
     {
       "id": "ltx23",
-      "label": "LTX 2.3 (WanGP)",
-      "note": "More main-pass steps: finer detail and, with motion LoRAs, stronger motion, but a longer render. 8 is the fast minimum, 30 the best.",
+      "label": "LTX 2.3 dev Q6",
+      "note": "Measured at 8 steps, 720p: 3 s ≈ 3:30, 10 s ≈ 6:10; 1080p: 3 s ≈ 5:40, 10 s ≈ 13 min. 8 is the fast distilled path. Above 8 it switches to the dev schedule with real guidance (for LoRAs that want more steps): each step costs about 3× as much, not measured yet.",
       "resolutions": [
         { "id": "720p", "label": "720p", "target": "720p" },
-        { "id": "1080p", "label": "1080p (native)", "target": "1080p" },
-        { "id": "1080p_from_720p", "label": "1080p (upscaled from 720p)", "target": "1080p", "render": "720p" },
-        { "id": "2k_from_1080p", "label": "2K (upscaled from 1080p)", "target": "2k", "render": "1080p" },
-        { "id": "2k", "label": "2K (native)", "target": "2k" }
+        { "id": "480p", "label": "480p (draft, fast)", "target": "480p" },
+        { "id": "1080p", "label": "1080p", "target": "1080p" }
       ],
       "stages": [
-        { "id": "main", "label": "Main pass", "kind": "sample", "size": "reduced", "steps": { "min": 8, "max": 30, "default": 8 } },
-        { "id": "refine", "label": "Refine", "kind": "sample", "hint": "after the automatic ×2 latent upscale to the render size", "steps": { "min": 1, "max": 8, "default": 3 } }
+        { "id": "main", "label": "Main pass", "kind": "sample", "hint": "at half size", "steps": { "min": 8, "max": 30, "default": 8 } },
+        { "id": "refine", "label": "Refine", "kind": "sample", "hint": "automatic, after the ×2 latent upscale to the render size", "steps": { "default": 3, "fixed": true } }
       ],
       "options": []
     },
     {
       "id": "h3_minimax",
-      "label": "H3 MiniMax Flash (WanGP)",
-      "note": "HyperFlow Flash: 4 steps in our tests, 6 or 8 are allowed. A single pass, no refine and no upscale stage.",
+      "label": "H3 HyperFlow Flash",
+      "note": "Best faces and staging. Measured at 4 steps, 720p: 3 s ≈ 4 min, 4.5 s ≈ 6:30, 8 s ≈ 22 min. 1080p is about 9 min per step.",
       "resolutions": [
         { "id": "720p", "label": "720p", "target": "720p" },
-        { "id": "1080p", "label": "1080p (native)", "target": "1080p" },
-        { "id": "1080p_from_720p", "label": "1080p (upscaled from 720p)", "target": "1080p", "render": "720p" },
-        { "id": "2k_from_1080p", "label": "2K (upscaled from 1080p)", "target": "2k", "render": "1080p" }
+        { "id": "480p", "label": "480p (draft, fast)", "target": "480p" },
+        { "id": "1080p", "label": "1080p (very slow)", "target": "1080p" }
       ],
       "stages": [
         { "id": "main", "label": "Single pass", "kind": "sample", "steps": { "choices": [4, 6, 8], "default": 4 } }

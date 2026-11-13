@@ -26,6 +26,7 @@ from PIL import Image
 import agents
 import morpheus
 import playground
+from engine import jobs as engine_jobs, runner as engine_runner
 import yumeko
 import yumeko_auto
 import soulforge
@@ -970,13 +971,16 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/board/save": morpheus.board_store, "/api/board/delete": self.board_delete,
                     "/api/board/star": self.board_star,
                     "/api/board/render": self.board_render, "/api/board/picture": self.board_picture,
+                    "/api/playground/render": self.playground_render, "/api/playground/upscale": self.playground_upscale,
+                    "/api/playground/stop": self.wake_stop,
                     **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()}}
         if self.path not in handlers:
             return self.send_error(404)
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             handler = handlers[self.path]
-            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat", "/api/wake", "/api/board/render"):
+            if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat", "/api/wake", "/api/board/render",
+                                                     "/api/playground/render", "/api/playground/upscale"):
                 # runs on after the page is gone (a reload mid-render); the page polls /api/job/<id> and finds it again
                 job_id = f"{time.time_ns():x}"
                 JOBS[job_id] = {"state": "running"}
@@ -1610,6 +1614,63 @@ class Handler(BaseHTTPRequestHandler):
             job["phase"] = "Loading models"
             morpheus.board_render(board_id, shot, lambda: job.get("_stop"), progress, part)
         return morpheus.board_view(morpheus.board_load(board_id))
+
+    ENGINE_PHASES = {"loading_model": "Loading the models", "encoding_text": "Reading the prompt", "inference": "Rendering",
+                     "decoding": "Decoding the video", "postprocessing": "Upscaling"}
+
+    def engine_job(self, job: dict, work: dict, total: int | None) -> dict:
+        """One engine worker job (engine/runner.py) under the GPU lock, ComfyUI stopped first: the worker and ComfyUI never
+        share the GPU. Progress goes to the job the page polls; the worker's per-phase steps are summed over phases
+        (LTX: main pass, then refine). Stop (/api/playground/stop) kills the worker."""
+        stopped = lambda: job.get("_stop")
+        job.update(phase="Waiting for the GPU", step=0, total=total)
+        seen = {"offset": 0, "key": None, "step": 0}
+
+        def progress(ev):
+            job["phase"] = self.ENGINE_PHASES.get(ev.get("phase"), str(ev.get("phase") or "Working").replace("_", " ").capitalize())
+            step, of = ev.get("step"), ev.get("total")
+            if step is None or not of:
+                return
+            key = (ev.get("phase"), of)
+            if key != seen["key"]:  # a new sampling phase: the steps before it count
+                if seen["key"] is not None and seen["key"][0] == "inference":
+                    seen["offset"] += seen["key"][1]
+                seen["key"] = key
+            if ev.get("phase") == "inference":
+                job["step"] = seen["offset"] + step
+                job["total"] = max(total or 0, seen["offset"] + of)
+            elif total is None:  # an upscale: its own counter
+                job["step"], job["total"] = step, of
+
+        with gpu:
+            if stopped():
+                raise ValueError("Stopped.")
+            job["phase"] = "Stopping ComfyUI"
+            morpheus.stop_comfy()
+            job["phase"] = "Waiting for free RAM"
+            engine_runner.wait_for_ram(stopped)
+            job["phase"] = "Starting the engine"
+            return engine_runner.run(work, progress, stopped)
+
+    def playground_render(self, req):
+        """Render the Playground with the engine (LTX 2.3 / H3 HyperFlow). The settings are frozen when Render is
+        pressed (snapshot); the finished clip moves into the playground's clips/ with its meta json."""
+        play_id = str(req.get("id", ""))
+        snap = playground.snapshot(play_id)
+        settings = engine_jobs.render_settings(snap, playground.folder(play_id))
+        out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"])
+        return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
+
+    def playground_upscale(self, req):
+        """Upscale a shelf clip (G4/G13): RelayVSR (quick) or SeedVR2 3B (best), x1.5 to x4 in 0.5 steps. The result is
+        a new clip next to the source; its meta links the source."""
+        play_id, video = str(req.get("id", "")), str(req.get("video", ""))
+        method = str(req.get("method", ""))
+        upsampling = engine_jobs.upscale_request(method, req.get("factor"))
+        mp4, meta = playground.clip_meta(play_id, video)
+        out = self.engine_job(req.get("_job", {}), {"kind": "upscale", "video": str(mp4), "upsampling": upsampling}, None)
+        snap = playground.upscaled_snap(meta, video, method, engine_jobs.UPSCALERS[method], float(req.get("factor")))
+        return playground.add_clip(play_id, Path(out["file"]), snap, seed=meta.get("seed"), seconds=out["seconds"])
 
     def wake_stop(self, req):
         job = JOBS.get(str(req.get("job", "")))
