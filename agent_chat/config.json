@@ -1,0 +1,14 @@
+{
+  "provider": "openrouter",
+  "model": "x-ai/grok-4.3",
+  "thinking": "off",
+  "greeting": "Hi! Drop a picture and tell me what you need — I write the prompt.",
+  "idle_minutes": 20,
+  "models": [
+    {"id": "x-ai/grok-4.3", "label": "Grok 4.3", "vision": true, "price": "$1.25 / $2.50"},
+    {"id": "deepseek/deepseek-v4.1-flash", "label": "DeepSeek V4.1 Flash", "vision": true, "price": "$0.30 / $1.20",
+     "pi": {"reasoning": true, "contextWindow": 1048576, "maxTokens": 32768, "cost": {"input": 0.3, "output": 1.2}}},
+    {"id": "thedrummer/cydonia-24b-v4.1", "label": "Cydonia 24B V4.1", "vision": false, "price": "$0.30 / $0.50",
+     "pi": {"reasoning": false, "contextWindow": 131072, "maxTokens": 16384, "cost": {"input": 0.3, "output": 0.5}}}
+  ]
+}

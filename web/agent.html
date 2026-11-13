@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morpheus · Agent</title>
+<link rel="icon" href="/favicon.png">
+<style>
+  body { margin:0; background:#0b0814; color:#ece8f7; font:14px/1.45 Inter, system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:16px; height:100vh; box-sizing:border-box; display:flex; flex-direction:column; gap:10px; }
+  h1 { font:600 18px/1.2 'IBM Plex Mono', monospace; letter-spacing:.08em; margin:0; }
+  p { color:#9a90b8; font-size:12.5px; margin:0; }
+  morpheus-agent-chat { flex:1; min-height:0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AGENT · TEST</h1>
+  <p>The prompt-writer chat on its own. <code>?fake</code> = no model, no cost.</p>
+  <morpheus-agent-chat task="Morpheus Agent test tab — usually a video prompt for LTX 2.3 or MiniMax H3"></morpheus-agent-chat>
+</main>
+<script>
+  if (new URLSearchParams(location.search).has("fake")) document.querySelector("morpheus-agent-chat").setAttribute("fake", "");
+</script>
+<script type="module" src="/agent-chat.js"></script>
+</body>
+</html>

@@ -22,3 +22,4 @@ engine/wangp/ffmpeg_bins/
 
 # the agent chat's OpenRouter key (agent_chat.py)
 .env
+.pi-agent/

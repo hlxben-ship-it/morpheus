@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import agent_chat
 import agents
 import morpheus
 import playground
@@ -805,7 +806,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(page.replace("/*GLIA-DATA*/null", data, 1).encode("utf-8"), "text/html; charset=utf-8")
         if route == "/yumeko-create.js":
             return self.send_file(WEB / "create.js", WEB)
-        if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json"):
+        if route == "/agent":  # the Agent test tab: the reusable prompt-writer chat (web/agent-chat.js) on its own
+            return self.send_bytes((WEB / "agent.html").read_bytes(), "text/html; charset=utf-8")
+        if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json", "/agent-chat.js"):
             return self.send_file(WEB / route[1:], WEB)
         if route == "/cloud":  # the Cloud tab: a Video / Image switch around /test and /test2
             return self.send_bytes((WEB / "cloud.html").read_bytes(), "text/html; charset=utf-8")
@@ -958,6 +961,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 400)
+        if self.path.startswith("/api/agentchat/"):  # open / send / close; send blocks until the agent answers
+            try:
+                action = agent_chat.ACTIONS.get(self.path.rsplit("/", 1)[1])
+                if not action:
+                    return self.send_error(404)
+                return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
+            except Exception as e:
+                traceback.print_exc()
+                return self.send_json({"error": str(e)}, 500)
         if self.path.startswith("/api/test/save"):  # the Test tab's finished video, raw mp4 bytes
             return self.test_save()
         if self.path == "/api/upload":  # raw bytes, not JSON
