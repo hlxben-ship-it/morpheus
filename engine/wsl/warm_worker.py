@@ -1,0 +1,110 @@
+"""Warm render worker for WSL: one WanGP session that takes job after job and keeps the last model loaded in RAM/VRAM.
+
+    python warm_worker.py [--keep-warm SECONDS]        (inside WSL, after env.sh)
+
+stdin     one JSON job per line, same shape as Morpheus engine/worker.py jobs:
+            {"kind": "render", "settings": {...}, "out_dir": "...", "result": "...json", "id": "..."}
+            {"kind": "upscale", "video": "...", "upsampling": "relayvsr*1.5", "out_dir": "...", "result": "...", "id": "..."}
+            {"kind": "unload"}   frees the model, stays alive        {"kind": "quit"}
+stdout    "@@ {json}" lines: {"event": "ready"}, progress, done, error (each with the job "id"), {"event": "idle_exit"}
+Exits by itself after --keep-warm seconds without a job (default 600), so RAM goes back to Windows when nobody renders.
+Windows paths (C:/...) in a job are mapped to /mnt/c/...; the output file is reported as a Windows path again.
+"""
+import sys; sys.path.insert(0, __import__("os").path.dirname(__file__))
+import amdspoof  # noqa: F401  (RDNA3 -> Ampere code paths in WanGP's Triton kernels; before any WanGP import)
+import json, os, queue, threading, time
+from pathlib import Path
+
+WANGP = Path(os.environ.get("WARM_WANGP", "/root/wangp"))
+KEEP_WARM = float(sys.argv[sys.argv.index("--keep-warm") + 1]) if "--keep-warm" in sys.argv else 600.0
+sys.argv = sys.argv[:1]  # WanGP parses sys.argv itself and rejects unknown flags
+
+
+def say(obj):
+    sys.__stdout__.write("@@ " + json.dumps(obj) + "\n"); sys.__stdout__.flush()
+
+
+def to_linux(v):
+    if isinstance(v, str) and len(v) > 2 and v[1] == ":" and v[2] in "/\\":
+        return "/mnt/" + v[0].lower() + v[2:].replace("\\", "/")
+    if isinstance(v, list): return [to_linux(x) for x in v]
+    if isinstance(v, dict): return {k: to_linux(x) for k, x in v.items()}
+    return v
+
+
+def to_windows(p):
+    p = str(p)
+    if p.startswith("/mnt/") and len(p) > 6: return p[5].upper() + ":" + p[6:]
+    return p
+
+
+def mem():
+    """Peak VRAM of this job and peak process RAM (GB), logged with each done event."""
+    try:
+        import resource, torch
+        return {"vram_peak_gb": round(torch.cuda.max_memory_reserved() / 2**30, 1),
+                "ram_peak_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}
+    except Exception:
+        return {}
+
+
+def main():
+    os.chdir(WANGP); sys.path.insert(0, str(WANGP))
+    from shared.api import init
+    import wgp
+    session = init(root=WANGP, console_output=False,
+                   cli_args=["--attention", "sdpa", "--profile", "4", "--preload", os.environ.get("WARM_PRELOAD", "14000")])
+    jobs = queue.Queue()
+    threading.Thread(target=lambda: [jobs.put(l) for l in sys.stdin], daemon=True).start()
+    say({"event": "ready", "keep_warm": KEEP_WARM})
+    while True:
+        try:
+            line = jobs.get(timeout=KEEP_WARM)
+        except queue.Empty:
+            say({"event": "idle_exit"}); break
+        if not line.strip(): continue
+        job = to_linux(json.loads(line)); jid = job.get("id")
+        if job["kind"] == "quit": break
+        if job["kind"] == "unload":
+            try: wgp.release_model()
+            except Exception as e: say({"event": "error", "id": jid, "message": f"unload: {e}"})
+            say({"event": "unloaded", "id": jid}); continue
+        t0 = time.time()
+        try:
+            import torch; torch.cuda.reset_peak_memory_stats()
+        except Exception: pass
+        try:
+            if job.get("out_dir"):
+                Path(job["out_dir"]).mkdir(parents=True, exist_ok=True)
+                for k in ("save_path", "image_save_path", "audio_save_path", "mesh_save_path"):
+                    wgp.server_config[k] = job["out_dir"]  # what shared.api does for output_dir, per job here
+            if job["kind"] == "render":
+                settings = dict(job["settings"])
+                floor = settings.pop("_frames_minimum", None)
+                if floor: wgp.get_model_def(settings["model_type"])["frames_minimum"] = int(floor)
+                handle = session.submit_task(settings)
+            elif job["kind"] == "upscale":
+                handle = session.submit_media_postprocessing(job["video"], spatial_upsampling=job["upsampling"])
+            else:
+                raise ValueError(f"Unknown job kind {job['kind']!r}.")
+            last = None
+            for ev in handle.events.iter(timeout=0.5):
+                if ev.kind != "progress": continue
+                p = ev.data; now = (p.phase, p.current_step, p.total_steps)
+                if now != last:
+                    last = now; say({"event": "progress", "id": jid, "phase": p.phase, "step": p.current_step, "total": p.total_steps})
+            result = handle.result()
+            if not result.success or not result.generated_files:
+                out = {"event": "error", "id": jid, "message": "; ".join(e.message for e in result.errors) or "WanGP made no file."}
+            else:
+                out = {"event": "done", "id": jid, "file": to_windows(Path(result.generated_files[-1]).resolve()), "seconds": round(time.time() - t0, 1), **mem()}
+        except Exception as e:  # noqa: BLE001
+            import traceback; traceback.print_exc(file=sys.__stderr__)
+            out = {"event": "error", "id": jid, "message": f"{type(e).__name__}: {e}"}
+        if job.get("result"): Path(job["result"]).write_text(json.dumps(out), encoding="utf-8")
+        say(out)
+    sys.__stdout__.flush(); os._exit(0)
+
+
+if __name__ == "__main__":
+    main()

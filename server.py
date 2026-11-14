@@ -27,7 +27,7 @@ import agent_chat
 import agents
 import morpheus
 import playground
-from engine import jobs as engine_jobs, runner as engine_runner
+from engine import jobs as engine_jobs, runner as engine_runner, wsl_runner as engine_wsl
 import yumeko
 import yumeko_auto
 import soulforge
@@ -67,6 +67,7 @@ COMFY_MODE = None  # "video" once started with the video flags; those stay off f
 def start_comfy(video: bool, timeout: float) -> None:
     """Hold comfy_lock. Start ComfyUI in the background, then wait until it answers."""
     global COMFY_MODE
+    engine_wsl.release()  # a warm WSL render worker would hold the RAM and VRAM ComfyUI is about to plan with
     log = open(morpheus.ROOT / "comfyui.log", "ab")
     # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
     # it plans with ~18 GB, Windows spills the overflow into shared memory and a step takes 81 s instead of 1.2 s
@@ -1630,12 +1631,15 @@ class Handler(BaseHTTPRequestHandler):
         return morpheus.board_view(morpheus.board_load(board_id))
 
     ENGINE_PHASES = {"loading_model": "Loading the models", "encoding_text": "Reading the prompt", "inference": "Rendering",
-                     "decoding": "Decoding the video", "postprocessing": "Upscaling"}
+                     "decoding": "Decoding the video", "postprocessing": "Upscaling", "starting_wsl": "Starting WSL"}
 
-    def engine_job(self, job: dict, work: dict, total: int | None) -> dict:
-        """One engine worker job (engine/runner.py) under the GPU lock, ComfyUI stopped first: the worker and ComfyUI never
-        share the GPU. Progress goes to the job the page polls; the worker's per-phase steps are summed over phases
-        (LTX: main pass, then refine). Stop (/api/playground/stop) kills the worker."""
+    # engine choice from the page -> seconds the WSL worker keeps the model loaded after a job (None = Windows worker)
+    WSL_KEEP = {"wsl": 20, "wsl10": 600, "wsl30": 1800}
+
+    def engine_job(self, job: dict, work: dict, total: int | None, engine: str = "win") -> dict:
+        """One engine worker job (engine/runner.py, or engine/wsl_runner.py for H3 when the page picks WSL) under the GPU
+        lock, ComfyUI stopped first: the worker and ComfyUI never share the GPU. Progress goes to the job the page polls;
+        the worker's per-phase steps are summed over phases (LTX: main pass, then refine). Stop (/api/playground/stop) kills the worker."""
         stopped = lambda: job.get("_stop")
         job.update(phase="Waiting for the GPU", step=0, total=total)
         seen = {"offset": 0, "key": None, "step": 0}
@@ -1656,14 +1660,20 @@ class Handler(BaseHTTPRequestHandler):
             elif total is None:  # an upscale: its own counter
                 job["step"], job["total"] = step, of
 
+        keep = self.WSL_KEEP.get(engine)
+        use_wsl = keep is not None and engine_wsl.handles(work)
         with gpu:
             if stopped():
                 raise ValueError("Stopped.")
             job["phase"] = "Stopping ComfyUI"
             morpheus.stop_comfy()
+            if not use_wsl:
+                engine_wsl.release()  # a warm WSL worker holds ~23 GB RAM and the VRAM: the Windows worker needs them
             job["phase"] = "Waiting for free RAM"
-            engine_runner.wait_for_ram(stopped)
+            (engine_wsl if use_wsl else engine_runner).wait_for_ram(stopped)
             job["phase"] = "Starting the engine"
+            if use_wsl:
+                return engine_wsl.run(work, progress, stopped, keep_warm=keep)
             return engine_runner.run(work, progress, stopped)
 
     def playground_render(self, req):
@@ -1672,7 +1682,8 @@ class Handler(BaseHTTPRequestHandler):
         play_id = str(req.get("id", ""))
         snap = playground.snapshot(play_id)
         settings = engine_jobs.render_settings(snap, playground.folder(play_id))
-        out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"])
+        out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
+                              engine=str(req.get("engine") or "win"))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
 
     def playground_upscale(self, req):
