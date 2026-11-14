@@ -1,4 +1,4 @@
-"""server.py's Playground render path without the GPU: the engine runner is replaced by a replay of the progress lines a
+"""server.py's Playground render path without the GPU: the WSL engine runner is replaced by a replay of the progress lines a
 real LTX run printed (2026-11-13), ComfyUI stop and the RAM wait are no-ops. python -m unittest engine.test_server_render"""
 import json
 import shutil
@@ -23,7 +23,8 @@ class RenderPath(unittest.TestCase):
         self.patches = [mock.patch.object(playground, "ROOT", self.tmp / "playground"),
                         mock.patch.object(playground.morpheus, "OUTPUT", self.tmp),
                         mock.patch.object(server.morpheus, "stop_comfy", lambda: None),
-                        mock.patch.object(server.engine_runner, "wait_for_ram", lambda stopped: None)]
+                        mock.patch.object(server.engine_wsl, "wait_for_ram", lambda stopped: None),
+                        mock.patch.object(server.engine_wsl, "release", lambda: None)]
         for p in self.patches:
             p.start()
         self.play = playground.new({})["id"]
@@ -36,7 +37,7 @@ class RenderPath(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def fake_run(self, seen: list, stop_at=None):
-        def run(work, on_event, stopped):
+        def run(work, on_event, stopped, keep_warm=None):
             seen.append(work)
             for n, (phase, step, total) in enumerate(REPLAY):
                 if stop_at is not None and n == stop_at:
@@ -52,7 +53,7 @@ class RenderPath(unittest.TestCase):
 
     def test_render_lands_in_the_shelf_with_summed_steps(self):
         seen, self.trace, self.job = [], [], {}
-        with mock.patch.object(server.engine_runner, "run", self.fake_run(seen)):
+        with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen)):
             meta = self.handler.playground_render({"id": self.play, "_job": self.job})
         self.assertEqual(seen[0]["kind"], "render")
         self.assertEqual(seen[0]["settings"]["model_type"], "ltx2_22B_dev_q6")
@@ -70,7 +71,7 @@ class RenderPath(unittest.TestCase):
 
     def test_stop_ends_the_job_without_a_clip(self):
         seen, self.trace, self.job = [], [], {}
-        with mock.patch.object(server.engine_runner, "run", self.fake_run(seen, stop_at=6)):
+        with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen, stop_at=6)):
             with self.assertRaisesRegex(ValueError, "Stopped"):
                 self.handler.playground_render({"id": self.play, "_job": self.job})
         self.assertEqual(playground.clips(), [])
@@ -78,14 +79,14 @@ class RenderPath(unittest.TestCase):
     def test_missing_lora_never_reaches_the_engine(self):
         playground.save({"id": self.play, "loras": [{"path": str(self.tmp / "gone.safetensors"), "strength": 1}, {"path": "", "strength": 1}]})
         seen, self.trace, self.job = [], [], {}
-        with mock.patch.object(server.engine_runner, "run", self.fake_run(seen)):
+        with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen)):
             with self.assertRaisesRegex(ValueError, "gone.safetensors"):
                 self.handler.playground_render({"id": self.play, "_job": self.job})
         self.assertEqual(seen, [])
 
     def test_upscale_makes_a_new_clip_linked_to_the_source(self):
         seen, self.trace, self.job = [], [], {}
-        with mock.patch.object(server.engine_runner, "run", self.fake_run(seen)):
+        with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen)):
             src = self.handler.playground_render({"id": self.play, "_job": self.job})
             video = f"playground/{self.play}/{src['video']}"
             self.job = {}

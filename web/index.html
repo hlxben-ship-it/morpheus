@@ -3089,9 +3089,9 @@
   });
 
   // ---------- Dawnforge Playground: /dawnforge/playground/<id>, state saved in output/playground/<id>/ ----------
-  // Engine for H3 renders (engine/wsl_runner.py): Windows, or WSL with Sol sparse attention, optionally keeping the model loaded
-  const PL_ENGINES = [['win', 'Windows'], ['wsl', 'WSL fast'], ['wsl10', 'WSL fast · keep model 10 min'], ['wsl30', 'WSL fast · keep model 30 min']];
-  function plEngine() { try { return localStorage.getItem('morpheus.plEngine') || 'win'; } catch { return 'win'; } }
+  // Every render runs in WSL (engine/wsl_runner.py); the choice is only how long the model stays loaded afterwards
+  const PL_ENGINES = [['wsl', 'Unload right after'], ['wsl10', 'Keep model 10 min'], ['wsl30', 'Keep model 30 min']];
+  function plEngine() { let v; try { v = localStorage.getItem('morpheus.plEngine'); } catch {} return PL_ENGINES.some(e => e[0] === v) ? v : 'wsl10'; }
   // Render and Upscale run in the engine worker as a background job (/api/playground/render | upscale, polled through
   // /api/job/<id>, kept in localStorage 'pl.job' so a reload finds it again). plProgress({ phase, step, total, since })
   // paints the bar while it runs (null when it is over); the finished clip lands in output/playground/<id>/clips/ and the
@@ -3221,7 +3221,7 @@
           <div class="pl-pipe"><label class="pl-l">Pipeline</label><ol class="pl-stages" id="pl-stages"></ol><div id="pl-opts"></div><p class="pl-hint" id="pl-note"></p></div></section>
         <button type="button" class="sb-quiet pl-writer" id="pl-writer" title="A chat that writes the prompt; it knows the model and sees the frames">✦ Write prompt</button>
         <section class="pl-box pl-loras"><b>LoRAs</b>${lora(0)}${lora(1)}</section>
-        <div class="pl-engine"${p.model === 'h3_minimax' ? '' : ' hidden'}><label class="pl-l" for="pl-engine">Engine</label><select id="pl-engine" title="WSL: Linux + Triton, Sol sparse attention (about 2x faster per step). Keep model: it stays loaded, the next render skips the load">${PL_ENGINES.map(([v, t]) => '<option value="' + v + '"' + (plEngine() === v ? ' selected' : '') + '>' + t + '</option>').join('')}</select></div>
+        <div class="pl-engine"><label class="pl-l" for="pl-engine">Keep warm</label><select id="pl-engine" title="Renders run in WSL. Keep model: it stays loaded, the next render skips the load (it holds ~23 GB RAM meanwhile)">${PL_ENGINES.map(([v, t]) => '<option value="' + v + '"' + (plEngine() === v ? ' selected' : '') + '>' + t + '</option>').join('')}</select></div>
         <button type="button" class="pl-render" id="pl-render">Render</button>
         <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
       </div>
@@ -3324,7 +3324,7 @@
       aspShow(false); aspBtn.focus();
     };
     for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0]])
-      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); box.querySelector('.pl-engine').hidden = p.model !== 'h3_minimax'; } persist(); };
+      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
     $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
     // prompt writer: one chat per page session, kept in wake.plChat across repaints; what it knows lives in its task
     // attribute (re-read on every message); frames go over once each as pictures, a changed frame once more
@@ -3464,7 +3464,7 @@
         if (a === 'up') { const box = dlg.querySelector('.pl-up'), b = dlg.querySelector('[data-a="up"]'); box.hidden = !box.hidden; b.setAttribute('aria-pressed', String(!box.hidden)); upInfo(); }
         const seg = e.target.closest('.pl-up .seg button');
         if (seg) { up[seg.parentElement.dataset.k] = seg.parentElement.dataset.k === 'factor' ? +seg.dataset.v : seg.dataset.v; upInfo(); }
-        if (a === 'up-go') { dlg.close(); plStart('/api/playground/upscale', { id: c.playground, video: c.video, method: up.method, factor: up.factor }, 'Upscale'); }
+        if (a === 'up-go') { dlg.close(); plStart('/api/playground/upscale', { id: c.playground, video: c.video, method: up.method, factor: up.factor, engine: plEngine() }, 'Upscale'); }
         if (a === 'del') {
           if (!confirm('Delete this clip? This can\'t be undone.')) return;
           try { await post('/api/playground/delete_clip', { id: c.playground, video: c.video }); }
@@ -3494,7 +3494,7 @@
       clearTimeout(timer);  // render what is on screen, not what was last autosaved
       try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
       catch (e) { return saved(e.message); }
-      plStart('/api/playground/render', { id: p.id, engine: p.model === 'h3_minimax' ? plEngine() : 'win' }, 'Render');
+      plStart('/api/playground/render', { id: p.id, engine: plEngine() }, 'Render');
     };
     if ($('pl-engine')) $('pl-engine').onchange = e => { try { localStorage.setItem('morpheus.plEngine', e.target.value); } catch {} };
     $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').textContent = 'Stopping …'; post('/api/playground/stop', { job: wake.plJob?.id }); };
@@ -3745,9 +3745,9 @@
     const bridges = shots.filter((s, i) => i && s.start === 'picture' && s.transition?.type === 'bridge');
     const open = bridges.filter(s => s.bridge_status !== 'rendered').length, n = todo.length + open;
     const seconds = shots.reduce((m, s) => m + (s.length || 2), 0) + bridges.length * 2;
-    const mins = Math.round(todo.reduce((m, s) => m + (s.length || 2) * 1.5, 0) + open * 3), stale = b.scene?.outdated || !b.scene;
+    const mins = Math.round(todo.reduce((m, s) => m + (s.length || 2) * 2, 0) + open * 10), stale = b.scene?.outdated || !b.scene;
     $('sb-sum').textContent = `${shots.length} ${shots.length === 1 ? 'shot' : 'shots'}, about ${seconds} s. ${n ? `${n} to render, about ${mins} min.` : stale ? 'Ready to join.' : 'All rendered.'}`;
-    const blocked = wake.options.installed ? '' : 'The Wan 2.2 DaSiWa models are not installed.';
+    const blocked = wake.options.installed ? '' : 'LTX 2.3 is not installed in WSL (/root/wangp/ckpts).';
     const progress = $('sb-progress');
     if ($('sb-one')) { $('sb-one').disabled = !!wake.job || !!blocked || !!currentShot()?.locked; $('sb-one').title = currentShot()?.locked ? 'Locked: unlock it to render again' : ''; $('sb-one').onclick = () => startRender(currentShot().id); }
     if (wake.job && !renderingHere()) {

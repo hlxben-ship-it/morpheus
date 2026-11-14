@@ -783,141 +783,79 @@ def run_edit(prompt: str, source: Path | Image.Image, model: str = "flux2-klein-
     return keep(meta, img, img, out, name, ghost)
 
 
-# ---------- Wake your dream: a picture and a motion prompt become a 2 s clip (Wan 2.2 14B DaSiWa, see the vault seed) ----------
+# ---------- Wake your dream: a picture and a motion prompt become a clip. All video renders in WSL (2026-11-14) ----------
+# LTX 2.3 dev Q6 + distill LoRA runs in the WanGP engine inside WSL2 (engine/wsl_runner.py, warm worker). ComfyUI makes
+# pictures only; its video graphs (Wan 2.2, LTX nodes) are gone. Glia seed: seed_2026_11_14_video_all_in_wsl.
 VIDEO_DIR = OUTPUT / "videos"
-# Wan 2.2 (DaSiWa Q4/Q6) and DaSiWa LTX DragonLeap are gone (2026-11-12): the WanGP spike found DragonLeap dissolves
-# props and stock LTX 2.3 dev Q6 + the distill LoRA holds them. "ltx" is now the only model; boards that still say
-# "q4"/"q6" fall back to it (video_model()).
 VIDEO_MODELS = {
     "ltx": {"label": "LTX 2.3 dev Q6", "ltx": True},
 }
 VIDEO_DEFAULT = "ltx"
-LTX_FILES = {"unet": "ltx-2.3-22b-dev-Q6_K.gguf", "text_encoders": "gemma-3-12b-it-heretic.Q4_K_M.gguf",
-             "text_projection": "ltx-2.3_text_projection_bf16.safetensors", "vae": "LTX23_video_vae_bf16.safetensors",
-             "audio_vae": "LTX23_audio_vae_bf16.safetensors", "upscaler": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
-             "lora": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors"}  # dev needs the distill LoRA for 8 steps at CFG 1
-LTX_DIRS = {"lora": "loras", "unet": "unet", "text_encoders": "text_encoders", "text_projection": "text_encoders", "vae": "vae",
-            "audio_vae": "checkpoints", "upscaler": "latent_upscale_models"}
-VIDEO_PRESETS = {"low": {"label": "Low", "note": "480 × 832 (480p) · about 2 min", "size": (480, 832)},
-                 "high": {"label": "High", "note": "720 × 1280 · about 13 min", "size": (720, 1280)}}
-VIDEO_FRAMES, VIDEO_FPS = 33, 16  # 2 s
+VIDEO_PRESETS = {"low": {"label": "Low", "note": "512 × 896 (480p) · about 2 min", "size": (512, 896)},
+                 "high": {"label": "High", "note": "704 × 1280 (720p) · about 5 min", "size": (704, 1280)}}
+VIDEO_FPS = 24  # LTX's own rate; at 16 props dissolve (engine/jobs.py)
+VIDEO_STEPS = 11  # progress per clip: 8 main steps + WanGP's ~3 refine steps after the x2 latent upscale
+VIDEO_FRAMES = VIDEO_FPS * 2 + 1  # 2 s
+VIDEO_KEEP_WARM = 600  # seconds the WSL worker keeps LTX loaded after a clip (a board renders clip after clip)
 VIDEO_NEGATIVE = ("vivid colors, overexposed, static, blurry details, subtitles, style, artwork, painting, still image, grey overall, "
                   "worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, bad hands, bad face, malformed limbs, "
-                  "fused fingers, motionless frame, cluttered background")
-VIDEO_MIN_RAM = 3 * 1024**3  # below this ComfyUI goes, not the desktop
+                  "fused fingers, motionless frame, cluttered background")  # kept for the page; LTX at CFG 1 has no negative
+LTX_CKPT = "/root/wangp/ckpts/ltx-2.3-22b-dev-Q6_K.gguf"  # on the WSL ext4 disk
 
 
-def video_workflow(image: str, prompt: str, negative: str, width: int, height: int, seed: int, prefix: str, end: str | None = None,
-                   frames: int = VIDEO_FRAMES, model: str = VIDEO_DEFAULT, motion: str = "normal") -> dict:
-    """The two-expert graph: HIGH for the first two steps, LOW for the last two. The speed-up is baked into both.
-    With end, the clip must also arrive on that picture (a bridge between two shots)."""
-    def expert(name):
-        return {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": name}}
-
-    def sample(model, latent, start, end, first):
-        return {"class_type": "KSamplerAdvanced", "inputs": {
-            "model": model, "positive": ["13", 0], "negative": ["13", 1], "latent_image": latent,
-            "add_noise": "enable" if first else "disable", "noise_seed": seed if first else 0, "steps": 4, "cfg": 1.0,
-            "sampler_name": "euler", "scheduler": "simple", "start_at_step": start, "end_at_step": end,
-            "return_with_leftover_noise": "enable" if first else "disable"}}
-    if VIDEO_MODELS[video_model(model)].get("ltx"):
-        return ltx_workflow(image, prompt, width, height, seed, prefix, frames, end)
-    mo = VIDEO_MOTION.get(motion, VIDEO_MOTION["normal"])
-    graph = {
-        "1": expert(VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])["high"]),
-        "2": expert(VIDEO_MODELS.get(model, VIDEO_MODELS["q4"])["low"]),
-        "20": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": mo["shift"]}},
-        "21": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["2", 0], "shift": mo["shift"]}},
-        "7": {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"}},
-        "8": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["7", 0], "text": prompt}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["7", 0], "text": negative}},
-        "12": {"class_type": "LoadImage", "inputs": {"image": image}},
-        "13": {"class_type": "WanImageToVideo", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "vae": ["8", 0],
-               "start_image": ["12", 0], "width": width, "height": height, "length": frames, "batch_size": 1}},
-        "14": sample(["20", 0], ["13", 2], 0, mo["high"], True),
-        "15": sample(["21", 0], ["14", 0], mo["high"], 10000, False),
-        "16": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["15", 0], "vae": ["8", 0], "tile_size": 256,
-               "overlap": 64, "temporal_size": max(64, (frames + 16) // 16 * 16), "temporal_overlap": 4}},  # above the clip length: a split shows as a quality snap
-        "17": {"class_type": "CreateVideo", "inputs": {"images": ["16", 0], "fps": VIDEO_FPS}},
-        "10": {"class_type": "SaveVideo", "inputs": {"video": ["17", 0], "filename_prefix": prefix, "format": "auto", "codec": "auto"}},
-        # the last frame as PNG, before the video encoder touches it: the next part starts from this one
-        "30": {"class_type": "ImageFromBatch", "inputs": {"image": ["16", 0], "batch_index": frames - 1, "length": 1}},
-        "11": {"class_type": "SaveImage", "inputs": {"images": ["30", 0], "filename_prefix": prefix}},
-    }
-    if end:
-        graph["31"] = {"class_type": "LoadImage", "inputs": {"image": end}}
-        graph["13"]["class_type"] = "WanFirstLastFrameToVideo"
-        graph["13"]["inputs"]["end_image"] = ["31", 0]
-    return graph
+def ltx_frames(n: int) -> int:
+    """LTX takes 8k + 1 frames: the next one at or above n."""
+    return max(9, -(-(n - 1) // 8) * 8 + 1)
 
 
-def ltx_workflow(image: str, prompt: str, width: int, height: int, seed: int, prefix: str, frames: int, end: str | None = None) -> dict:
-    """LTX 2.3 dev Q6 + distill LoRA: pass 1 at ~0.77 of the board size (8 steps), LTX's latent upscaler x2, pass 2 refines (4 steps, denoise 0.4).
-    Rendered at 16 fps so it cuts with the Wan shots; the audio track is made (the model wants it) and dropped.
-    Both passes need sizes divisible by 32, so the render can be a bit larger and is scaled to the board size at the end.
-    No negative: at CFG 1 ComfyUI skips it anyway. Same output node ids as video_workflow (10 clip, 11 last frame).
-    With end (a bridge), LTXVAddGuide pins that picture to the last frame in both passes; LTXVCropGuides takes the guide
-    frames off again before the upscale and before the decode."""
-    frames = (frames - 1 + 7) // 8 * 8 + 1  # LTX takes 8n + 1
-    # pass 1 at ~0.77 of the board size, not half: at 256x416 hair, hands and limbs broke; 384x640 (for 480x832) came out
-    # clean at about the same time (spike_ltx_res.py, 2026-11-10). 24 fps brought nothing, so the board's 16 fps stays.
-    half_w, half_h = max(32, round(width * 0.77 / 32) * 32), max(32, round(height * 0.77 / 32) * 32)
-    f = LTX_FILES
-    g = {
-        "1g": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": f["unet"]}},
-        "1": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["1g", 0], "lora_name": f["lora"], "strength_model": 1.0}},
-        "2": {"class_type": "DualCLIPLoaderGGUF", "inputs": {"clip_name1": f["text_encoders"], "clip_name2": f["text_projection"], "type": "ltxv"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": f["vae"]}},
-        "4": {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": f["audio_vae"]}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-        "6": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["5", 0]}},
-        "7": {"class_type": "LTXVConditioning", "inputs": {"positive": ["5", 0], "negative": ["6", 0], "frame_rate": VIDEO_FPS}},
-        "8": {"class_type": "LoadImage", "inputs": {"image": image}},
-        "9": {"class_type": "LTXVPreprocess", "inputs": {"image": ["8", 0], "img_compression": 35}},
-        "12": {"class_type": "EmptyLTXVLatentVideo", "inputs": {"width": half_w, "height": half_h, "length": frames, "batch_size": 1}},
-        "13": {"class_type": "LTXVImgToVideoInplace", "inputs": {"vae": ["3", 0], "image": ["9", 0], "latent": ["12", 0], "strength": 1.0, "bypass": False}},
-        "14": {"class_type": "LTXVEmptyLatentAudio", "inputs": {"frames_number": frames, "frame_rate": VIDEO_FPS, "batch_size": 1, "audio_vae": ["4", 0]}},
-        "15": {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": ["13", 0], "audio_latent": ["14", 0]}},
-        "16": {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": ["7", 0], "negative": ["7", 1], "cfg": 1.0}},
-        "17": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler_cfg_pp"}},
-        "18": {"class_type": "BasicScheduler", "inputs": {"model": ["1", 0], "scheduler": "linear_quadratic", "steps": 8, "denoise": 1.0}},
-        "19": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
-        "20": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["19", 0], "guider": ["16", 0], "sampler": ["17", 0], "sigmas": ["18", 0], "latent_image": ["15", 0]}},
-        "21": {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["20", 0]}},
-        "22": {"class_type": "LatentUpscaleModelLoader", "inputs": {"model_name": f["upscaler"]}},
-        "23": {"class_type": "LTXVLatentUpsampler", "inputs": {"samples": ["21", 0], "upscale_model": ["22", 0], "vae": ["3", 0]}},
-        "24": {"class_type": "LTXVImgToVideoInplace", "inputs": {"vae": ["3", 0], "image": ["9", 0], "latent": ["23", 0], "strength": 1.0, "bypass": False}},
-        "25": {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": ["24", 0], "audio_latent": ["21", 1]}},
-        "26": {"class_type": "BasicScheduler", "inputs": {"model": ["1", 0], "scheduler": "linear_quadratic", "steps": 4, "denoise": 0.4}},
-        "27": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed + 1}},
-        "28": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["27", 0], "guider": ["16", 0], "sampler": ["17", 0], "sigmas": ["26", 0], "latent_image": ["25", 0]}},
-        "29": {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["28", 0]}},
-        "31": {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["29", 0], "vae": ["3", 0], "tile_size": 256, "overlap": 64, "temporal_size": 48, "temporal_overlap": 8}},
-        "32": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "upscale_method": "lanczos", "width": width, "height": height, "crop": "center"}},
-        "17v": {"class_type": "CreateVideo", "inputs": {"images": ["32", 0], "fps": VIDEO_FPS}},
-        "10": {"class_type": "SaveVideo", "inputs": {"video": ["17v", 0], "filename_prefix": prefix, "format": "auto", "codec": "auto"}},
-        "30": {"class_type": "ImageFromBatch", "inputs": {"image": ["32", 0], "batch_index": frames - 1, "length": 1}},
-        "11": {"class_type": "SaveImage", "inputs": {"images": ["30", 0], "filename_prefix": prefix}},
-    }
-    if end:
-        g["40"] = {"class_type": "LoadImage", "inputs": {"image": end}}
-        g["41"] = {"class_type": "LTXVPreprocess", "inputs": {"image": ["40", 0], "img_compression": 35}}
-        for guide, cond, lat, concat, guider, sampler, sep, crop in (("42", ["7", 0], "13", "15", "16", "20", "21", "43"),
-                                                                       ("44", ["7", 0], "24", "25", "46", "28", "29", "45")):
-            g[guide] = {"class_type": "LTXVAddGuide", "inputs": {"positive": cond, "negative": ["7", 1], "vae": ["3", 0],
-                        "latent": [lat, 0], "image": ["41", 0], "frame_idx": -1, "strength": 1.0}}
-            g[concat]["inputs"]["video_latent"] = [guide, 2]
-            g[guider] = {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": [guide, 0], "negative": [guide, 1], "cfg": 1.0}}
-            g[sampler]["inputs"]["guider"] = [guider, 0]
-            g[crop] = {"class_type": "LTXVCropGuides", "inputs": {"positive": [guide, 0], "negative": [guide, 1], "latent": [sep, 0]}}
-        g["23"]["inputs"]["samples"] = ["43", 2]  # upscale without the guide frames
-        g["31"]["inputs"]["samples"] = ["45", 2]  # decode without them
-    return g
+def engine_size(width: int, height: int) -> tuple[int, int]:
+    """LTX renders multiples of 64; the frames are scaled to the asked size afterwards."""
+    return max(64, round(width / 64) * 64), max(64, round(height / 64) * 64)
 
 
-# Wan 2.2's HIGH expert makes the motion, LOW the details (DaSiWa guide): more of the 4 steps on HIGH means more motion,
-# a lower shift broader, more varied movement. Same render time either way.
+def video_clip(start, prompt: str, width: int, height: int, seed: int, frames: int = VIDEO_FRAMES,
+               end=None, stopped=lambda: False, progress=None, stats: dict | None = None) -> list:
+    """One LTX clip in the WSL engine: start picture (+ end picture for a bridge) -> its frames as PIL images at width x height.
+    Call with the server's GPU lock held. ComfyUI is stopped first: the engine and ComfyUI never share the card."""
+    from engine import jobs as ejobs, wsl_runner
+    stop_comfy()
+    w, h = engine_size(width, height)
+    tmp = wsl_runner.JOBS_DIR / f"in_{time.time_ns():x}"
+    tmp.mkdir(parents=True, exist_ok=True)
+    try:
+        start.convert("RGB").resize((w, h), Image.LANCZOS).save(tmp / "start.png")
+        s = {"model_type": ejobs.MODELS["ltx23"], "seed": int(seed) % 2**31, "resolution": f"{w}x{h}",
+             "video_length": ltx_frames(frames), "force_fps": VIDEO_FPS, "multi_prompts_gen_type": "FG",
+             "prompt": prompt, "image_prompt_type": "SE" if end is not None else "S", "image_start": str(tmp / "start.png"),
+             **ejobs.ltx_steps(8)}
+        if end is not None:
+            end.convert("RGB").resize((w, h), Image.LANCZOS).save(tmp / "end.png")
+            s["image_end"] = str(tmp / "end.png")
+        seen = {"offset": 0, "key": None}
+
+        def on_event(ev):
+            if not progress or ev.get("phase") != "inference" or not ev.get("total"):
+                return
+            if ev["total"] != seen["key"] and seen["key"] is not None:
+                seen["offset"] += seen["key"]  # the refine pass counts on from the main pass
+            seen["key"] = ev["total"]
+            progress(min(seen["offset"] + (ev.get("step") or 0), VIDEO_STEPS), VIDEO_STEPS)
+
+        wsl_runner.wait_for_ram(stopped)
+        out = wsl_runner.run({"kind": "render", "settings": s}, on_event, stopped, keep_warm=VIDEO_KEEP_WARM)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    made = Path(out["file"])
+    try:
+        clip = [f.resize((width, height), Image.LANCZOS) if f.size != (width, height) else f for f in video_frames(made)]
+    finally:
+        made.unlink(missing_ok=True)
+    if stats is not None:
+        stats.update({k: out[k] for k in ("vram_peak_gb", "ram_peak_gb") if k in out}, engine="wsl")
+    return clip
+
+
+# Motion: from the Wan 2.2 days; boards still store and show it, LTX does not use it.
 VIDEO_MOTION = {"normal": {"label": "Normal", "high": 2, "shift": 5.0},
                 "more": {"label": "More", "high": 3, "shift": 5.0},
                 "wild": {"label": "Wild", "high": 3, "shift": 4.0}}
@@ -945,11 +883,21 @@ def video_model(m) -> str:
     return m if m in VIDEO_MODELS else VIDEO_DEFAULT
 
 
+_INSTALLED = {"at": 0.0, "ok": False}
+
+
 def video_installed(model: str = VIDEO_DEFAULT) -> bool:
-    m = VIDEO_MODELS[video_model(model)]
-    if m.get("ltx"):
-        return all((COMFY_MODELS / LTX_DIRS[k] / f).is_file() for k, f in LTX_FILES.items())
-    return all((COMFY_MODELS / "unet" / f).is_file() for f in (m["high"], m["low"]))
+    """LTX's checkpoint on the WSL disk (checked at most once a minute: wsl.exe takes a moment)."""
+    import subprocess
+    if time.time() - _INSTALLED["at"] > 60:
+        try:
+            r = subprocess.run(["wsl.exe", "-d", "Ubuntu-24.04", "-u", "root", "--", "test", "-f", LTX_CKPT], timeout=60,
+                               capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            _INSTALLED["ok"] = r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _INSTALLED["ok"] = False
+        _INSTALLED["at"] = time.time()
+    return _INSTALLED["ok"]
 
 
 def video_models() -> list[dict]:
@@ -966,45 +914,6 @@ def stop_comfy() -> None:
         if not comfy_up():
             return
         time.sleep(0.25)
-
-
-def video_part(graph: dict, stopped, progress, stats: dict | None = None) -> tuple[Path, Path]:
-    """Render one graph, with the same stop and RAM guards throughout; returns ComfyUI's clip and last-frame PNG.
-    stats, if given, gets the peaks: VRAM in use on the card (all processes) and system RAM in use, in GB."""
-    import psutil
-    client, done = uuid.uuid4().hex, threading.Event()
-    if progress:
-        ready = threading.Event()
-        threading.Thread(target=watch, args=(client, progress, ready, done), daemon=True).start()
-        ready.wait(3)
-    try:
-        prompt_id = call("/prompt", {"prompt": graph, "client_id": client})["prompt_id"]
-        while True:
-            if stopped():
-                stop_comfy()
-                raise ValueError("Stopped.")
-            if psutil.virtual_memory().available < VIDEO_MIN_RAM:
-                stop_comfy()
-                raise RuntimeError("Stopped to protect the PC: less than 3 GB RAM left.")
-            if stats is not None:
-                ram = psutil.virtual_memory()
-                stats["ram_peak_gb"] = max(stats.get("ram_peak_gb", 0), round((ram.total - ram.available) / 1024**3, 1))
-                try:
-                    dev = call("/system_stats")["devices"][0]
-                    stats["vram_peak_gb"] = max(stats.get("vram_peak_gb", 0), round((dev["vram_total"] - dev["vram_free"]) / 1024**3, 1))
-                    stats["vram_total_gb"] = round(dev["vram_total"] / 1024**3, 1)
-                except Exception:
-                    pass
-            hist = call(f"/history/{prompt_id}").get(prompt_id)
-            if hist and hist.get("status", {}).get("status_str") == "error":
-                raise RuntimeError(f"ComfyUI error: {json.dumps(hist['status'])[:1500]}")
-            if hist and hist.get("status", {}).get("completed"):
-                break
-            time.sleep(0.5)
-    finally:
-        done.set()
-    clip, last = hist["outputs"]["10"]["images"][0], hist["outputs"]["11"]["images"][0]
-    return tuple(ROOT / "ComfyUI" / "output" / f["subfolder"] / f["filename"] for f in (clip, last))
 
 
 def video_frames(path: Path) -> list:
@@ -1031,40 +940,29 @@ def run_video(source: Path, source_name: str, sets: list[dict], preset: str, len
               progress=None, on_part=None) -> dict:
     """Render a clip into output/videos in 2 s parts: each part starts on the last frame of the one before and takes its
     own prompt set from sets (the last set repeats if the clip is longer). The clip and
-    its sidecar are rewritten after every part, so stopping keeps what is done. stopped() true, or RAM nearly gone, kills ComfyUI."""
+    its sidecar are rewritten after every part, so stopping keeps what is done. Each part renders in the WSL engine (video_clip)."""
     width, height = VIDEO_PRESETS[preset]["size"]
     with Image.open(source) as im:
         if im.width > im.height:
             width, height = height, width  # a landscape picture stays landscape
         start = im.convert("RGB")
-    seed = random.randrange(2**32 - 16)
+    seed = random.randrange(2**31 - 16)
     name = f"{time.strftime('%Y%m%d-%H%M%S')}_wake_{preset}_{slug(sets[0]['prompt'])}_{seed}"
-    staged = COMFY_INPUT / "morpheus" / f"wake_{time.time_ns():x}.png"
-    staged.parent.mkdir(parents=True, exist_ok=True)
     VIDEO_DIR.mkdir(parents=True, exist_ok=True)
     began, parts, frames, meta = time.time(), length // 2, [], {}
-    try:
-        for n in range(parts):
-            if on_part:
-                on_part(n + 1, parts)
-            start.save(staged)
-            use = sets[min(n, len(sets) - 1)]
-            graph = video_workflow(f"morpheus/{staged.name}", use["prompt"], use["negative"], width, height, seed + n, f"morpheus/{name}_p{n}")
-            made, last = video_part(graph, stopped, progress)
-            part = video_frames(made)
-            made.unlink(missing_ok=True)
-            frames += part if n == 0 else part[1:]  # the first frame repeats the last one of the part before
-            with Image.open(last) as im:
-                start = im.convert("RGB")
-            last.unlink(missing_ok=True)
-            video_write(frames, VIDEO_DIR / f"{name}.mp4")
-            frames[len(frames) // 2].resize((160, round(160 * height / width))).save(VIDEO_DIR / f"{name}_thumb.jpg", quality=85)
-            meta = {"video": f"videos/{name}.mp4", "thumb": f"videos/{name}_thumb.jpg", "source": source_name, "prompt": sets[0]["prompt"], "sets": sets, "preset": preset,
-                    "width": width, "height": height, "seed": seed, "length": (n + 1) * 2, "seconds": round(time.time() - began),
-                    "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
-            (VIDEO_DIR / f"{name}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    finally:
-        staged.unlink(missing_ok=True)
+    for n in range(parts):
+        if on_part:
+            on_part(n + 1, parts)
+        use = sets[min(n, len(sets) - 1)]
+        part = video_clip(start, use["prompt"], width, height, seed + n, stopped=stopped, progress=progress)
+        frames += part if n == 0 else part[1:]  # the first frame repeats the last one of the part before
+        start = part[-1]
+        video_write(frames, VIDEO_DIR / f"{name}.mp4")
+        frames[len(frames) // 2].resize((160, round(160 * height / width))).save(VIDEO_DIR / f"{name}_thumb.jpg", quality=85)
+        meta = {"video": f"videos/{name}.mp4", "thumb": f"videos/{name}_thumb.jpg", "source": source_name, "prompt": sets[0]["prompt"], "sets": sets, "preset": preset,
+                "width": width, "height": height, "seed": seed, "length": (n + 1) * 2, "seconds": round(time.time() - began),
+                "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        (VIDEO_DIR / f"{name}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta
 
 
@@ -1072,9 +970,9 @@ def run_video(source: Path, source_name: str, sets: list[dict], preset: str, len
 BOARD_DIR = OUTPUT / "boards"
 BOARD_LOCK = threading.RLock()
 SHOT_FIELDS = ("id", "label", "start", "source", "prompt", "negative", "seed", "transition", "length", "motion", "tempo", "model", "character")
-SHOT_TEMPOS = (1, 1.25, 1.5)  # up-casting (DaSiWa guide): render more frames, play them in the shot's length; against Wan's slow motion  # what the page may change
+SHOT_TEMPOS = (1, 1.25, 1.5)  # up-casting: render more frames, play them in the shot's length (against slow motion)
 RENDER_FIELDS = ("clip", "last", "thumb", "seconds", "done", "bridge", "bridge_seconds", "bridge_done", "stats")  # what only a render writes
-SHOT_LENGTHS = (2, 3, 4, 5)  # seconds; Wan takes 4n + 1 frames
+SHOT_LENGTHS = (2, 3, 4, 5)  # seconds; LTX takes 8n + 1 frames
 TRANSITIONS = ("cut", "fade", "flash", "bridge")
 FLASH_COLORS = {"violet": (150, 70, 255), "pink": (255, 60, 200), "cyan": (60, 230, 255), "white": (255, 255, 255), "black": (0, 0, 0)}
 
@@ -1267,25 +1165,13 @@ def board_bridge(board: dict, i: int, sig: str, stopped, progress) -> None:
     """A new clip from the last frame of shot i-1 to the first frame of shot i."""
     s, before, folder = board["shots"][i], board["shots"][i - 1], board_file(board["id"]).parent
     width, height = board_size(board)
-    tag = f"bridge_{time.time_ns():x}"
-    first, last = COMFY_INPUT / "morpheus" / f"{tag}_a.png", COMFY_INPUT / "morpheus" / f"{tag}_b.png"
-    first.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(OUTPUT / before["last"]) as im:
-        im.convert("RGB").resize((width, height)).save(first)
-    video_frames(OUTPUT / s["clip"])[0].resize((width, height)).save(last)
+        first = im.convert("RGB").resize((width, height))
+    last = video_frames(OUTPUT / s["clip"])[0].resize((width, height))
     motion = s["transition"]["prompt"].strip() or "One smooth continuous camera move from the first picture to the second."
     prompt = ". ".join(x.strip().rstrip(".") for x in (shot_character(board, s), motion) if x.strip()) + "."
     began = time.time()
-    try:
-        graph = video_workflow(f"morpheus/{first.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["transition"]["seed"],
-                               f"morpheus/{tag}", f"morpheus/{last.name}", model=bridge_model(board, s), motion=shot_motion(board, s))
-        made, end = video_part(graph, stopped, progress)
-    finally:
-        first.unlink(missing_ok=True)
-        last.unlink(missing_ok=True)
-    frames = video_frames(made)
-    made.unlink(missing_ok=True)
-    end.unlink(missing_ok=True)
+    frames = video_clip(first, prompt, width, height, s["transition"]["seed"], end=last, stopped=stopped, progress=progress)
     video_write(frames, folder / f"{s['id']}_bridge.mp4")
     with BOARD_LOCK:
         now = board_load(board["id"])
@@ -1303,27 +1189,17 @@ def board_shot(board: dict, i: int, sig: str, stopped, progress) -> None:
     chained = i > 0 and s["start"] == "continue"
     with Image.open(OUTPUT / (board["shots"][i - 1]["last"] if chained else s["source"])) as im:
         start = ImageOps.fit(im.convert("RGB"), (width, height), Image.LANCZOS)
-    staged = COMFY_INPUT / "morpheus" / f"board_{time.time_ns():x}.png"
-    staged.parent.mkdir(parents=True, exist_ok=True)
-    start.save(staged)
     prompt = ". ".join(x.strip().rstrip(".") for x in (shot_character(board, s), s["prompt"]) if x.strip()) + "."
     began = time.time()
-    try:
-        tempo = s.get("tempo", 1) if s.get("tempo", 1) in SHOT_TEMPOS else 1
-        keep_n = s.get("length", 2) * VIDEO_FPS + 1  # what the shot plays
-        frames_n = -(-round(s.get("length", 2) * VIDEO_FPS * tempo) // 4) * 4 + 1  # what Wan renders: 4n + 1
-        graph = video_workflow(f"morpheus/{staged.name}", prompt, s["negative"] or VIDEO_NEGATIVE, width, height, s["seed"], f"morpheus/board_{s['id']}",
-                               frames=frames_n, model=shot_model(board, s), motion=shot_motion(board, s))
-        stats = {"model": shot_model(board, s), "motion": shot_motion(board, s), "tempo": tempo, "frames": frames_n, "size": f"{width}x{height}"}
-        made, last = video_part(graph, stopped, progress, stats)
-    finally:
-        staged.unlink(missing_ok=True)
-    frames = video_frames(made)
-    made.unlink(missing_ok=True)
+    tempo = s.get("tempo", 1) if s.get("tempo", 1) in SHOT_TEMPOS else 1
+    keep_n = s.get("length", 2) * VIDEO_FPS + 1  # what the shot plays
+    frames_n = ltx_frames(round(s.get("length", 2) * VIDEO_FPS * tempo) + 1)  # what LTX renders: 8n + 1
+    stats = {"model": shot_model(board, s), "tempo": tempo, "frames": frames_n, "size": f"{width}x{height}"}
+    frames = video_clip(start, prompt, width, height, s["seed"], frames=frames_n, stopped=stopped, progress=progress, stats=stats)
     if len(frames) > keep_n:  # faster tempo: spread the shot's frames evenly over the render, first and last kept
         frames = [frames[round(i * (len(frames) - 1) / (keep_n - 1))] for i in range(keep_n)]
     video_write(frames, folder / f"{s['id']}.mp4")
-    shutil.move(str(last), folder / f"{s['id']}_last.png")
+    frames[-1].save(folder / f"{s['id']}_last.png")
     frames[len(frames) // 2].resize((160, round(160 * height / width))).save(folder / f"{s['id']}_thumb.jpg", quality=85)
     base = f"boards/{board['id']}/{s['id']}"
     with BOARD_LOCK:

@@ -1,6 +1,6 @@
 """Render jobs for the Morpheus video engine: a Playground snapshot or an upscale request -> the settings dict the
 WanGP copy in engine/wangp/ takes. Pure Python (no torch), so server.py and the tests import it from the light venv;
-engine/worker.py runs the result in the engine venv.
+engine/wsl/warm_worker.py runs the result in WSL.
 
 Every value here comes from the 2026-11 WanGP spike (Glia seed seed_2026_11_13_playground_wangp_native): what is
 not measured there is not offered. Before adding anything: look how WanGP does it first (engine/PROVENANCE.md).

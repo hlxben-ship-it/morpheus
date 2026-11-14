@@ -10,4 +10,8 @@ sync; echo 3 > /proc/sys/vm/drop_caches
 # keep the page cache flat while the model loads (else the VM holds the file twice and Windows runs out of RAM)
 ( for i in $(seq 1 40); do sleep 5; sync; echo 1 > /proc/sys/vm/drop_caches; done ) &
 cd /root/wangp
-exec /root/venv/bin/python "$(dirname "$0")/warm_worker.py" --keep-warm "${1:-600}"
+/root/venv/bin/python "$(dirname "$0")/warm_worker.py" --keep-warm "${1:-600}"
+code=$?
+# hand the memory back to Windows at once (else vmmemWSL keeps ~7 GB for a long while)
+sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory
+exit $code

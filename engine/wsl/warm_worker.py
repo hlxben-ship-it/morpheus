@@ -2,7 +2,7 @@
 
     python warm_worker.py [--keep-warm SECONDS]        (inside WSL, after env.sh)
 
-stdin     one JSON job per line, same shape as Morpheus engine/worker.py jobs:
+stdin     one JSON job per line, the Morpheus engine job shape:
             {"kind": "render", "settings": {...}, "out_dir": "...", "result": "...json", "id": "..."}
             {"kind": "upscale", "video": "...", "upsampling": "relayvsr*1.5", "out_dir": "...", "result": "...", "id": "..."}
             {"kind": "unload"}   frees the model, stays alive        {"kind": "quit"}
@@ -69,6 +69,9 @@ def main():
             try: wgp.release_model()
             except Exception as e: say({"event": "error", "id": jid, "message": f"unload: {e}"})
             say({"event": "unloaded", "id": jid}); continue
+        try:  # page cache from the last job (or a big file copy) pushes the next one into swap: 4x slower (2026-11-14 bridge bench)
+            os.sync(); open("/proc/sys/vm/drop_caches", "w").write("1")
+        except OSError: pass
         t0 = time.time()
         try:
             import torch; torch.cuda.reset_peak_memory_stats()

@@ -7,7 +7,7 @@ its `defaults/*.json`, `profiles/`, the docs inside `models/<family>/*_handler.p
 |---|---|
 | Source | WanGP by DeepBeepMeep, https://github.com/deepbeepmeep/WanGP |
 | Version | **v19.29**, repo commit **`49f128de`** |
-| Reference checkout | `C:/dev/wangp` (kept read-only; its spike scripts `morpheus_bench.py` / `morpheus_upscale.py` are the origin of `worker.py`) |
+| Reference checkout | `C:/dev/wangp` was the spike checkout; **deleted 2026-11-14**. The running copy is `/root/wangp` in WSL (two AMD patches, see the Glia page wsl_render_engine) |
 | Licence | WanGP Community License 2.0, full text in `wangp/LICENSE.txt`. Own use and modification are fine; no selling, white-labelling, paid API / SaaS. Keep this repo private and the notices in the files. |
 | Copied | 2026-11-13, Glia seed `seed_2026_11_13_playground_wangp_native` (G1: copied as-is, cut, slim later) |
 
@@ -30,12 +30,12 @@ its `defaults/*.json`, `profiles/`, the docs inside `models/<family>/*_handler.p
 | `wangp/wgp_config.json` | WanGP's config from the spike, **paths changed**: checkpoints in `../../models/{ltx,h3,upscale}`, LoRAs in `../../models/loras`, output `../../output/engine` |
 | `wangp/ffmpeg_bins/` | downloaded by WanGP on the first start (not in git) |
 | `jobs.py`, `worker.py`, `runner.py`, `__init__.py` | **ours**: Playground snapshot → WanGP settings; the one-job worker process; the server-side launcher |
-| `.venv/` | not in git: **hard links** to `C:/dev/wangp/venv` (Python 3.12.10, torch 2.9.1+rocm7.2.1). A *copy* is blocked by Smart App Control (torch's DLLs), hard links keep the same trusted files and cost no disk space |
+| `.venv/`, `runner.py`, `worker.py` | **gone 2026-11-14**: the Windows worker. Every job runs in `wsl_runner.py` → `wsl/warm_worker.py` |
 
 ## Models (G12)
 
-One folder, `C:/dev/morpheus/models/` (not in git): `ltx/` (dev Q6 GGUF, VAE / audio VAE / vocoder / connector / projection,
-spatial + temporal upscalers, Gemma 3 12B encoder), `h3/` (HyperFlow Flash 14B int8, audio VAE, `minimax_h3/` LightVAE + latent
-upscaler, `P-H3-Image-Qwen3-VL-4B/`), `upscale/` (`RelayVSR/`, `SeedVR2/`), `loras/ltx2/` (distill LoRA 1.1, owner LoRAs).
-All are **hard links** to the files in `C:/dev/wangp/ckpts` and `ComfyUI/models` (ComfyUI still reads its LTX files): deleting
-the WanGP copies later frees nothing until the last link is gone, and loses nothing.
+**Since 2026-11-14 every render runs in WSL** (`engine/wsl_runner.py` + `engine/wsl/`); its checkpoints live on the WSL ext4
+disk: `/root/wangp/ckpts` (LTX dev Q6 GGUF + VAE/audio/vocoder/connector/projection/upscalers, Gemma 3 12B, H3 HyperFlow,
+`minimax_h3/`, `P-H3-Image-Qwen3-VL-4B/`), `/root/wangp/loras/ltx2/`, `/root/wangp/finetunes/ltx2_22B_dev_q6.json`.
+Upscalers (`RelayVSR/`, `SeedVR2/`) too. Nothing video is left on Windows: `models/{ltx,h3,upscale,loras/ltx2}`, `C:/dev/wangp`,
+the engine venv and ComfyUI's video models are deleted. `engine/wangp/` here stays as the reviewed source copy.

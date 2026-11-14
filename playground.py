@@ -1,7 +1,7 @@
 """Dawnforge Playground: one free local-video page per folder, output/playground/<id>/.
 
 The page's state lives here (model, selects, prompt, frames, two LoRA paths + strengths), the LoRA header read and the
-clip shelf. Rendering runs in the engine worker (engine/), started by server.py. The id is the folder name, so
+clip shelf. Rendering runs in the WSL engine worker (engine/wsl_runner.py), started by server.py. The id is the folder name, so
 /dawnforge/playground/<id> can be rebuilt from a folder on disk.
 """
 import base64

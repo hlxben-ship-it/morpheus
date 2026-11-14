@@ -27,7 +27,7 @@ import agent_chat
 import agents
 import morpheus
 import playground
-from engine import jobs as engine_jobs, runner as engine_runner, wsl_runner as engine_wsl
+from engine import jobs as engine_jobs, wsl_runner as engine_wsl
 import yumeko
 import yumeko_auto
 import soulforge
@@ -61,12 +61,8 @@ def other_vram_gb() -> float:
         return 2.0
 
 
-COMFY_MODE = None  # "video" once started with the video flags; those stay off for pictures
-
-
-def start_comfy(video: bool, timeout: float) -> None:
-    """Hold comfy_lock. Start ComfyUI in the background, then wait until it answers."""
-    global COMFY_MODE
+def start_comfy(timeout: float) -> None:
+    """Hold comfy_lock. Start ComfyUI (pictures only; all video renders in the WSL engine) and wait until it answers."""
     engine_wsl.release()  # a warm WSL render worker would hold the RAM and VRAM ComfyUI is about to plan with
     log = open(morpheus.ROOT / "comfyui.log", "ab")
     # ComfyUI can't see what the desktop and browser hold on the card (measured 1.5-7 GB); without this reserve
@@ -74,8 +70,7 @@ def start_comfy(video: bool, timeout: float) -> None:
     # The overcount swings with what the desktop maps (11.9 to 14.9 GB on one afternoon). At 11.9 every model ran
     # well (SDXL 13 s, Qwen-Edit 85 s); at 14.6 SDXL itself was offloaded (20 s); at 5 Qwen spilled (135 s a step)
     reserve = min(other_vram_gb() + 1.0, 12.0)
-    flags = (["--reserve-vram", "1", "--disable-smart-memory", "--cache-none"] if video else
-             ["--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"])
+    flags = ["--preview-method", "latent2rgb", "--reserve-vram", f"{reserve:.1f}"]
     # our route for the loaded models, refreshed every start so an update lands
     shutil.copy2(morpheus.ROOT / "comfy_ext" / "morpheus_status.py", morpheus.ROOT / "ComfyUI" / "custom_nodes")
     subprocess.Popen(
@@ -83,7 +78,6 @@ def start_comfy(video: bool, timeout: float) -> None:
          "--disable-auto-launch", *flags],
         stdout=log, stderr=subprocess.STDOUT, cwd=morpheus.ROOT,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    COMFY_MODE = "video" if video else None
     deadline = time.time() + timeout
     while time.time() < deadline:
         if morpheus.comfy_up():
@@ -93,25 +87,10 @@ def start_comfy(video: bool, timeout: float) -> None:
 
 
 def ensure_comfy(timeout: float = 300) -> None:
-    """ComfyUI ready for pictures. After a clip it restarts without the video flags, once the GPU is free."""
-    if COMFY_MODE == "video":
-        with gpu, comfy_lock:  # always gpu before comfy_lock, as in ensure_video_comfy
-            if COMFY_MODE == "video":
-                morpheus.stop_comfy()
-                start_comfy(False, timeout)
-        return
+    """ComfyUI ready for pictures (a video clip stops it; it comes back here on the next picture)."""
     with comfy_lock:
         if not morpheus.comfy_up():
-            start_comfy(False, timeout)
-
-
-def ensure_video_comfy(timeout: float = 300) -> None:
-    """Call with gpu held, so no picture is rendering when ComfyUI restarts with the video flags."""
-    with comfy_lock:
-        if morpheus.comfy_up() and COMFY_MODE == "video":
-            return
-        morpheus.stop_comfy()
-        start_comfy(True, timeout)
+            start_comfy(timeout)
 
 
 # Claude runs from its own empty folder: inside C:\dev it would pick up the projects' CLAUDE.md files,
@@ -1546,7 +1525,7 @@ class Handler(BaseHTTPRequestHandler):
         if preset not in morpheus.VIDEO_PRESETS:
             raise ValueError("Please pick Low or High.")
         if not morpheus.video_installed():
-            raise ValueError("The Wan 2.2 DaSiWa models are not installed.")
+            raise ValueError("LTX 2.3 is not installed in WSL (/root/wangp/ckpts).")
         if source.startswith("upload:"):
             source = self.keep_upload(source.removeprefix("upload:"))
         picture = (morpheus.OUTPUT / source).resolve()
@@ -1561,9 +1540,7 @@ class Handler(BaseHTTPRequestHandler):
         with gpu:
             if job.get("_stop"):
                 raise ValueError("Stopped.")
-            job["phase"] = "Starting ComfyUI"
-            ensure_video_comfy()
-            job["phase"] = "Loading models"
+            job["phase"] = "Starting the engine"
             return morpheus.run_video(picture, source, sets, preset, length, lambda: job.get("_stop"), progress, on_part)
 
     def wake_stage(self, job):
@@ -1572,7 +1549,7 @@ class Handler(BaseHTTPRequestHandler):
 
         def on_part(n, parts):
             stage["label"] = f"Rendering part {n} of {parts}" if parts > 1 else "Rendering"
-            stage["total"] = parts * 4
+            stage["total"] = parts * morpheus.VIDEO_STEPS
             job["phase"] = "Loading models" if n == 1 else stage["label"]
 
         def progress(step=None, total=None, preview=None):
@@ -1582,7 +1559,7 @@ class Handler(BaseHTTPRequestHandler):
                 stage["offset"] += stage["last"]
             stage["last"] = step
             job["step"], job["total"] = min(stage["offset"] + step, stage["total"]), stage["total"]
-            job["phase"] = "Finishing the part" if stage["offset"] + step >= 4 and (stage["offset"] + step) % 4 == 0 else stage["label"]
+            job["phase"] = stage["label"]
         return on_part, progress
 
     def keep_upload(self, upload_id):
@@ -1611,7 +1588,7 @@ class Handler(BaseHTTPRequestHandler):
     def board_render(self, req):
         """Render a storyboard, all of it or up to one shot. Stops through /api/wake/stop like a clip."""
         if not morpheus.video_installed():
-            raise ValueError("The Wan 2.2 DaSiWa models are not installed.")
+            raise ValueError("LTX 2.3 is not installed in WSL (/root/wangp/ckpts).")
         board_id, shot = str(req.get("id", "")), req.get("shot")
         job = req.get("_job", {})
         job["phase"] = "Waiting for the GPU"
@@ -1624,22 +1601,20 @@ class Handler(BaseHTTPRequestHandler):
         with gpu:
             if job.get("_stop"):
                 raise ValueError("Stopped.")
-            job["phase"] = "Starting ComfyUI"
-            ensure_video_comfy()
-            job["phase"] = "Loading models"
+            job["phase"] = "Starting the engine"
             morpheus.board_render(board_id, shot, lambda: job.get("_stop"), progress, part)
         return morpheus.board_view(morpheus.board_load(board_id))
 
     ENGINE_PHASES = {"loading_model": "Loading the models", "encoding_text": "Reading the prompt", "inference": "Rendering",
                      "decoding": "Decoding the video", "postprocessing": "Upscaling", "starting_wsl": "Starting WSL"}
 
-    # engine choice from the page -> seconds the WSL worker keeps the model loaded after a job (None = Windows worker)
+    # keep-warm choice from the page -> seconds the WSL worker keeps the model loaded after a job
     WSL_KEEP = {"wsl": 20, "wsl10": 600, "wsl30": 1800}
 
-    def engine_job(self, job: dict, work: dict, total: int | None, engine: str = "win") -> dict:
-        """One engine worker job (engine/runner.py, or engine/wsl_runner.py for H3 when the page picks WSL) under the GPU
-        lock, ComfyUI stopped first: the worker and ComfyUI never share the GPU. Progress goes to the job the page polls;
-        the worker's per-phase steps are summed over phases (LTX: main pass, then refine). Stop (/api/playground/stop) kills the worker."""
+    def engine_job(self, job: dict, work: dict, total: int | None, engine: str = "wsl10") -> dict:
+        """One render or upscale in the WSL worker (engine/wsl_runner.py) under the GPU lock, ComfyUI stopped first: the engine
+        and ComfyUI never share the GPU. Progress goes to the job the page polls; the worker's per-phase steps are summed
+        over phases (LTX: main pass, then refine). Stop (/api/playground/stop) kills the worker."""
         stopped = lambda: job.get("_stop")
         job.update(phase="Waiting for the GPU", step=0, total=total)
         seen = {"offset": 0, "key": None, "step": 0}
@@ -1660,21 +1635,16 @@ class Handler(BaseHTTPRequestHandler):
             elif total is None:  # an upscale: its own counter
                 job["step"], job["total"] = step, of
 
-        keep = self.WSL_KEEP.get(engine)
-        use_wsl = keep is not None and engine_wsl.handles(work)
+        keep = self.WSL_KEEP.get(engine, self.WSL_KEEP["wsl10"])
         with gpu:
             if stopped():
                 raise ValueError("Stopped.")
             job["phase"] = "Stopping ComfyUI"
             morpheus.stop_comfy()
-            if not use_wsl:
-                engine_wsl.release()  # a warm WSL worker holds ~23 GB RAM and the VRAM: the Windows worker needs them
             job["phase"] = "Waiting for free RAM"
-            (engine_wsl if use_wsl else engine_runner).wait_for_ram(stopped)
+            engine_wsl.wait_for_ram(stopped)
             job["phase"] = "Starting the engine"
-            if use_wsl:
-                return engine_wsl.run(work, progress, stopped, keep_warm=keep)
-            return engine_runner.run(work, progress, stopped)
+            return engine_wsl.run(work, progress, stopped, keep_warm=keep)
 
     def playground_render(self, req):
         """Render the Playground with the engine (LTX 2.3 / H3 HyperFlow). The settings are frozen when Render is
@@ -1683,7 +1653,7 @@ class Handler(BaseHTTPRequestHandler):
         snap = playground.snapshot(play_id)
         settings = engine_jobs.render_settings(snap, playground.folder(play_id))
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
-                              engine=str(req.get("engine") or "win"))
+                              engine=str(req.get("engine") or "wsl10"))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
 
     def playground_upscale(self, req):
@@ -1693,7 +1663,8 @@ class Handler(BaseHTTPRequestHandler):
         method = str(req.get("method", ""))
         upsampling = engine_jobs.upscale_request(method, req.get("factor"))
         mp4, meta = playground.clip_meta(play_id, video)
-        out = self.engine_job(req.get("_job", {}), {"kind": "upscale", "video": str(mp4), "upsampling": upsampling}, None)
+        out = self.engine_job(req.get("_job", {}), {"kind": "upscale", "video": str(mp4), "upsampling": upsampling}, None,
+                              engine=str(req.get("engine") or "wsl10"))
         snap = playground.upscaled_snap(meta, video, method, engine_jobs.UPSCALERS[method], float(req.get("factor")))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=meta.get("seed"), seconds=out["seconds"])
 
@@ -1802,7 +1773,7 @@ def warm_up() -> None:
 
 
 yumeko.ask_claude, yumeko.ensure_comfy, yumeko.CHAT_DIR = ask_claude, ensure_comfy, CHAT_DIR
-yumeko.ensure_video_comfy, yumeko.SERVER_GPU = ensure_video_comfy, gpu  # Animate that: the same lock and ComfyUI start as Dawnforge
+yumeko.SERVER_GPU = gpu  # Animate that: the same GPU lock as Dawnforge
 yumeko._unstick()  # panels cut off by the last restart are free again
 yumeko.register_all()
 yumeko_auto.resume_all()

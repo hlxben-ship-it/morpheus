@@ -1163,7 +1163,6 @@ def book_delete(req: dict) -> dict:
 
 
 # ---------- Animate that: a manga becomes a film, every panel a 2 s living picture (LTX, see the vault seed manga_comes_alive) ----------
-ensure_video_comfy = lambda: None  # server.py hands in its own, with its GPU lock
 SERVER_GPU = threading.Lock()
 MOTION_DEFAULT = "Subtle living motion: hair and clothes sway gently, she breathes and blinks, a slow camera push-in. Anime style."
 FILM_SIZE = (768, 512)  # 3:2 like the 1216x832 panels; LTX pass 1 then runs at 576x384
@@ -1210,7 +1209,7 @@ def book_animate(req: dict) -> dict:
         raise ValueError("No panel has a picture yet.")
     if training_now():
         raise ValueError("A LoRA is training; the GPU is taken until it finishes.")
-    state = ANIMATING[b["id"]] = {"at": 0, "of": len(todo), "panel": "", "step": 0, "total": 12, "error": None, "done": False}
+    state = ANIMATING[b["id"]] = {"at": 0, "of": len(todo), "panel": "", "step": 0, "total": morpheus.VIDEO_STEPS, "error": None, "done": False}
 
     def progress(step=None, total=None, preview=None):
         if step is not None:
@@ -1220,7 +1219,6 @@ def book_animate(req: dict) -> dict:
         try:
             frames = []
             with GPU, SERVER_GPU:  # Yumeko's lock first, then the server's: the order a panel render takes them (ensure_comfy), or two jobs deadlock
-                ensure_video_comfy()
                 for n, (p, shown) in enumerate(todo, 1):
                     motion = (p.get("motion") or "").strip() or MOTION_DEFAULT
                     state.update(at=n, panel=p.get("title", ""), step=0)
@@ -1229,19 +1227,11 @@ def book_animate(req: dict) -> dict:
                         with Image.open(panel_dir(p["id"]) / shown) as im:
                             w, h = FILM_SIZE if im.width >= im.height else FILM_SIZE[::-1]
                             src = ImageOps.fit(im.convert("RGB"), (w, h), Image.LANCZOS)
-                        staged = morpheus.COMFY_INPUT / "morpheus" / f"anim_{time.time_ns():x}.png"
-                        staged.parent.mkdir(parents=True, exist_ok=True)
-                        src.save(staged)
-                        try:
-                            graph = morpheus.video_workflow(f"morpheus/{staged.name}", motion, "", w, h, random.randrange(2 ** 31),
-                                                            f"morpheus/anim_{p['id']}", frames=morpheus.VIDEO_FPS * 2 + 1, model="ltx")
-                            made, last = morpheus.video_part(graph, lambda: state.get("stop"), progress)
-                        finally:
-                            staged.unlink(missing_ok=True)
+                        made = morpheus.video_clip(src, motion, w, h, random.randrange(2 ** 31), frames=morpheus.VIDEO_FRAMES,
+                                                   stopped=lambda: state.get("stop"), progress=progress)
                         for old in panel_dir(p["id"]).glob("anim_*.mp4"):
                             old.unlink(missing_ok=True)  # an older clip of this panel: its picture or Motion changed
-                        shutil.move(str(made), clip)
-                        last.unlink(missing_ok=True)
+                        morpheus.video_write(made, clip)
                     frames += [_letterbox(f) for f in morpheus.video_frames(clip)]
             name = f"film_{time.time_ns():x}.mp4"
             morpheus.video_write(frames, MANGA / name)
