@@ -124,7 +124,7 @@ def probe_h3_checkpoint(filename):
         hyperflow = {}
         if "endpoint_time_embedder.proj_in.weight" in normalized:  # HyperFlow: removed blocks, low-rank linears, two-time AdaLN of width 16
             present = {int(key.split(".", 2)[1]) for key in normalized if key.startswith("blocks.")}
-            hyperflow = {"time_embed_dim": int(normalized["time_embedder.proj_out.weight"].shape[0]), "endpoint_gate": float(metadata["hyperflow_gate"]),
+            hyperflow = {"time_embed_dim": int(normalized["time_embedder.proj_out.weight"].shape[0]), "endpoint_gate": float(metadata.get("hyperflow_gate", 0.25)),
                          "dropped_blocks": tuple(index for index in range(NUM_TRANSFORMER_BLOCKS) if index not in present),
                          "low_rank": {key[:-len(".down.weight")]: int(tensor.shape[0]) for key, tensor in normalized.items() if key.endswith(".down.weight")}}
         return {"compressed_modulation": False, "adaln_curve_grid": None, "time_embed_dim": 2688, "adaln_dtype": None, "separate_qkv": separate_qkv, **stream, **hyperflow}
@@ -225,7 +225,7 @@ def _load_transformer(filename, dtype, qkv_splitting=True, qkv_layout="interleav
             for layer, block in enumerate(transformer.blocks):
                 block.attn.vsa = VSAAttention(transformer.vsa_attention, layer)
     qkv_layout = _qkv_layout(filenames, qkv_layout)
-    split_map = get_linear_split_map(transformer.attention_inner_size, qkv_layout=qkv_layout) if qkv_splitting and not any(path.lower().endswith(".gguf") for path in filenames) else None
+    split_map = get_linear_split_map(transformer.attention_inner_size, qkv_layout=qkv_layout) if qkv_splitting and (checkpoint["separate_qkv"] or not any(path.lower().endswith(".gguf") for path in filenames)) else None  # Morpheus: a GGUF with separate q/k/v (engine/wsl/gguf_to_wangp.py) is split like the int8
     if split_map is not None:
         offload.split_linear_modules(transformer, split_map)
     else:

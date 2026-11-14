@@ -23,7 +23,7 @@ JOBS_DIR = ENGINE.parent / "output" / "engine" / "jobs"
 RAM_WAIT = 90  # seconds to wait for the RAM (the last worker's memory takes a moment to come back)
 WSL_MODELS = {"minimax_h3_ref2va_hyperflow", "ltx2_22B_dev_q6"}  # checkpoints on the WSL disk: all video renders here (2026-11-14)
 SOL = {"overrides": "attention_mode='sol'", "attention_sparsity": 1.3}  # tau 1.3: 2x per step; 1.6/2.0 bought ~0-6 % more
-SOL_MODELS = {"minimax_h3_ref2va_hyperflow"}  # Sol sparse attention is an H3 path in WanGP
+SOL_MODELS = {"minimax_h3_ref2va_hyperflow", "minimax_h3_ref2va_hyperflow_gguf_q4_k_m", "minimax_h3_ref2va_hyperflow_gguf_q6_k"}  # Sol sparse attention is an H3 path in WanGP
 NEED_GB = 20       # Windows RAM the VM needs to grow into for H3 (process ~22.7 GB inside a 24 GB cap)
 READY_WAIT = 240   # VM boot + WanGP import
 

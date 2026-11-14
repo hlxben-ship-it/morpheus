@@ -1,0 +1,10 @@
+{
+ "model": {
+  "name": "H3 HyperFlow Flash 14B Ref2VA GGUF Q4_K_M (Morpheus)",
+  "architecture": "minimax_h3_ref2va_pruned",
+  "parent_model_type": "minimax_h3_ref2va_hyperflow",
+  "description": "Video Rebirth's own GGUF of HyperFlow H3 Flash Ref2VA (VideoRebirthAI/hyperflow-h3-flash, ref2va_gguf). Image references only. Compared against the int8 convrot in the Playground (Glia seed hyperflow_gguf_fl2va).",
+  "URLs": ["minimax_h3_ref2va_hyperflow_flash_14b-Q4_K_M-wangp.gguf"],
+  "hyperflow": true
+ }
+}

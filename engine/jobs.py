@@ -20,7 +20,10 @@ SIZES = {
 LTX_BUDGET = 1920 * 1088
 
 MODELS = {"ltx23": "ltx2_22B_dev_q6",  # finetune in engine/wangp/finetunes/
-          "h3_minimax": "minimax_h3_ref2va_hyperflow"}
+          "h3_minimax": "minimax_h3_ref2va_hyperflow",
+          # Video Rebirth's own GGUFs, converted by engine/wsl/gguf_to_wangp.py (Glia seed hyperflow_gguf_fl2va): less RAM
+          "h3_gguf_q4": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
+          "h3_gguf_q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k"}
 
 UPSCALERS = {"relayvsr": "RelayVSR", "seedvr2": "SeedVR2 3B"}
 FACTORS = (1.5, 2.0, 2.5, 3.0, 3.5, 4.0)  # RelayVSR refuses anything not x1.0-4.0 in 0.5 steps (x1.534 failed)
