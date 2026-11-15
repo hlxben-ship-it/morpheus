@@ -237,8 +237,9 @@ def send(req: dict) -> dict:
     if not s:
         raise ValueError("this chat has ended — start a new one")
     message = str(req.get("message", "")).strip()
-    if req.get("task"):  # what the host page wants, e.g. "LTX 2.3 video prompt for the Playground"
-        message = f"[Context from the page: {str(req['task'])[:300]}]\n\n{message}"
+    if req.get("task"):  # what the host page wants, e.g. "LTX 2.3 video prompt for the Playground"; room for the full
+        # Playground state (model, frames, picture list, then the current prompt last; 300 used to cut the prompt off)
+        message = f"[Context from the page: {str(req['task'])[:4000]}]\n\n{message}"
     urls = list(req.get("images") or ([req["image"]] if req.get("image") else []))[:MAX_IMAGES]
     if urls and not models()[s.model]["vision"]:
         raise ValueError(f"{models()[s.model]['label']} can't see pictures — switch to a model with vision, or send text only")

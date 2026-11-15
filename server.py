@@ -1677,7 +1677,7 @@ class Handler(BaseHTTPRequestHandler):
         pressed (snapshot); the finished clip moves into the playground's clips/ with its meta json."""
         play_id = str(req.get("id", ""))
         snap = playground.snapshot(play_id)
-        settings = engine_jobs.render_settings(snap, playground.folder(play_id))
+        settings = engine_jobs.render_settings(snap, playground.folder(play_id), seed=snap.get("seed"))
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
                               engine=str(req.get("engine") or "wsl10"))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])

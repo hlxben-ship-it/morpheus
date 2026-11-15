@@ -6,6 +6,7 @@
 //   el.addImage(dataUrl)   hand over a picture from the host page (setImage(null) clears them)
 //   pictures are named img1, img2 … in upload order across the chat; the agent picks the flow from how you use them
 //   event "prompt-copy"    detail: {prompt} — fired when the user copies a prompt
+//   event "chat-reset"   — the user started a new chat (header button); the host hands its context over again (say())
 //   event "prompt-use"     detail: {prompt} — fired by the Use button; the host puts the prompt where it belongs
 //   el.sent                how many pictures went out so far (the next one is img<sent + 1>)
 // Talks to /api/agentchat/{open,send,close}; the key and the agent process stay on the server.
@@ -17,6 +18,7 @@ const ICON = {  // Lucide (ISC), inlined
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   spin: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
+  reset: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
   eyeoff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
 };
@@ -81,6 +83,9 @@ textarea::placeholder { color:#6f6690; }
 .model { display:flex; align-items:center; gap:4px; color:#9a90b8; font:11px 'IBM Plex Mono', monospace; cursor:pointer;
   background:#1c1630; border:1px solid #2e2647; border-radius:20px; padding:2px 6px 2px 9px; transition:.15s; }
 .model:hover, .model.open { color:#ece8f7; border-color:#8A6CD8; }
+.reset { display:grid; place-items:center; width:24px; height:24px; padding:0; color:#9a90b8; cursor:pointer;
+  background:#1c1630; border:1px solid #2e2647; border-radius:50%; transition:.15s; }
+.reset:hover { color:#ece8f7; border-color:#8A6CD8; } .reset:disabled { opacity:.35; cursor:not-allowed; }
 .menu { position:absolute; right:0; top:calc(100% + 6px); z-index:5; min-width:270px; background:#1c1630; border:1px solid #2e2647;
   border-radius:12px; padding:5px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
 .menu[hidden] { display:none; }
@@ -96,7 +101,7 @@ class AgentChat extends HTMLElement {
     if (this.shadowRoot) return;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${CSS}</style>
-      <header><b>✦ PROMPT WRITER</b><small class="stats" hidden></small><div class="picker"><button class="model" title="Switch model">…</button><div class="menu" hidden></div></div></header>
+      <header><b>✦ PROMPT WRITER</b><small class="stats" hidden></small><div class="picker"><button class="model" title="Switch model">…</button><div class="menu" hidden></div></div><button class="reset" title="New chat — clears the history, then sends the current pictures and prompt">${svg("reset", 14)}</button></header>
       <div class="log"></div>
       <footer><div class="box">
         <div class="chips"></div>
@@ -120,6 +125,7 @@ class AgentChat extends HTMLElement {
     text.onpaste = (e) => { [...e.clipboardData.files].filter((f) => f.type.startsWith("image/")).forEach((f) => this.readFile(f)); };
     text.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.send(); } };
     this.$(".go").onclick = () => this.send();
+    this.$(".reset").onclick = () => this.reset();
     this.open();
     addEventListener("pagehide", () => this.session && navigator.sendBeacon("/api/agentchat/close", JSON.stringify({ session: this.session })));
   }
@@ -131,14 +137,15 @@ class AgentChat extends HTMLElement {
     return j;
   }
 
-  async open() {
+  async open(model) {
     try {
-      const j = await this.api("open", { fake: this.hasAttribute("fake"), model: this.getAttribute("model") || undefined });
+      const j = await this.api("open", { fake: this.hasAttribute("fake"), model: model || this.getAttribute("model") || undefined });
       this.session = j.session;
       this.models = j.models; this.fake = j.fake; this.skills = j.skills;
       this.showModel(j.model);
       this.$(".model").onclick = (e) => { e.stopPropagation(); this.toggleMenu(); };
-      this.shadowRoot.addEventListener("click", (e) => { if (!e.target.closest(".picker")) this.toggleMenu(false); });
+      if (!this.menuWired) this.shadowRoot.addEventListener("click", (e) => { if (!e.target.closest(".picker")) this.toggleMenu(false); });
+      this.menuWired = true;
       this.add("agent", j.greeting);
     } catch (e) { this.add("err", e.message); }
   }
@@ -252,6 +259,21 @@ class AgentChat extends HTMLElement {
     el.scrollIntoView({ block: "end", behavior: "smooth" });
     return el;
   }
+
+  // New chat: the old session ends (its history with it), a fresh one opens on the same model; the host hears
+  // "chat-reset" and hands its pictures and context over again, then say() sends them as the first message
+  async reset() {
+    if (this.$(".go").disabled || !confirm("Start a new chat? The history is cleared.")) return;
+    const old = this.session, model = this.model?.id;
+    this.session = null;
+    if (old) this.api("close", { session: old }).catch(() => {});
+    this.$(".log").innerHTML = ""; this.images = []; this.sent = 0; this.total = null;
+    this.$(".stats").hidden = true; this.drawChips();
+    await this.open(model);
+    if (this.session) this.dispatchEvent(new CustomEvent("chat-reset", { bubbles: true }));
+  }
+
+  say(message) { this.$("textarea").value = message; return this.send(); }
 
   async send() {
     const text = this.$("textarea"), go = this.$(".go");

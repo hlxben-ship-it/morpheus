@@ -44,7 +44,23 @@ def fresh_state(play_id: str) -> dict:
     return {"id": play_id, "kind": "video", "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
             "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "21:9",
             "prompt": "", "start": None, "end": None, "main_first": True, "refs": [None] * REFS, "last_ref": None,
-            "loras": [{"id": "", "strength": 1.0}, {"id": "", "strength": 1.0}]}
+            "loras": [{"id": "", "strength": 1.0}, {"id": "", "strength": 1.0}], "seed": None}
+
+
+SEED_MAX = 2**31 - 1
+
+
+def clean_seed(value):
+    """The render seed the user set: a whole number 1 to 2^31-1, or None (empty field) for a random one per render."""
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        seed = int(str(value).strip())
+    except ValueError:
+        raise ValueError("Seed: a whole number, or empty for random.")
+    if not 1 <= seed <= SEED_MAX:
+        raise ValueError(f"Seed: 1 to {SEED_MAX}, or empty for random.")
+    return seed
 
 
 def h3_pictures(state: dict) -> list:
@@ -122,6 +138,10 @@ def load(play_id: str) -> dict:
         state["last_ref"] = None
     state["pictures"] = h3_pictures(state)
     state["loras"] = clean_slots(state.get("loras"), model["id"])
+    try:  # a playground made before the seed field, or a seed edited by hand: random
+        state["seed"] = clean_seed(state.get("seed"))
+    except ValueError:
+        state["seed"] = None
     return state
 
 
@@ -192,6 +212,8 @@ def save(req: dict) -> dict:
         if last is not None and (not isinstance(last, int) or isinstance(last, bool) or not 0 <= last < REFS):
             raise ValueError("Unknown reference slot.")
         state["last_ref"] = last
+    if "seed" in req:
+        state["seed"] = clean_seed(req["seed"])
     state.pop("missing", None)
     return load(write(state)["id"])
 
@@ -353,7 +375,8 @@ def snapshot(play_id: str) -> dict:
             "start_frame": state["start"], "end_frame": state["end"],  # file names in the playground folder (never overwritten)
             "main_first": state["main_first"], "refs": list(state["refs"]), "last_ref": state["last_ref"],
             "pictures": h3_pictures(state),  # what an H3 render sends, numbered (render_settings reads this for H3)
-            "loras": [lora_info(n + 1, l) for n, l in enumerate(state["loras"]) if l["id"]]}
+            "loras": [lora_info(n + 1, l) for n, l in enumerate(state["loras"]) if l["id"]],
+            "seed": state["seed"]}  # the seed the user fixed, or None; the clip meta gets the one the render really used
 
 
 def make_thumb(mp4: Path, out: Path) -> None:
@@ -466,7 +489,8 @@ def clips(play_id: str | None = None) -> list:
         out.append({"video": rel(mp4), "thumb": rel(thumb) if thumb.is_file() else "", "prompt": meta.get("prompt", ""),
                     "created": meta.get("created") or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(mp4.stat().st_mtime)),
                     "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name,
-                    "size": size_label(mp4), "looped": bool(meta.get("loop"))})
+                    "size": size_label(mp4), "looped": bool(meta.get("loop")),
+                    "seed": meta.get("seed"), "render_seconds": meta.get("render_seconds"), "settings": bool(meta.get("model"))})
     out.sort(key=lambda c: c["created"], reverse=True)
     if not play_id:
         return out[:60]
@@ -526,12 +550,15 @@ def last_frame(req: dict) -> dict:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise ValueError("ffmpeg is not on PATH.")
-    # -sseof jumps near the end, -update 1 keeps overwriting one picture, so what stays is the last decoded frame
-    run = subprocess.run([ffmpeg, "-loglevel", "error", "-sseof", "-1", "-i", str(mp4), "-an", "-update", "1",
-                          "-f", "image2", "-c:v", "png", "pipe:1"], capture_output=True)
-    if run.returncode or not run.stdout:
+    # -sseof jumps to the last second; every frame of it comes out as one PNG after the other (-update 1 only overwrites
+    # a file, never a pipe), so the last PNG in the stream is the clip's last frame. Taking the whole stream gave the
+    # page the first one, ~20 frames early (2026-11-15)
+    run = subprocess.run([ffmpeg, "-loglevel", "error", "-sseof", "-1", "-i", str(mp4), "-an",
+                          "-f", "image2pipe", "-c:v", "png", "pipe:1"], capture_output=True)
+    sig = b"\x89PNG\r\n\x1a\n"
+    if run.returncode or sig not in run.stdout:
         raise ValueError(f"Could not read the last frame: {run.stderr.decode(errors='replace').strip()[-300:]}")
-    data = "data:image/png;base64," + base64.b64encode(run.stdout).decode()
+    data = "data:image/png;base64," + base64.b64encode(run.stdout[run.stdout.rindex(sig):]).decode()
     if req.get("slot") is not None:  # dragged onto an H3 reference slot
         return ref({"id": req.get("id"), "slot": req.get("slot"), "data": data})
     return frame({"id": req.get("id"), "kind": "start", "data": data})
@@ -634,4 +661,42 @@ def clear_lora(lora_id: str) -> None:
         write(state)
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip}
+def use_clip(req: dict) -> dict:
+    """"Use these settings": the playground takes everything a shelf clip was rendered with (prompt, model, params,
+    resolution, aspect, duration, frames, references, LoRAs) and its seed, so Render makes the same clip again.
+    Frames are file names in this playground's folder; one deleted since is simply empty. A LoRA no longer in the
+    library is dropped. A loop's duration is its source's (the loop doubled it)."""
+    play_id = str(req.get("id", ""))
+    _, meta = clip_meta(play_id, str(req.get("video", "")))
+    model = meta.get("model")
+    if not isinstance(model, dict) or not model.get("id"):
+        raise ValueError("This clip has no settings to take.")
+    duration = meta.get("duration")
+    if duration and meta.get("loop"):
+        duration = round(float(duration) / 2, 1)
+    duration = int(duration) if duration and float(duration).is_integer() else duration
+    by_slot = {l.get("slot"): l for l in meta.get("loras") or [] if lora_library.get(str(l.get("id", "")))}
+    loras = [{"id": by_slot[n]["id"], "strength": by_slot[n]["strength"]} if n in by_slot else {"id": "", "strength": 1.0}
+             for n in (1, 2)]
+    res = meta.get("resolution")
+    upd = {"id": play_id, "model": model["id"], "params": meta.get("params") or {}, "prompt": meta.get("prompt", ""),
+           "loras": loras, "seed": meta.get("seed"), "main_first": meta.get("main_first", True)}
+    if isinstance(res, dict) and res.get("id"):
+        upd["resolution"] = res["id"]
+    if duration in LISTS["durations"]:
+        upd["duration"] = duration
+    if meta.get("aspect") in LISTS["aspects"]:
+        upd["aspect"] = meta["aspect"]
+    save(upd)
+    state = load(play_id)
+    here = lambda f: f if f and (folder(play_id) / str(f)).is_file() else None
+    state["start"], state["end"] = here(meta.get("start_frame")), here(meta.get("end_frame"))
+    refs = list(meta.get("refs") or [])[:REFS]
+    state["refs"] = [here(r) for r in refs + [None] * (REFS - len(refs))]
+    last = meta.get("last_ref")
+    state["last_ref"] = last if isinstance(last, int) and 0 <= last < REFS and state["refs"][last] else None
+    state.pop("missing", None)
+    return load(write(state)["id"])
+
+
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip}
