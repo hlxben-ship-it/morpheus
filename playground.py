@@ -38,7 +38,7 @@ def options() -> dict:
 
 def fresh_state(play_id: str) -> dict:
     model = pm.models()[0]
-    return {"id": play_id, "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
+    return {"id": play_id, "kind": "video", "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
             "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "21:9",
             "prompt": "", "start": None, "end": None,
             "loras": [{"path": "", "strength": 1.0}, {"path": "", "strength": 1.0}]}
@@ -350,7 +350,7 @@ def size_label(mp4: Path) -> str:
     return SIZES[key]
 
 
-def clips() -> list:
+def clips(play_id: str | None = None) -> list:
     """The clip shelf, newest first: every Playground render, from all playgrounds (what add_clip() wrote:
     output/playground/<id>/clips/<name>.mp4 + <name>.json meta, optional <name>_thumb.jpg)."""
     out = []
@@ -367,7 +367,7 @@ def clips() -> list:
     def name(x):  # {"label": ..} in the meta, or plain text in one written by hand
         return x.get("label") if isinstance(x, dict) else x
 
-    for js in ROOT.glob("*/clips/*.json"):
+    for js in (folder(play_id) if play_id else ROOT).glob("clips/*.json" if play_id else "*/clips/*.json"):
         meta, mp4 = read(js), js.with_suffix(".mp4")
         if meta is None or not mp4.is_file():
             continue
@@ -379,7 +379,16 @@ def clips() -> list:
                     "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name,
                     "size": size_label(mp4), "looped": bool(meta.get("loop"))})
     out.sort(key=lambda c: c["created"], reverse=True)
-    return out[:60]
+    if not play_id:
+        return out[:60]
+    try:  # the starred clip leads the shelf, before the newest
+        cover = json.loads((folder(play_id) / "playground.json").read_text(encoding="utf-8-sig")).get("cover")
+    except (OSError, ValueError):
+        cover = None
+    for c in out:
+        c["cover"] = bool(cover) and c["video"] == f"playground/{play_id}/{cover}"
+    out.sort(key=lambda c: not c["cover"])
+    return out
 
 
 def delete_clip(req: dict) -> dict:
@@ -437,4 +446,78 @@ def last_frame(req: dict) -> dict:
     return frame({"id": req.get("id"), "kind": "start", "data": data})
 
 
-ACTIONS = {"last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
+def list_all() -> list:
+    """The Local gallery: every playground, starred first, then newest first. The mini is the newest clip's thumbnail
+    (none = the page shows a plain placeholder)."""
+    out = []
+    for js in ROOT.glob("*/playground.json"):
+        try:
+            st = json.loads(js.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        clips_dir = js.parent / "clips"
+        metas = sorted(clips_dir.glob("*.json")) if clips_dir.is_dir() else []
+        metas = [m for m in metas if m.with_suffix(".mp4").is_file()]
+        thumb = next((m.with_name(m.stem + "_thumb.jpg") for m in reversed(metas) if m.with_name(m.stem + "_thumb.jpg").is_file()), None)
+        newest = max(metas, key=lambda m: m.stat().st_mtime, default=None)  # the hover peek and fullscreen play this one
+        cover = js.parent / str(st.get("cover") or "-")  # the starred clip, if it is still there, wins over the newest
+        if st.get("cover") and cover.is_file() and cover.suffix == ".mp4":
+            newest = cover.with_suffix(".json")
+            if cover.with_name(cover.stem + "_thumb.jpg").is_file():
+                thumb = cover.with_name(cover.stem + "_thumb.jpg")
+        out.append({"id": js.parent.name, "kind": st.get("kind") or "video", "created": st.get("created", ""),
+                    "updated": st.get("updated") or st.get("created", ""), "model": st.get("model", ""),
+                    "prompt": (st.get("prompt") or "").strip()[:120], "clips": len(metas), "starred": bool(st.get("starred")),
+                    "thumb": thumb.relative_to(morpheus.OUTPUT).as_posix() if thumb else "",
+                    "video": newest.with_suffix(".mp4").relative_to(morpheus.OUTPUT).as_posix() if newest else ""})
+    out.sort(key=lambda p: p["updated"], reverse=True)
+    out.sort(key=lambda p: not p["starred"])
+    return out
+
+
+def star(req: dict) -> dict:
+    path = folder(str(req.get("id", ""))) / "playground.json"
+    try:
+        state = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        raise ValueError("This playground does not exist.")
+    state["starred"] = bool(req.get("starred"))
+    tmp = path.with_suffix(".tmp")  # not write(): a star is no edit, "updated" stays
+    tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    tmp.replace(path)
+    return {"ok": True, "starred": state["starred"]}
+
+
+def star_clip(req: dict) -> dict:
+    """One clip per playground can be starred: it is the playground's mini, hover and fullscreen in the Local gallery and
+    leads the shelf. Starring another moves the star; starred=False takes it off."""
+    play_id = str(req.get("id", ""))
+    d = folder(play_id)
+    path = d / "playground.json"
+    try:
+        state = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        raise ValueError("This playground does not exist.")
+    if req.get("starred"):
+        mp4 = (morpheus.OUTPUT / str(req.get("video", ""))).resolve()
+        if mp4.parent != (d / "clips").resolve() or mp4.suffix != ".mp4" or not mp4.is_file():
+            raise ValueError("This clip is gone.")
+        state["cover"] = f"clips/{mp4.name}"
+    else:
+        state.pop("cover", None)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    tmp.replace(path)
+    return {"ok": True, "cover": state.get("cover")}
+
+
+def delete(req: dict) -> dict:
+    """A whole playground: its settings, frames and every clip in it."""
+    d = folder(str(req.get("id", "")))
+    if not (d / "playground.json").is_file():
+        raise ValueError("This playground does not exist.")
+    shutil.rmtree(d)
+    return {"ok": True}
+
+
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}

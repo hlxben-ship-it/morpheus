@@ -614,6 +614,27 @@
   .sbh-pic img, .sbh-pic video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
   .sbh-pic video { opacity: 0; transition: opacity .25s; }
   .sbh-pic video.on { opacity: 1; }
+  /* Local: a widescreen render widens the whole card on hover (same height, picture in its own aspect); edge tiles widen inwards */
+  .sbh-card.wide:is(:hover, :focus-visible) { width: calc(100% * var(--ar, 1)); margin-left: calc(50% - 50% * var(--ar, 1)); }
+  .sbh-card.wide.l:is(:hover, :focus-visible) { margin-left: 0; }
+  .sbh-card.wide.r:is(:hover, :focus-visible) { margin-left: calc(100% - 100% * var(--ar, 1)); }
+  .sbh-card.wide:is(:hover, :focus-visible) .sbh-pic { aspect-ratio: var(--ar, 1); }
+  .sbh-card.wide:is(:hover, :focus-visible) .sbh-pic :is(img, video) { object-position: 50% 50%; }
+  .loc-full { position: fixed; inset: 0; width: 100%; height: 100%; background: #000; object-fit: contain; z-index: 99; }
+  .sbh-newcard { width: 100%; text-align: left; font: inherit; border-style: dashed; }
+  .sbh-newcard .sbh-none { font-size: 54px; }
+  .wake-dialog.loc-kind { width: min(420px, calc(100vw - 32px)); padding: 0 18px 18px; text-align: center; }
+  .loc-kind h3 { margin: 18px 0 16px; font: 400 15px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 14px var(--glow, rgba(177, 77, 255, .4)); }
+  .loc-x { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+  .loc-x:hover { color: var(--text); background: var(--raised); }
+  .loc-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .loc-kinds button { position: relative; display: grid; justify-items: center; gap: 8px; aspect-ratio: 1; align-content: center; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); color: inherit; font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
+  .loc-kinds button svg { width: 44px; height: 44px; color: var(--accent); }
+  .loc-kinds button b { font: 400 13px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .08em; text-transform: uppercase; }
+  .loc-kinds small { color: var(--muted); font-size: 11px; }
+  .loc-kinds button:not(.soon):hover, .loc-kinds button:not(.soon):focus-visible { border-color: var(--accent); box-shadow: 0 0 24px var(--glow, rgba(177, 77, 255, .4)); transform: translateY(-2px); outline: none; }
+  .loc-kinds button.soon { opacity: .45; cursor: default; }
+  .loc-kinds .badge { position: absolute; top: 8px; right: 8px; font: 400 9px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .08em; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .sbh-none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 38px; }
   .sbh-tag { position: absolute; top: 7px; left: 7px; z-index: 1; font: 400 10px/1 var(--px, 'Silkscreen', monospace); letter-spacing: .08em; padding: 4px 7px; border-radius: 999px; background: var(--accent); color: #fff; box-shadow: 0 0 12px var(--glow, rgba(177, 77, 255, .4)); }
   .sbh-tag.old { background: var(--danger); }
@@ -707,6 +728,11 @@
   .pl-clip img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .pl-clip .pic b { position: relative; font-size: 22px; color: #fff; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .15s; }
   .pl-clip:hover .pic b, .pl-clip:focus-visible .pic b { opacity: 1; }
+  .pl-clip .pl-star { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font-style: normal; font-size: 13px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  .pl-clip:hover .pl-star, .pl-clip:focus-within .pl-star, .pl-clip .pl-star.on { opacity: 1; }
+  .pl-clip .pl-star.on { color: #ffd84a; }
+  .pl-clip .pl-star:hover { outline: 1px solid var(--accent); }
+  @media (hover: none) { .pl-clip .pl-star { opacity: 1; } }
   .pl-clip small { padding: 0 8px 7px; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pl-modal video { display: block; width: 100%; max-height: 66vh; border-radius: 10px; background: #000; }
   .pl-modal .wake-open.danger { color: var(--danger); }
@@ -1044,6 +1070,7 @@
       <button type="button" role="tab" data-f="soul" aria-selected="false" title="Avatars for agents">Soul<span>forge</span></button>
       <button type="button" role="tab" data-f="wake" aria-selected="false" title="Turn pictures into a storyboard of clips">Dawnforge</button>
       <button type="button" role="tab" data-f="yumeko" aria-selected="false" title="Character LoRAs and manga panels">Yumeko</button>
+      <button type="button" role="tab" data-f="local" aria-selected="false" title="Playgrounds on this PC's GPU">Local</button>
       <button type="button" role="tab" data-f="cloud" aria-selected="false" title="Video and pictures from OpenRouter (real credit)">Cloud</button>
     </div>
     <div class="top-actions">
@@ -1769,7 +1796,7 @@
     renderSessions();
     renderThread();
     loadHistory();
-    if (state.forge === 'wake') renderWake();
+    if (state.forge === 'wake' || state.forge === 'local') renderWake();
   }
   $('ghost').onclick = () => setGhost(!state.ghost);
 
@@ -2604,25 +2631,30 @@
     }
     state.forge = f; store.set('forge', f);
     document.body.classList.toggle('soul-mode', f === 'soul');
-    document.body.classList.toggle('wake-mode', f === 'wake');
+    const sbF = f === 'wake' || f === 'local';  // Local shares the Dawnforge panel: its gallery and the Playground live in #wake
+    if (f === 'local' && (!['local', 'play'].includes(wake.view) || (wake.view === 'play' && !wake.playId))) wake.view = 'local';
+    if (f === 'wake' && ['local', 'play'].includes(wake.view)) wake.view = 'home';
+    document.body.classList.toggle('wake-mode', sbF);
     document.body.classList.toggle('yumeko-mode', f === 'yumeko');
     $('yumeko').hidden = f !== 'yumeko';
     if (f === 'yumeko' && !$('yumeko').src) $('yumeko').src = '/yumeko' + yumekoDeep();  // stays loaded between tabs; a deep link lands where it points
     else if (f === 'yumeko') { try { $('yumeko').contentWindow.location.hash = ''; } catch {} }  // the Yumeko tab always opens her start page
     if (f !== 'yumeko' && location.pathname.startsWith('/yumeko')) history.replaceState(null, '', '/');
     if (f !== 'wake' && location.pathname.startsWith('/dawnforge')) history.replaceState(null, '', '/');
+    if (f !== 'local' && location.pathname.startsWith('/local')) history.replaceState(null, '', '/');
     document.body.classList.toggle('cloud-mode', f === 'cloud');
     $('cloudtab').hidden = f !== 'cloud';
     if (f === 'cloud' && !$('cloudtab').src) $('cloudtab').src = '/cloud';  // stays loaded between tabs: the key lives in its memory
-    $('wake').hidden = f !== 'wake';
+    $('wake').hidden = !sbF;
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
     if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
     else $('input').placeholder = 'Describe what you want to see …';
     renderThread();
-    if (f === 'wake') renderWake();
+    if (sbF) renderWake();
   }
   document.querySelectorAll('.forge button').forEach(b => b.onclick = () => {
     if (b.dataset.f === 'wake') { wake.view = 'home'; store.set('wake.view', 'home'); wake.push = true; }  // the Dawnforge tab always opens on its scenes
+    if (b.dataset.f === 'local') { wake.view = 'local'; store.set('wake.view', 'local'); wake.push = true; }  // the Local tab always opens on its gallery
     setForge(b.dataset.f);
   });
   $('new-agent').onclick = () => { soul.current = null; store.set('soul.current', null); renderAgents(); setForge('soul'); $('input').focus(); };
@@ -2975,11 +3007,12 @@
         <div class="sb-bar"><button type="button" class="sb-quiet" id="sb-back">← Scenes</button>
           <div class="sb-bar-board" id="sb-bar"></div><div id="sb-play-bar" hidden></div><span id="sb-saved" class="sb-saved" aria-live="polite"></span></div>
         <div id="sb-home" class="sbh"></div>
+        <div id="sb-local" class="sbh" hidden></div>
         <div id="sb-board"></div>
         <div id="sb-play" class="pl" hidden></div>
         <div id="sb-clips" class="sb-clips"><div class="wake-strip" id="wake-strip"></div><div id="wake-player"></div></div>
       </div><dialog class="wake-dialog" id="wake-dialog"></dialog>`;
-      $('sb-back').onclick = () => showWake('home');
+      $('sb-back').onclick = () => showWake(state.forge === 'local' ? 'local' : 'home');
     }
     if (!wake.board) {
       const id = store.get('wake.board', null);
@@ -2989,7 +3022,10 @@
     if (wake.job) followWake();
   }
   async function paintView() {
-    $('sb-back').hidden = wake.view === 'home';
+    $('sb-back').hidden = wake.view === 'home' || wake.view === 'local';
+    $('sb-back').textContent = wake.view === 'play' ? '← Playgrounds' : '← Scenes';
+    $('sb-local').hidden = wake.view !== 'local';
+    if (wake.view === 'local') paintLocal();
     if (wake.view === 'board' && !wake.board) await openBoard(wake.boards[0]?.id);
     $('sb-board').hidden = $('sb-bar').hidden = wake.view !== 'board';
     $('sb-home').hidden = wake.view !== 'home';
@@ -3015,6 +3051,11 @@
     paintView();
   }
   function wakeUrl() {
+    if (state.forge === 'local') {
+      const path = wake.view === 'play' ? '/local/playground/' + (wake.playId || '') : '/local';
+      if (location.pathname !== path) history[wake.push ? 'pushState' : 'replaceState'](null, '', path);
+      wake.push = false; return;
+    }
     if (state.forge !== 'wake') return;
     const path = wake.view === 'home' ? '/dawnforge' : wake.view === 'clips' ? '/dawnforge/clips' : wake.view === 'play' ? '/dawnforge/playground/' + (wake.playId || '') : '/dawnforge/' + (wake.board?.id || '');
     if (location.pathname !== path) history[wake.push ? 'pushState' : 'replaceState'](null, '', path);
@@ -3041,10 +3082,9 @@
     };
     const all = order(wake.boards);
     box.innerHTML = `<section class="sbh-shelf"><div class="sbh-head"><h2>Scenes</h2><span class="count">${all.length} ${all.length === 1 ? 'scene' : 'scenes'}</span>
-        <button type="button" class="sb-quiet" id="sbh-clips" style="margin-left:auto">All clips</button><button type="button" class="add" id="sbh-play" style="margin-left:0">Playground</button><button type="button" class="add" data-new style="margin-left:0">+ New scene</button></div>
+        <button type="button" class="sb-quiet" id="sbh-clips" style="margin-left:auto">All clips</button><button type="button" class="add" data-new style="margin-left:0">+ New scene</button></div>
         ${all.length ? `<div class="sbh-grid">${all.map(tile).join('')}</div>` : '<p class="sbh-empty">No scene yet.</p>'}</section>`;
     $('sbh-clips').onclick = () => showWake('clips');
-    $('sbh-play').onclick = async () => { wake.playId = (await post('/api/playground/new', {})).id; wake.play = null; showWake('play'); };
     box.querySelectorAll('[data-new]').forEach(n => n.onclick = async () => { await openBoard(null); showWake('board'); });
     box.querySelectorAll('.sbh-grid').forEach(sbhEdges);
     box.querySelectorAll('.sbh-card').forEach(c => {
@@ -3074,20 +3114,95 @@
       c.addEventListener('focus', play); c.addEventListener('blur', stop);
     });
   }
-  let sbhResize; addEventListener('resize', () => { clearTimeout(sbhResize); sbhResize = setTimeout(() => document.querySelectorAll('#sb-home .sbh-grid').forEach(sbhEdges), 120); });
+  let sbhResize; addEventListener('resize', () => { clearTimeout(sbhResize); sbhResize = setTimeout(() => document.querySelectorAll('#sb-home .sbh-grid, #sb-local .sbh-grid').forEach(sbhEdges), 120); });
+  // ---------- Local: a gallery of playgrounds. Address: /local, /local/playground/<id> ----------
+  async function paintLocal() {
+    const box = $('sb-local');
+    let all = [];
+    try { all = await (await fetch('/api/playground/list')).json(); } catch {}
+    if (!Array.isArray(all)) all = [];
+    const when = t => t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    const tile = p => `<a class="sbh-card" href="/local/playground/${esc(p.id)}" data-id="${esc(p.id)}">
+        <span class="sbh-pic">${p.thumb ? `<img src="${esc(url(p.thumb))}" alt="" loading="lazy">` : '<span class="sbh-none">▶</span>'}
+          ${p.video ? `<video muted loop playsinline preload="none" data-src="${esc(url(p.video))}"></video>` : ''}</span>
+        <span class="sbh-tag">${p.kind === 'image' ? 'Image' : 'Video'}</span>
+        <span class="sbh-acts">${p.video ? '<button type="button" data-a="full" aria-label="Fullscreen" title="Play the starred (else newest) render fullscreen">⛶</button>' : ''}<button type="button" data-a="star" class="${p.starred ? 'on' : ''}" aria-label="${p.starred ? 'Remove from favourites' : 'Favourite'}" title="Favourite">${p.starred ? '★' : '☆'}</button><button type="button" data-a="del" aria-label="Delete" title="Delete">✕</button></span>
+        <span class="sbh-cap"><b>${esc(p.prompt || p.id)}</b><small>${esc(p.model)} · ${p.clips} clip${p.clips === 1 ? '' : 's'} · ${when(p.updated || p.created)}</small></span>
+      </a>`;
+    box.innerHTML = `<section class="sbh-shelf"><div class="sbh-head"><h2>Playgrounds</h2><span class="count">${all.length} ${all.length === 1 ? 'playground' : 'playgrounds'}</span></div>
+        <div class="sbh-grid"><button type="button" class="sbh-card sbh-newcard" id="loc-new"><span class="sbh-pic"><span class="sbh-none">+</span></span><span class="sbh-cap"><b>New Playground</b><small>Image or video</small></span></button>${all.map(tile).join('')}</div></section>
+      <dialog class="wake-dialog loc-kind" id="loc-kind"><button type="button" class="loc-x" data-k="close" aria-label="Close">✕</button><h3>New Playground</h3>
+        <div class="loc-kinds"><button type="button" data-k="video" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="14" height="14" rx="2.5"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><b>Video</b><small>Local models</small></button><button type="button" class="soon" data-k="image" aria-disabled="true"><span class="badge">SOON</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg><b>Image</b><small>Coming soon</small></button></div></dialog>`;
+    box.querySelectorAll('.sbh-grid').forEach(sbhEdges);
+    const dlg = $('loc-kind');
+    $('loc-new').onclick = () => dlg.showModal();
+    dlg.onclick = async e => {
+      const k = e.target.closest('[data-k]')?.dataset.k;
+      if (e.target === dlg || k === 'close') return dlg.close();
+      if (k === 'image') return;  // a placeholder for now
+      if (k === 'video') {
+        dlg.close();
+        try { wake.playId = (await post('/api/playground/new', {})).id; } catch (err) { return alert(err.message); }
+        wake.play = null; showWake('play');
+      }
+    };
+    box.querySelectorAll('a.sbh-card').forEach(c => {
+      const p = all.find(x => x.id === c.dataset.id);
+      c.onclick = async e => {
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a) e.preventDefault();
+        if (a === 'full') {
+          const fv = document.createElement('video');
+          fv.src = url(p.video); fv.controls = true; fv.loop = true; fv.playsInline = true; fv.className = 'loc-full';
+          document.body.append(fv);
+          fv.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) fv.remove(); });
+          try { await fv.requestFullscreen(); } catch { fv.remove(); return; }
+          fv.play().catch(() => {});
+          return;
+        }
+        if (a === 'star') {
+          try { await post('/api/playground/star', { id: p.id, starred: !p.starred }); } catch (err) { alert(err.message); }
+          return paintLocal();
+        }
+        if (a === 'del') {
+          if (!confirm(`Delete this playground and all its clips? This can't be undone.`)) return;
+          try { await post('/api/playground/delete', { id: p.id }); } catch (err) { alert(err.message); }
+          if (wake.playId === p.id) { wake.playId = null; wake.play = null; }
+          return paintLocal();
+        }
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+        e.preventDefault();
+        wake.playId = p.id; wake.play = null; showWake('play');
+      };
+      const v = c.querySelector('video'), img = c.querySelector('.sbh-pic img');
+      const ar = el => { const w = el.videoWidth || el.naturalWidth, h = el.videoHeight || el.naturalHeight; if (w && h) { c.style.setProperty('--ar', w / h); c.classList.toggle('wide', w / h > 1.05); } };
+      if (img) img.complete ? ar(img) : img.addEventListener('load', () => ar(img));
+      if (!v) return;
+      v.addEventListener('loadedmetadata', () => ar(v));
+      const play = () => { if (!canPeek()) return; if (!v.src) v.src = v.dataset.src; v.play().then(() => v.classList.add('on')).catch(() => {}); };
+      const stop = () => { v.pause(); v.classList.remove('on'); try { v.currentTime = 0; } catch {} };
+      c.addEventListener('mouseenter', play); c.addEventListener('mouseleave', stop);
+      c.addEventListener('focus', play); c.addEventListener('blur', stop);
+    });
+  }
   addEventListener('popstate', () => {
+    const lm = location.pathname.match(/^\/local(?:\/playground\/([^/]+))?\/?$/);
+    if (lm) {
+      if (lm[1]) { wake.playId = lm[1]; wake.play = null; wake.view = 'play'; } else wake.view = 'local';
+      if (state.forge !== 'local') return setForge('local');
+      return showWake(wake.view, false);
+    }
     const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+)(?:\/([^/]+))?)?/);
     if (!m) return;
     if (state.forge !== 'wake') setForge('wake');
     const part = m[1];
     if (!part) return showWake('home', false);
     if (part === 'clips') return showWake('clips', false);
-    if (part === 'playground') { if (!m[2]) return showWake('home', false); wake.playId = m[2]; return showWake('play', false); }
     if (wake.board?.id !== part) openBoard(part).then(() => showWake('board', false));
     else showWake('board', false);
   });
 
-  // ---------- Dawnforge Playground: /dawnforge/playground/<id>, state saved in output/playground/<id>/ ----------
+  // ---------- Playground (Local tab): /local/playground/<id>, state saved in output/playground/<id>/ ----------
   // Every render runs in WSL (engine/wsl_runner.py); the choice is only how long the model stays loaded afterwards
   const PL_ENGINES = [['wsl', 'Unload right after'], ['wsl10', 'Keep model 10 min'], ['wsl30', 'Keep model 30 min']];
   function plEngine() { let v; try { v = localStorage.getItem('morpheus.plEngine'); } catch {} return PL_ENGINES.some(e => e[0] === v) ? v : 'wsl10'; }
@@ -3192,7 +3307,7 @@
       if (!r.ok) { wake.play = null; bar.innerHTML = ''; box.innerHTML = `<p class="sbh-empty">${esc(d.error)}</p>`; return; }
       wake.play = d; wake.playClips = null;
     }
-    wake.playClips ??= await (await fetch('/api/playground/clips')).json();
+    wake.playClips ??= await (await fetch('/api/playground/clips?id=' + encodeURIComponent(wake.play.id))).json();  // only this playground's renders
     const p = wake.play, dir = `playground/${p.id}/`, shelf = wake.playClips;
     const opt = (list, v, lab = x => x) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? lab(x))}</option>`).join('');
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
@@ -3203,7 +3318,7 @@
         <button type="button" class="sb-quiet danger" data-a="clear" title="Remove this LoRA" aria-label="Remove LoRA ${i + 1}" ${p.loras[i].path ? '' : 'hidden'}>✕</button></div>
       <div class="row"><label class="pl-l" style="margin:0">Strength</label><input type="range" min="0" max="2" step="0.05" value="${p.loras[i].strength}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>
       <dl class="pl-sum" hidden></dl><details class="pl-raw" hidden><summary>Raw header</summary><pre class="pl-dbg"></pre></details></div>`;
-    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}</span><small>${esc(c.label)}</small></button>`;
+    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b><i class="pl-star${c.cover ? ' on' : ''}" role="button" tabindex="0" aria-label="${c.cover ? 'Unstar' : 'Star: cover of this playground'}" title="${c.cover ? 'Starred: the gallery shows this clip' : 'Star: show this clip in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}</span><small>${esc(c.label)}</small></button>`;
     bar.innerHTML = `<h2 class="pl-title">Playground</h2><span class="pl-id">${esc(p.id)}</span><span class="sb-saved" id="pl-saved" style="margin-left:auto" aria-live="polite"></span>`;
     box.innerHTML = `<div class="pl-left">
         <section class="pl-box pl-prompt"><label class="pl-l" for="pl-prompt" style="margin:0">Prompt</label><textarea id="pl-prompt" placeholder="What happens in the clip …">${esc(p.prompt)}</textarea></section>
@@ -3486,7 +3601,12 @@
     };
     $('pl-strip').querySelectorAll('.pl-clip').forEach(b => {
       const c = shelf[+b.dataset.i];
-      b.onclick = () => openClip(c);
+      b.onclick = async e => {
+        if (!e.target.closest('.pl-star')) return openClip(c);
+        e.stopPropagation();
+        try { await post('/api/playground/star_clip', { id: p.id, video: c.video, starred: !c.cover }); } catch (err) { return alert(err.message); }
+        wake.playClips = null; paintPlay();
+      };
       b.ondragstart = e => { e.dataTransfer.setData('text/x-pl-clip', b.dataset.i); e.dataTransfer.effectAllowed = 'copy'; };
     });
     $('pl-render').onclick = async () => {
@@ -4223,6 +4343,10 @@
   }
   if (location.pathname.startsWith('/yumeko/')) state.forge = 'yumeko';
   {
+    const old = location.pathname.match(/^\/dawnforge\/playground\/([^/]+)/);  // the Playground moved to Local (2026-11-15)
+    if (old) history.replaceState(null, '', '/local/playground/' + old[1]);
+    const lm = location.pathname.match(/^\/local(?:\/playground\/([^/]+))?\/?$/);
+    if (lm) { state.forge = 'local'; wake.view = lm[1] ? 'play' : 'local'; if (lm[1]) wake.playId = lm[1]; }
     const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+)(?:\/([^/]+))?)?/);
     if (m) {
       state.forge = 'wake';

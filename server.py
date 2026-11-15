@@ -778,7 +778,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split("?")[0]
-        if (route.startswith("/yumeko/") or route == "/dawnforge" or route.startswith("/dawnforge/")) and "." not in route:  # a deep link into the Yumeko or Dawnforge tab: the outer page, which opens it there
+        if (route.startswith("/yumeko/") or route == "/dawnforge" or route.startswith("/dawnforge/")
+             or route == "/local" or route.startswith("/local/")) and "." not in route:  # a deep link into the Yumeko or Dawnforge tab: the outer page, which opens it there
             route = "/"
         if route == "/":  # the moods and worlds go in inline, so the page's first render already has them
             page = (WEB / "index.html").read_text(encoding="utf-8")
@@ -848,7 +849,13 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:  # a broken playground_models.json: say what is wrong instead of hanging up
                 return self.send_json({"error": str(e)}, 500)
         if route == "/api/playground/clips":
-            return self.send_json(playground.clips())
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                return self.send_json(playground.clips((q.get("id") or [None])[0]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
+        if route == "/api/playground/list":  # the Local tab's gallery
+            return self.send_json(playground.list_all())
         if route.startswith("/api/playground/"):
             try:
                 return self.send_json(playground.load(route.removeprefix("/api/playground/")))
