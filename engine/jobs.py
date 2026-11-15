@@ -99,7 +99,7 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
     w, h = size(res["target"], snap["aspect"])
     gone = [l["name"] for l in snap.get("loras", []) if l.get("missing")]
     if gone:
-        raise ValueError(f"LoRA file missing: {', '.join(gone)}. Pick it again or remove it.")
+        raise ValueError(f"LoRA file missing: {', '.join(gone)}. Its file is gone from the library folder: delete it in Settings and upload it again.")
     h3 = model != "ltx23"
     if h3:  # H3: the numbered list from playground.h3_pictures (main image, "Last frame" ref, references); no End slot
         pics = snap.get("pictures") or []

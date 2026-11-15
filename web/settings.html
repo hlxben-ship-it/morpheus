@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<style>
+  :root { --bg:#0b0814; --panel:#141022; --raised:#1c1630; --line:#2e2647; --text:#ece8f7; --muted:#9a90b8; --accent:#8A6CD8; --pink:#F08AA8; --danger:#ff6b8a; --ok:#7fd6a8; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font:14px/1.45 Inter, system-ui, sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:22px 16px 60px; }
+  h1 { font:700 20px/1.2 Montserrat, sans-serif; margin:0 0 4px; }
+  h2 { font:700 13px/1.2 'IBM Plex Mono', monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:26px 0 10px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  .section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .head h3 { margin:0; font:700 15px/1.2 Montserrat, sans-serif; flex:1; }
+  button, .btn { font:600 12.5px/1 Inter, sans-serif; border:1px solid var(--line); background:var(--raised); color:var(--text); border-radius:999px; padding:8px 14px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:var(--danger); }
+  button:disabled { opacity:.5; cursor:default; }
+  .list { display:grid; gap:8px; }
+  .item { display:grid; grid-template-columns:64px minmax(0,1fr) auto; gap:12px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+  .pic { width:64px; height:64px; border-radius:8px; object-fit:cover; background:var(--raised); display:grid; place-items:center; color:var(--muted); font-size:22px; }
+  .item b { display:block; overflow-wrap:anywhere; }
+  .meta { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  .kw { font:12px/1.4 'IBM Plex Mono', monospace; color:var(--pink); overflow-wrap:anywhere; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .empty { color:var(--muted); font-size:13px; padding:6px 2px; }
+  .bad { color:var(--danger); }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(860px, calc(100vw - 32px)); max-height:calc(100vh - 32px); }
+  dialog::backdrop { background:rgb(0 0 0 / .6); }
+  form { display:grid; gap:12px; }
+  label { display:grid; gap:4px; font-size:12px; color:var(--muted); }
+  input[type=text], input[type=url], select, textarea { font:14px/1.4 Inter, sans-serif; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; width:100%; }
+  textarea { min-height:280px; resize:vertical; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  .note { font-size:12px; color:var(--muted); }
+  .check { display:flex; gap:8px; align-items:center; color:var(--text); }
+  .prog { height:6px; border-radius:999px; background:var(--raised); overflow:hidden; } .prog i { display:block; height:100%; width:0; background:var(--accent); }
+  .picrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .picrow img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
+  .picrow .grow { flex:1; }
+  .ico { display:inline-grid; place-items:center; width:40px; height:40px; padding:0; }
+  .ico svg { width:18px; height:18px; }
+  .ico.primary { width:auto; padding:0 16px; gap:8px; grid-auto-flow:column; }
+  .ico.busy { opacity:.6; pointer-events:none; }
+  dl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:2px 12px; margin:0; font-size:12px; } dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
+  @media (max-width:560px) { .item { grid-template-columns:48px minmax(0,1fr); } .pic { width:48px; height:48px; } .acts { grid-column:1 / -1; } .two { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Settings</h1>
+  <p class="sub">Things Morpheus keeps between sessions.</p>
+
+  <section class="section" aria-labelledby="lora-h">
+    <div class="head"><h3 id="lora-h">Video LoRAs</h3>
+      <button type="button" class="primary" id="upload-btn">Upload a LoRA …</button>
+      <input type="file" id="file" accept=".safetensors" hidden></div>
+    <p class="note">Download a LoRA yourself, then upload the .safetensors here. The Playground's LoRA slots pick from this library, filtered by the model.</p>
+    <div id="lib"></div>
+  </section>
+</main>
+
+<dialog id="dlg"></dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+// Lucide icons (ISC licence), inline
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  imagePlus: svg('<path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/><circle cx="9" cy="9" r="2"/>'),
+  trash: svg('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'),
+  x: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  check: svg('<path d="M20 6 9 17l-5-5"/>'),
+  pencil: svg('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
+  upload: svg('<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'),
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const gb = n => n >= 1 << 30 ? (n / (1 << 30)).toFixed(2) + ' GB' : (n / (1 << 20)).toFixed(0) + ' MB';
+let lib = { families: {}, loras: [] };
+
+async function post(path, body) {
+  const r = await fetch(path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+  const d = await r.json().catch(() => ({ error:'The server did not answer.' }));
+  if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+  return d;
+}
+
+async function refresh() {
+  try { lib = await (await fetch('/api/loras/video')).json(); } catch { $('lib').innerHTML = '<p class="empty bad">Could not read the library.</p>'; return; }
+  $('lib').innerHTML = Object.entries(lib.families).map(([fam, label]) => {
+    const items = lib.loras.filter(e => e.family === fam);
+    return `<h2>${esc(label)}</h2><div class="list">${items.length ? items.map(e => `<div class="item" data-id="${esc(e.id)}">
+      ${e.picture ? `<img class="pic" src="/api/loras/video/picture/${encodeURIComponent(e.id)}?v=${esc(e.picture)}" alt="">` : '<span class="pic" aria-hidden="true">◇</span>'}
+      <div><b>${esc(e.name)}</b>${e.keywords ? `<div class="kw">${esc(e.keywords)}</div>` : ''}${e.url ? `<div class="meta"><a href="${esc(e.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(e.url)}</a></div>` : ''}
+        <div class="meta">strength ${e.strength_min}–${e.strength_max} · ${gb(e.bytes)} · ${e.family_source === 'header' ? 'family from header' : 'family picked by hand'}${e.missing ? ' · <span class="bad">file missing</span>' : ''}</div></div>
+      <div class="acts"><button type="button" class="ico" data-a="edit" title="Edit" aria-label="Edit ${esc(e.name)}">${ICON.pencil}</button><button type="button" class="ico danger" data-a="del" title="Delete" aria-label="Delete ${esc(e.name)}">${ICON.trash}</button></div></div>`).join('')
+      : '<p class="empty">No LoRAs for this model yet.</p>'}</div>`;
+  }).join('');
+  $('lib').querySelectorAll('.item').forEach(el => {
+    const e = lib.loras.find(x => x.id === el.dataset.id);
+    el.querySelector('[data-a="edit"]').onclick = () => openForm({ entry:e });
+    el.querySelector('[data-a="del"]').onclick = () => askDelete(e);
+  });
+}
+window.refresh = refresh;
+
+// Upload: raw bytes to /api/upload (streams to disk), then the header probe, then the form.
+$('upload-btn').onclick = () => $('file').click();
+$('file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); };
+function upload(file) {
+  if (!/\.safetensors$/i.test(file.name)) return alert('A .safetensors file, please.');
+  const dlg = $('dlg');
+  dlg.innerHTML = `<h3 style="margin:0 0 10px">Uploading ${esc(file.name)}</h3><div class="prog"><i id="bar"></i></div><p class="note" id="up-t">0 %</p>`;
+  dlg.showModal();
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/upload');
+  xhr.upload.onprogress = ev => { if (ev.lengthComputable) { const p = ev.loaded / ev.total * 100; $('bar').style.width = p + '%'; $('up-t').textContent = `${p.toFixed(0)} % of ${gb(ev.total)}`; } };
+  xhr.onerror = () => { $('up-t').innerHTML = '<span class="bad">Upload failed.</span>'; };
+  xhr.onload = async () => {
+    try {
+      const { id } = JSON.parse(xhr.responseText);
+      $('up-t').textContent = 'Reading the header …';
+      const probe = await post('/api/loras/video/probe', { upload_id:id });
+      openForm({ upload:{ id, name:file.name, probe } });
+    } catch (err) { $('up-t').innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+  };
+  xhr.send(file);
+}
+
+function readPicture(file) {
+  return new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = fail; r.readAsDataURL(file); });
+}
+
+// One form for a new upload and for editing an entry.
+function openForm({ entry = null, upload = null }) {
+  const dlg = $('dlg'), detected = upload?.probe.family || null, v = entry || {};
+  const famPick = upload && !detected;
+  const defName = upload ? upload.name.replace(/\.safetensors$/i, '').replace(/[_-]+/g, ' ') : '';
+  let picture = null;  // undefined-ish: null = unchanged, '' = remove, data URL = new
+  dlg.innerHTML = `<form method="dialog" id="f">
+    <h3 style="margin:0">${entry ? 'Edit ' + esc(entry.name) : 'New LoRA'}</h3>
+    ${upload ? `<p class="note" style="margin:0">${esc(upload.name)} · ${gb(upload.probe.bytes)} · ${upload.probe.tensors} tensors · ${detected ? `header says <b>${esc(lib.families[detected])}</b>` : '<span class="bad">the header does not say which model: pick one</span>'}</p>` : ''}
+    <label>Name<input type="text" name="name" required maxlength="120" value="${esc(v.name ?? defName)}"></label>
+    ${upload ? `<label>Model family<select name="family">${famPick ? '<option value="">Pick …</option>' : ''}${Object.entries(lib.families).map(([k, l]) => `<option value="${k}" ${k === detected ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      <label class="check" id="force-row" hidden><input type="checkbox" name="force"> Use my pick anyway (the header says otherwise)</label>` : `<p class="note" style="margin:0">Family: ${esc(lib.families[entry.family])}</p>`}
+    <label>URL (where it came from)<input type="url" name="url" maxlength="500" value="${esc(v.url ?? '')}" placeholder="https://civitai.com/models/… or huggingface.co/…"></label>
+    <label>Keywords (trigger words)<input type="text" name="keywords" maxlength="300" value="${esc(v.keywords ?? '')}" placeholder="e.g. dr34ml4y style"></label>
+    <div class="two"><label>Recommended strength, min<input type="text" inputmode="decimal" name="strength_min" value="${v.strength_min ?? 0.6}" placeholder="0–2"></label>
+      <label>max<input type="text" inputmode="decimal" name="strength_max" value="${v.strength_max ?? 1.0}" placeholder="0–2"></label></div>
+    <label>Info (recommendations, notes)<textarea name="info" maxlength="20000" placeholder="What it does, prompts that work, what to avoid …">${esc(v.info ?? '')}</textarea></label>
+    ${upload?.probe.summary?.length ? `<details><summary class="note">What the file says</summary><dl>${upload.probe.summary.map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join('')}</dl></details>` : ''}
+    <p class="bad" id="err" style="margin:0" hidden></p>
+    <div class="picrow">
+      <img id="pic-prev" alt="" ${entry?.picture ? `src="/api/loras/video/picture/${encodeURIComponent(entry.id)}?v=${esc(entry.picture)}"` : 'hidden'}>
+      <button type="button" class="ico" id="pic-btn" title="Choose a picture" aria-label="Choose a picture">${ICON.imagePlus}</button>
+      <button type="button" class="ico danger" id="pic-rm" title="Remove the picture" aria-label="Remove the picture" ${entry?.picture ? '' : 'hidden'}>${ICON.trash}</button>
+      <input type="file" id="pic" accept="image/png,image/jpeg,image/webp" hidden>
+      <span class="grow"></span>
+      <button type="button" class="ico" id="cancel" title="${upload ? 'Discard' : 'Cancel'}" aria-label="${upload ? 'Discard' : 'Cancel'}">${ICON.x}</button>
+      <button type="submit" class="ico primary" id="save" title="${upload ? 'Add to library' : 'Save'}" aria-label="${upload ? 'Add to library' : 'Save'}">${ICON.check}</button>
+    </div>
+  </form>`;
+  if (!dlg.open) dlg.showModal();
+  const f = $('f');
+  const fam = f.elements.family;
+  if (fam) fam.onchange = () => { $('force-row').hidden = !(detected && fam.value && fam.value !== detected); };
+  $('pic-btn').onclick = () => $('pic').click();
+  $('pic').onchange = async e => { const file = e.target.files[0]; if (!file) return; picture = await readPicture(file); $('pic-prev').src = picture; $('pic-prev').hidden = false; $('pic-rm').hidden = false; };
+  $('pic-rm').onclick = () => { picture = ''; $('pic-prev').hidden = true; $('pic-rm').hidden = true; };
+  $('cancel').onclick = () => dlg.close();  // an unused upload stays in the temp folder and is cleaned up with it
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    const d = Object.fromEntries(new FormData(f));
+    const num = x => Number(String(x).trim().replace(',', '.'));  // 0,5 and 0.5 both work
+    const body = { name:d.name, url:d.url, keywords:d.keywords, info:d.info, strength_min:num(d.strength_min), strength_max:num(d.strength_max), ...(picture !== null && { picture }) };
+    $('save').disabled = true; $('err').hidden = true;
+    $('save').classList.add('busy'); $('save').title = upload ? 'Checking and copying …' : 'Saving …';
+    try {
+      if (upload) await post('/api/loras/video/add', { ...body, upload_id:upload.id, filename:upload.name, family:d.family || null, force:!!d.force });
+      else await post('/api/loras/video/update', { ...body, id:entry.id });
+      dlg.close(); refresh();
+    } catch (err) {
+      $('err').textContent = err.message; $('err').hidden = false; $('save').disabled = false; $('save').classList.remove('busy');
+      if (/use anyway/i.test(err.message)) $('force-row').hidden = false;
+    }
+  };
+}
+
+async function askDelete(e) {
+  const dlg = $('dlg');
+  let used = [];
+  try { used = (await post('/api/loras/video/delete', { id:e.id })).used_by; } catch (err) { return alert(err.message); }
+  dlg.innerHTML = `<h3 style="margin:0 0 8px">Delete ${esc(e.name)}?</h3>
+    <p class="note">${used.length ? `<b class="bad">Used by ${used.length} Playground${used.length > 1 ? 's' : ''}</b> (${used.map(u => esc(u.title)).join(', ')}): those slots will be emptied. Clips already rendered keep their render info.` : 'No Playground uses it.'} The file (${gb(e.bytes)}) is removed from disk.</p>
+    <div class="row"><button type="button" class="ico" id="no" title="Cancel" aria-label="Cancel">${ICON.x}</button><button type="button" class="ico primary danger" id="yes" title="Delete" aria-label="Delete">${ICON.trash} Delete</button></div>`;
+  dlg.showModal();
+  $('no').onclick = () => dlg.close();
+  $('yes').onclick = async () => { try { await post('/api/loras/video/delete', { id:e.id, confirm:true }); dlg.close(); refresh(); } catch (err) { alert(err.message); } };
+}
+
+refresh();
+</script>
+</body>
+</html>

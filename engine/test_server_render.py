@@ -77,10 +77,14 @@ class RenderPath(unittest.TestCase):
         self.assertEqual(playground.clips(), [])
 
     def test_missing_lora_never_reaches_the_engine(self):
-        playground.save({"id": self.play, "loras": [{"path": str(self.tmp / "gone.safetensors"), "strength": 1}, {"path": "", "strength": 1}]})
-        seen, self.trace, self.job = [], [], {}
-        with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen)):
-            with self.assertRaisesRegex(ValueError, "gone.safetensors"):
+        # a library entry whose file went missing from models/loras/video after it was picked
+        import lora_library
+        with mock.patch.object(lora_library, "DIR", self.tmp / "loras"):
+            lora_library.write_entries([{"id": "gone", "name": "Gone LoRA", "family": "ltx2", "file": "gone.safetensors",
+                                         "strength_min": 0.5, "strength_max": 1.0}])
+            playground.save({"id": self.play, "loras": [{"id": "gone", "strength": 1}, {"id": "", "strength": 1}]})
+            seen, self.trace, self.job = [], [], {}
+            with mock.patch.object(server.engine_wsl, "run", self.fake_run(seen)), self.assertRaisesRegex(ValueError, "Gone LoRA"):
                 self.handler.playground_render({"id": self.play, "_job": self.job})
         self.assertEqual(seen, [])
 

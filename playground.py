@@ -1,6 +1,6 @@
 """Dawnforge Playground: one free local-video page per folder, output/playground/<id>/.
 
-The page's state lives here (model, selects, prompt, frames, two LoRA paths + strengths), the LoRA header read and the
+The page's state lives here (model, selects, prompt, frames, two LoRA slots: library id + strength), the LoRA header read and the
 clip shelf. Rendering runs in the WSL engine worker (engine/wsl_runner.py), started by server.py. The id is the folder name, so
 /dawnforge/playground/<id> can be rebuilt from a folder on disk.
 """
@@ -13,6 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
+import lora_library
 import morpheus
 import playground_models as pm
 
@@ -34,7 +35,8 @@ def folder(play_id: str) -> Path:
 
 def options() -> dict:
     """What the page's pickers offer: the model schema plus the shared lists."""
-    return {"models": pm.models(), **LISTS}
+    ms = pm.models()
+    return {"models": ms, "lora_families": {m["id"]: lora_library.family_of_model(m["id"]) for m in ms}, **LISTS}
 
 
 def fresh_state(play_id: str) -> dict:
@@ -42,7 +44,7 @@ def fresh_state(play_id: str) -> dict:
     return {"id": play_id, "kind": "video", "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
             "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "21:9",
             "prompt": "", "start": None, "end": None, "main_first": True, "refs": [None] * REFS, "last_ref": None,
-            "loras": [{"path": "", "strength": 1.0}, {"path": "", "strength": 1.0}]}
+            "loras": [{"id": "", "strength": 1.0}, {"id": "", "strength": 1.0}]}
 
 
 def h3_pictures(state: dict) -> list:
@@ -119,9 +121,27 @@ def load(play_id: str) -> dict:
     if not (isinstance(state.get("last_ref"), int) and 0 <= state["last_ref"] < REFS and state["refs"][state["last_ref"]]):
         state["last_ref"] = None
     state["pictures"] = h3_pictures(state)
-    for lora in state.get("loras", []):
-        lora["missing"] = bool(lora.get("path")) and not Path(lora["path"]).is_file()
+    state["loras"] = clean_slots(state.get("loras"), model["id"])
     return state
+
+
+def clean_slots(slots, model_id: str) -> list:
+    """Two {id, strength} slots. A slot whose id is not in the library, or is for another model family, is empty:
+    that also drops the free file paths of playgrounds made before the library (no migration, seed decision #4)."""
+    family = lora_library.family_of_model(model_id)
+    known = {e["id"]: e for e in lora_library.entries()}
+    out = []
+    for slot in (list(slots) if isinstance(slots, list) else [])[:2]:
+        slot = slot if isinstance(slot, dict) else {}
+        entry = known.get(str(slot.get("id", "")))
+        ok = entry and entry["family"] == family
+        try:
+            strength = float(slot.get("strength", 1.0))
+        except (TypeError, ValueError):
+            strength = 1.0
+        out.append({"id": entry["id"] if ok else "", "strength": strength,
+                    **({"missing": True} if ok and not lora_library.file_path(entry).is_file() else {})})
+    return out + [{"id": "", "strength": 1.0}] * (2 - len(out))
 
 
 def save(req: dict) -> dict:
@@ -151,7 +171,16 @@ def save(req: dict) -> dict:
         loras = req["loras"]
         if not isinstance(loras, list) or len(loras) != 2:
             raise ValueError("Two LoRA slots expected.")
-        state["loras"] = [{"path": str(x.get("path", "")), "strength": float(x.get("strength", 1.0))} for x in loras]
+        family = lora_library.family_of_model(state["model"])
+        for x in loras:
+            entry = lora_library.get(str((x or {}).get("id", ""))) if (x or {}).get("id") else None
+            if (x or {}).get("id") and not entry:
+                raise ValueError("This LoRA is not in the library.")
+            if entry and entry["family"] != family:
+                raise ValueError(f"{entry['name']} is a {lora_library.FAMILIES[entry['family']]} LoRA; this model takes {lora_library.FAMILIES.get(family, 'none')}.")
+            if not 0 <= float((x or {}).get("strength", 1.0)) <= 2:
+                raise ValueError("LoRA strength: 0 to 2.")
+        state["loras"] = [{"id": str((x or {}).get("id", "")), "strength": float((x or {}).get("strength", 1.0))} for x in loras]
     if "start" in req and req["start"] is None:  # removing a frame; adding one goes through frame()
         state["start"] = None
     if "end" in req and req["end"] is None:
@@ -209,23 +238,6 @@ def ref(req: dict) -> dict:
         state["refs"][slot] = store_picture(state, f"ref{slot + 1}", req.get("data"))
     state.pop("missing", None)
     return load(write(state)["id"])
-
-
-def pick_lora(req: dict) -> dict:
-    """A native Windows file dialog on this machine, so the page can keep the full path (a browser hides it).
-    The server runs on the user's own PC; the dialog opens there."""
-    # The owner form must be shown (invisible, topmost, activated): a dialog owned by a form that was never shown
-    # opens behind the browser with no taskbar entry, and it looks as if nothing happens.
-    script = ("Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::EnableVisualStyles(); "
-              "$f = New-Object System.Windows.Forms.Form; $f.Text = 'Morpheus'; $f.TopMost = $true; $f.Opacity = 0; "
-              "$f.ShowInTaskbar = $false; $f.StartPosition = 'CenterScreen'; $f.Size = New-Object System.Drawing.Size(1, 1); "
-              "$f.Show(); $f.Activate(); "
-              "$d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = 'Choose a LoRA'; "
-              "$d.Filter = 'LoRA (*.safetensors)|*.safetensors|All files|*.*'; "
-              "if ($d.ShowDialog($f) -eq 'OK') { [Console]::Out.Write($d.FileName) }; $f.Close()")
-    out = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", script], capture_output=True, text=True,
-                         timeout=600).stdout.strip()
-    return {"path": out}
 
 
 def summarize(meta: dict | None, ranks: list) -> list:
@@ -311,14 +323,16 @@ CLIP_FORMAT = 1
 
 
 def lora_info(slot: int, lora: dict) -> dict:
-    """One used LoRA slot as it was at render time: path, strength and what the file's header says about itself."""
-    path = Path(lora["path"])
-    info = {"slot": slot, "path": lora["path"], "name": path.name, "strength": lora["strength"], "missing": not path.is_file()}
+    """One used LoRA slot as it was at render time: the library entry, its file, the strength and what the header says."""
+    entry = lora_library.get(lora["id"]) or {"id": lora["id"], "name": lora["id"], "family": "", "file": ""}
+    path = lora_library.file_path(entry) if entry["file"] else Path("")
+    info = {"slot": slot, "id": entry["id"], "name": entry["name"], "path": str(path), "file": entry["file"],
+            "strength": lora["strength"], "missing": not entry["file"] or not path.is_file()}
     if info["missing"]:
         return info
     info["bytes"] = path.stat().st_size
     try:
-        info["header"] = inspect({"path": lora["path"]})["summary"]  # the readable rows, as on the page
+        info["header"] = inspect({"path": str(path)})["summary"]  # the readable rows, as on the page
     except ValueError as e:
         info["header_error"] = str(e)
     return info
@@ -339,7 +353,7 @@ def snapshot(play_id: str) -> dict:
             "start_frame": state["start"], "end_frame": state["end"],  # file names in the playground folder (never overwritten)
             "main_first": state["main_first"], "refs": list(state["refs"]), "last_ref": state["last_ref"],
             "pictures": h3_pictures(state),  # what an H3 render sends, numbered (render_settings reads this for H3)
-            "loras": [lora_info(n + 1, l) for n, l in enumerate(state["loras"]) if l["path"]]}
+            "loras": [lora_info(n + 1, l) for n, l in enumerate(state["loras"]) if l["id"]]}
 
 
 def make_thumb(mp4: Path, out: Path) -> None:
@@ -597,4 +611,27 @@ def delete(req: dict) -> dict:
     return {"ok": True}
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
+def lora_users(lora_id: str) -> list:
+    """Playgrounds whose saved slots name this library LoRA: [{id, title}]."""
+    out = []
+    for f in sorted(ROOT.glob("*/playground.json")):
+        try:
+            state = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if any(isinstance(l, dict) and l.get("id") == lora_id for l in state.get("loras", [])):
+            out.append({"id": f.parent.name, "title": state.get("title") or f.parent.name})
+    return out
+
+
+def clear_lora(lora_id: str) -> None:
+    """Empty every slot that names this LoRA (it was deleted from the library)."""
+    for user in lora_users(lora_id):
+        path = folder(user["id"]) / "playground.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        state["loras"] = [{"id": "", "strength": l.get("strength", 1.0)} if isinstance(l, dict) and l.get("id") == lora_id else l
+                          for l in state.get("loras", [])]
+        write(state)
+
+
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip}
