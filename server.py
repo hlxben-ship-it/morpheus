@@ -25,6 +25,7 @@ from PIL import Image
 
 import agent_chat
 import agents
+import lora_library
 import morpheus
 import playground
 from engine import jobs as engine_jobs, wsl_runner as engine_wsl
@@ -791,6 +792,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes((WEB / "agent.html").read_bytes(), "text/html; charset=utf-8")
         if route in ("/logo.png", "/favicon.png", "/city.jpg", "/glia-avatar.js", "/glia-data.json", "/agent-chat.js"):
             return self.send_file(WEB / route[1:], WEB)
+        if route == "/settings":  # the Settings (gear) tab: the video LoRA library
+            return self.send_bytes((WEB / "settings.html").read_bytes(), "text/html; charset=utf-8")
+        if route == "/api/loras/video":
+            return self.send_json(lora_library.listing())
+        if route.startswith("/api/loras/video/picture/"):
+            pic = lora_library.picture(urllib.parse.unquote(route.rsplit("/", 1)[1]))
+            return self.send_file(pic, lora_library.DIR) if pic else self.send_error(404)
         if route == "/cloud":  # the Cloud tab: a Video / Image switch around /test and /test2
             return self.send_bytes((WEB / "cloud.html").read_bytes(), "text/html; charset=utf-8")
         if route == "/test2":  # the Test 2 tab: OpenRouter image (MiniMax H3) with n reference pictures
@@ -961,6 +969,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(e)}, 500)
         if self.path.startswith("/api/test/save"):  # the Test tab's finished video, raw mp4 bytes
             return self.test_save()
+        if self.path.startswith("/api/loras/video/"):  # probe / add / update / delete (Settings tab)
+            try:
+                action = lora_library.ACTIONS.get(self.path.rsplit("/", 1)[1])
+                if not action:
+                    return self.send_error(404)
+                return self.send_json(action(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
+            except Exception as e:
+                traceback.print_exc()
+                return self.send_json({"error": str(e)}, 500)
         if self.path == "/api/upload":  # raw bytes, not JSON
             return self.upload()
         if self.path == "/api/agent/export":  # answers with the zip itself

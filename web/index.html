@@ -554,7 +554,7 @@
 
   /* ---------- Soulforge ---------- */
   /* Wake your dream: its own page, picture on the left, the clips on the right */
-  body.wake-mode .side, body.wake-mode .main, body.yumeko-mode .side, body.yumeko-mode .main, body.cloud-mode .side, body.cloud-mode .main { display: none; }
+  body.wake-mode .side, body.wake-mode .main, body.yumeko-mode .side, body.yumeko-mode .main, body.cloud-mode .side, body.cloud-mode .main, body.settings-mode .side, body.settings-mode .main { display: none; }
   .yumeko-tab { grid-column: 1 / 3; min-height: 0; width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
   .wake { grid-column: 1 / 3; min-height: 0; overflow-y: auto; padding: 24px 16px 40px; }
   .wake-in { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -689,11 +689,33 @@
   .pl-drop.over, .pl-drop:hover { border-color: var(--accent); }
   .pl-drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .pl-drop .x { position: absolute; top: 6px; right: 6px; z-index: 1; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); color: #fff; cursor: pointer; }
-  .pl-lora { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-  .pl-lora .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .pl-lora .path { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); }
-  .pl-lora .path.bad { color: var(--danger); }
-  .pl-lora input[type=range] { flex: 1; min-width: 120px; }
+  .pl-lpair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
+  .pl-lora { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: center; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .pl-lpic { display: block; padding: 0; width: 88px; height: 88px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; cursor: pointer; color: var(--muted); }
+  .pl-lora.on .pl-lpic { border-style: solid; }
+  .pl-lpic:hover, .pl-lpic:focus-visible { border-color: var(--accent); color: var(--accent); }
+  .pl-lpic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pl-lpic .empty, .pl-lpic .ph { display: grid; place-items: center; width: 100%; height: 100%; font-size: 26px; }
+  .pl-lpic .ph { font: 700 28px/1 Montserrat, sans-serif; color: var(--accent); }
+  .pl-ldet { display: grid; gap: 5px; min-width: 0; }
+  .pl-lname { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .pl-lname b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+  .pl-lname .bad { color: var(--danger); font-size: 11px; white-space: nowrap; }
+  .pl-lbtn { flex: none; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 2px 6px; font-size: 11px; cursor: pointer; }
+  .pl-lbtn:hover { color: var(--accent); border-color: var(--accent); }
+  .pl-lkw { display: flex; gap: 4px; overflow: hidden; } .pl-lkw span { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .pl-lstr { display: flex; align-items: center; gap: 6px; } .pl-lstr input { flex: 1; min-width: 0; } .pl-lstr output { font-size: 12px; width: 32px; text-align: right; }
+  .pl-lnone { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); } .pl-lnone small { font-size: 11px; }
+  .pl-lora input[type=range].banded { accent-color: var(--accent); background: linear-gradient(90deg, transparent var(--lo), color-mix(in srgb, var(--accent) 35%, transparent) var(--lo) var(--hi), transparent var(--hi)); border-radius: 999px; }
+  .pl-lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; max-height: 70vh; overflow-y: auto; }
+  .pl-ltile { display: grid; gap: 3px; text-align: left; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); cursor: pointer; min-width: 0; }
+  .pl-ltile:hover:not(:disabled), .pl-ltile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .pl-ltile:disabled { opacity: .4; cursor: default; }
+  .pl-ltile .pic { aspect-ratio: 1; border-radius: 7px; overflow: hidden; background: var(--panel); display: grid; }
+  .pl-ltile .pic img { width: 100%; height: 100%; object-fit: cover; } .pl-ltile .pic .ph { display: grid; place-items: center; font: 700 30px/1 Montserrat, sans-serif; color: var(--accent); }
+  .pl-ltile b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-ltile small { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-ltile em { font-style: normal; font-size: 11px; color: var(--accent); }
   .pl-sum { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 0; font-size: 12px; line-height: 1.4; }
   .pl-sum dt { color: var(--muted); } .pl-sum dd { margin: 0; overflow-wrap: anywhere; }
   .pl-raw summary { cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
@@ -753,8 +775,7 @@
     .pl-frames { flex: 3 1 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
     .pl-frames .pl-grid { grid-template-columns: 1fr 1fr; min-height: 0; }
     .pl-drop { aspect-ratio: auto; height: 100%; }
-    .pl-loras { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; align-content: start; }
-    .pl-loras::-webkit-scrollbar { display: none; }
+    .pl-loras { flex: none; overflow: hidden; }
     .pl-prog, .pl-strip { grid-column: 1 / -1; }
   }
   /* prompt writer (web/agent-chat.js): a drawer over the right side; a third column on wide screens */
@@ -1072,6 +1093,7 @@
       <button type="button" role="tab" data-f="yumeko" aria-selected="false" title="Character LoRAs and manga panels">Yumeko</button>
       <button type="button" role="tab" data-f="local" aria-selected="false" title="Playgrounds on this PC's GPU">Local</button>
       <button type="button" role="tab" data-f="cloud" aria-selected="false" title="Video and pictures from OpenRouter (real credit)">Cloud</button>
+      <button type="button" role="tab" data-f="settings" aria-selected="false" title="Settings: video LoRA library" aria-label="Settings">⚙</button>
     </div>
     <div class="top-actions">
       <div class="hud" id="hud" aria-live="off">
@@ -1236,6 +1258,7 @@
   <section class="wake" id="wake" aria-label="Dawnforge" hidden></section>
   <iframe class="yumeko-tab" id="yumeko" title="Yumeko" hidden></iframe>
   <iframe class="yumeko-tab" id="cloudtab" title="Cloud" hidden></iframe>
+  <iframe class="yumeko-tab" id="settingstab" title="Settings" hidden></iframe>
 </div>
 
 <dialog class="lb" id="lightbox"><div class="lb-inner" id="lb-inner"></div></dialog>
@@ -2645,6 +2668,10 @@
     document.body.classList.toggle('cloud-mode', f === 'cloud');
     $('cloudtab').hidden = f !== 'cloud';
     if (f === 'cloud' && !$('cloudtab').src) $('cloudtab').src = '/cloud';  // stays loaded between tabs: the key lives in its memory
+    document.body.classList.toggle('settings-mode', f === 'settings');
+    $('settingstab').hidden = f !== 'settings';
+    if (f === 'settings') { if (!$('settingstab').src) $('settingstab').src = '/settings'; else try { $('settingstab').contentWindow.refresh?.(); } catch {} }
+    if (f !== 'settings' && wake.play) wake.loraLib = null;  // the Playground re-reads the library on its next paint
     $('wake').hidden = !sbF;
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
     if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
@@ -3301,6 +3328,7 @@
       wake.playOpts = d;
     }
     const o = wake.playOpts;
+    try { wake.loraLib = await (await fetch('/api/loras/video')).json(); } catch { wake.loraLib ??= { loras: [] }; }  // the Settings tab may have changed it
     if (wake.play?.id !== wake.playId) {
       const r = await fetch('/api/playground/' + encodeURIComponent(wake.playId || '-'));
       const d = await r.json();
@@ -3313,11 +3341,37 @@
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
     if (!curModel().resolutions.some(r => r.id === p.resolution)) p.resolution = curModel().resolutions[0].id;  // the server resolves this too
     const frame = (k, hint) => `<div class="pl-frame"><label class="pl-l">${k === 'start' ? 'Start frame' : 'End frame'}</label><div class="pl-drop" data-k="${k}" tabindex="0">${p[k] ? `<img src="${esc(url(dir + p[k]))}" alt=""><button type="button" class="x" title="Remove" aria-label="Remove ${k} frame">${ACT_ICON.close}</button>` : hint}</div></div>`;
-    const lora = i => `<div class="pl-lora" data-i="${i}"><div class="row"><b>LoRA ${i + 1}</b><button type="button" class="sb-quiet" data-a="pick">Open a file …</button>
-        <span class="path ${p.loras[i].missing ? 'bad' : ''}">${p.loras[i].path ? esc(p.loras[i].path) + (p.loras[i].missing ? ' — file missing' : '') : 'No file'}</span>
-        <button type="button" class="sb-quiet danger" data-a="clear" title="Remove this LoRA" aria-label="Remove LoRA ${i + 1}" ${p.loras[i].path ? '' : 'hidden'}>✕</button></div>
-      <div class="row"><label class="pl-l" style="margin:0">Strength</label><input type="range" min="0" max="2" step="0.05" value="${p.loras[i].strength}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>
-      <dl class="pl-sum" hidden></dl><details class="pl-raw" hidden><summary>Raw header</summary><pre class="pl-dbg"></pre></details></div>`;
+    // LoRA slots pick from the video LoRA library (Settings tab), only the family the model takes
+    const famNow = () => o.lora_families?.[p.model] || null;
+    const libFor = () => (wake.loraLib?.loras || []).filter(e => e.family === famNow());
+    const entryOf = i => (wake.loraLib?.loras || []).find(e => e.id === p.loras[i].id) || null;
+    const band = e => e ? `--lo:${e.strength_min / 2 * 100}%;--hi:${e.strength_max / 2 * 100}%` : '';
+    const pic = e => e?.picture ? `<img src="/api/loras/video/picture/${encodeURIComponent(e.id)}?v=${esc(e.picture)}" alt="" loading="lazy">` : `<span class="ph">${esc((e?.name || '?').slice(0, 1))}</span>`;
+    const kw3 = e => (e.keywords || '').split(',').map(w => w.trim()).filter(Boolean).slice(0, 3);
+    const lora = i => { const e = entryOf(i), bad = p.loras[i].missing || e?.missing; return `<div class="pl-lora${e ? ' on' : ''}" data-i="${i}">
+        <button type="button" class="pl-lpic" data-a="pick" title="${e ? esc(e.name + (e.info ? '\n\n' + e.info : '') + '\n\nClick to change') : 'Pick a LoRA'}" aria-label="LoRA ${i + 1}: ${e ? esc(e.name) : 'none'}, pick">
+          ${e ? pic(e) : `<span class="empty">+</span>`}</button>
+        <div class="pl-ldet">${e ? `<div class="pl-lname"><b title="${esc(e.name)}">${esc(e.name)}</b>${bad ? '<span class="bad">file missing</span>' : ''}
+          ${e.keywords ? `<button type="button" class="pl-lbtn" data-a="kw" title="Add to the prompt: ${esc(e.keywords)}" aria-label="Add the keywords to the prompt">+T</button>` : ''}
+          <button type="button" class="pl-lbtn" data-a="clear" title="Remove" aria-label="Remove LoRA ${i + 1}">✕</button></div>
+          ${kw3(e).length ? `<div class="pl-lkw" title="${esc(e.keywords)}">${kw3(e).map(w => `<span>${esc(w)}</span>`).join('')}</div>` : ''}
+          <div class="pl-lstr"><input type="range" class="banded" style="${band(e)}" min="0" max="2" step="0.05" value="${p.loras[i].strength}" title="Strength · recommended ${e.strength_min}–${e.strength_max}" aria-label="Strength LoRA ${i + 1}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>`
+          : `<span class="pl-lnone">LoRA ${i + 1}<small>Click the square to pick one</small></span>`}</div></div>`; };
+    const openLoraPick = i => {
+      const dlg = $('pl-lpick'), lib = libFor();
+      dlg.innerHTML = `<div class="gal-head"><h2 class="h">LoRA ${i + 1}</h2><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></div>
+        ${lib.length ? `<div class="pl-lgrid">${lib.map(x => `<button type="button" class="pl-ltile" data-id="${esc(x.id)}" aria-pressed="${x.id === p.loras[i].id}" ${p.loras[1 - i].id === x.id ? 'disabled title="Already in the other slot"' : `title="${esc(x.info || x.name)}"`}>
+            <span class="pic">${pic(x)}</span><b>${esc(x.name)}</b><small>${esc(x.keywords || '')}</small><em>${x.strength_min}–${x.strength_max}</em></button>`).join('')}</div>`
+          : `<p class="hint">No ${esc(wake.loraLib?.families?.[famNow()] || '')} LoRAs yet. Upload them in ⚙ Settings.</p>`}`;
+      dlg.querySelector('[data-a="close"]').onclick = () => dlg.close();
+      dlg.querySelectorAll('.pl-ltile').forEach(t => t.onclick = () => {
+        const e = lib.find(x => x.id === t.dataset.id);
+        p.loras[i] = { id: e.id, strength: Math.round((e.strength_min + e.strength_max) / 2 * 20) / 20 };  // starts mid-range
+        dlg.close(); persist(); paintPlay();
+      });
+      dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+      dlg.showModal();
+    };
     const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b><i class="pl-star${c.cover ? ' on' : ''}" role="button" tabindex="0" aria-label="${c.cover ? 'Unstar' : 'Star: cover of this playground'}" title="${c.cover ? 'Starred: the gallery shows this clip' : 'Star: show this clip in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}</span><small>${esc(c.label)}</small></button>`;
     bar.innerHTML = `<h2 class="pl-title">Playground</h2><span class="pl-id">${esc(p.id)}</span><span class="sb-saved" id="pl-saved" style="margin-left:auto" aria-live="polite"></span>`;
     box.innerHTML = `<div class="pl-left">
@@ -3334,7 +3388,7 @@
             <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${plAspects(o.aspects, p.aspect)}<button type="button" class="ratio pl-asp-x" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}<span>Close</span></button></div></div></div>
           <div class="pl-pipe"><label class="pl-l">Pipeline</label><ol class="pl-stages" id="pl-stages"></ol><div id="pl-opts"></div><p class="pl-hint" id="pl-note"></p></div></section>
         <button type="button" class="sb-quiet pl-writer" id="pl-writer" title="A chat that writes the prompt; it knows the model and sees the frames">✦ Write prompt</button>
-        <section class="pl-box pl-loras"><b>LoRAs</b>${lora(0)}${lora(1)}</section>
+        <section class="pl-box pl-loras"><b>LoRAs</b><div class="pl-lpair">${lora(0)}${lora(1)}</div></section>
         <div class="pl-engine"><label class="pl-l" for="pl-engine">Keep warm</label><select id="pl-engine" title="Renders run in WSL. Keep model: it stays loaded, the next render skips the load (it holds ~23 GB RAM meanwhile)">${PL_ENGINES.map(([v, t]) => '<option value="' + v + '"' + (plEngine() === v ? ' selected' : '') + '>' + t + '</option>').join('')}</select></div>
         <button type="button" class="pl-render" id="pl-render">Render</button>
         <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
@@ -3342,14 +3396,15 @@
       <div class="pl-prog" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
       <div class="pl-strip" id="pl-strip">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your Playground renders show up here. Drag one onto the start frame to continue from its last frame.</span>'}</div>
       <div class="pl-chat" id="pl-chat" hidden><button type="button" class="pl-chat-x" id="pl-chat-x" title="Close (the chat stays)" aria-label="Close prompt writer">${ACT_ICON.close}</button></div>
-      <dialog class="wake-dialog pl-modal" id="pl-modal"></dialog>`;
+      <dialog class="wake-dialog pl-modal" id="pl-modal"></dialog>
+      <dialog class="wake-dialog pl-modal" id="pl-lpick"></dialog>`;
     const saved = t => $('pl-saved').textContent = t;
     let timer;
     const persist = () => {
       wake.plTask?.();  // the prompt writer sees model, duration, aspect and prompt as they are now
       clearTimeout(timer); saved('Saving …');
       timer = setTimeout(async () => {
-        try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
+        try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ id: l.id || '', strength: l.strength })) }); saved('Saved'); }
         catch (e) { saved(e.message); }
       }, 400);
     };
@@ -3438,7 +3493,7 @@
       aspShow(false); aspBtn.focus();
     };
     for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0]])
-      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
+      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); if (p.loras.some((l, i) => l.id && entryOf(i)?.family !== famNow())) { p.loras = p.loras.map((l, i) => l.id && entryOf(i)?.family !== famNow() ? { id: '', strength: 1.0 } : l); persist(); return paintPlay(); } } persist(); };
     $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
     // prompt writer: one chat per page session, kept in wake.plChat across repaints; what it knows lives in its task
     // attribute (re-read on every message); frames go over once each as pictures, a changed frame once more
@@ -3523,31 +3578,19 @@
       };
     });
     $('pl-file').onchange = e => send(e.target.files[0]);
-    // LoRAs: a native file dialog on this PC gives the full path; a readable summary, the raw header folded away
-    const showHeader = async (el, i) => {
-      const sum = el.querySelector('.pl-sum'), raw = el.querySelector('.pl-raw'), path = p.loras[i].path;
-      sum.hidden = raw.hidden = true;
-      if (!path) return;
-      try {
-        const { summary, ...rest } = await post('/api/playground/inspect', { path });
-        sum.innerHTML = summary.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join(''); sum.hidden = false;
-        el.querySelector('.pl-dbg').textContent = JSON.stringify(rest, null, 1); raw.hidden = false;
-      } catch (e) { sum.innerHTML = `<dt>Header</dt><dd>${esc(e.message)}</dd>`; sum.hidden = false; }
-    };
+    // LoRAs: two slots side by side, each a picture that opens the library grid
     box.querySelectorAll('.pl-lora').forEach(el => {
-      const i = +el.dataset.i, range = el.querySelector('input'), out = el.querySelector('output');
-      range.oninput = () => { p.loras[i].strength = +range.value; out.textContent = (+range.value).toFixed(2); persist(); };
-      el.querySelector('[data-a="pick"]').onclick = async () => {
-        saved('Waiting for the file dialog on this PC …');
-        try {
-          const { path } = await post('/api/playground/pick_lora', {});
-          if (!path) return saved('');
-          p.loras[i].path = path; p.loras[i].missing = false;
-          persist(); paintPlay();
-        } catch (e) { saved(e.message); }
+      const i = +el.dataset.i, range = el.querySelector('input[type=range]'), out = el.querySelector('output');
+      if (range) range.oninput = () => { p.loras[i].strength = +range.value; out.textContent = (+range.value).toFixed(2); persist(); };
+      el.querySelector('[data-a="pick"]').onclick = () => openLoraPick(i);
+      const clear = el.querySelector('[data-a="clear"]');
+      if (clear) clear.onclick = () => { p.loras[i] = { id: '', strength: 1.0 }; persist(); paintPlay(); };
+      const kw = el.querySelector('[data-a="kw"]');
+      if (kw) kw.onclick = () => {
+        const words = entryOf(i)?.keywords || '', ta = $('pl-prompt');
+        if (!words || ta.value.includes(words)) return;
+        ta.value = (ta.value.trim() ? ta.value.trimEnd() + ' ' : '') + words; p.prompt = ta.value; persist();
       };
-      el.querySelector('[data-a="clear"]').onclick = () => { p.loras[i] = { path: '', strength: 1.0 }; persist(); paintPlay(); };
-      if (p.loras[i].path && !p.loras[i].missing) showHeader(el, i);
     });
     // the shelf: click a clip for the big player, drag it onto the start frame
     const openClip = c => {
@@ -3611,7 +3654,7 @@
     });
     $('pl-render').onclick = async () => {
       clearTimeout(timer);  // render what is on screen, not what was last autosaved
-      try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
+      try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ id: l.id || '', strength: l.strength })) }); saved('Saved'); }
       catch (e) { return saved(e.message); }
       plStart('/api/playground/render', { id: p.id, engine: plEngine() }, 'Render');
     };

@@ -98,7 +98,7 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
     w, h = size(res["target"], snap["aspect"])
     gone = [l["name"] for l in snap.get("loras", []) if l.get("missing")]
     if gone:
-        raise ValueError(f"LoRA file missing: {', '.join(gone)}. Pick it again or remove it.")
+        raise ValueError(f"LoRA file missing: {', '.join(gone)}. Its file is gone from the library folder: delete it in Settings and upload it again.")
     start = str(folder / snap["start_frame"]) if snap.get("start_frame") else None
     end = str(folder / snap["end_frame"]) if snap.get("end_frame") else None
     s = {"model_type": MODELS[model], "seed": seed if seed is not None else random.randrange(1, 2**31),
