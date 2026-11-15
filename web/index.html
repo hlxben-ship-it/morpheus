@@ -697,8 +697,7 @@
   @keyframes pl-stripes { to { background-position: 28px 0; } }
   .pl-prog span { position: relative; font-size: 13px; color: var(--muted); padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .pl-prog.running span { color: var(--text); }
-  .pl-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; min-height: 138px; }
-  .pl-strip::-webkit-scrollbar { display: none; }
+  .pl-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; min-height: 138px; }
   .pl-strip > :first-child { margin-left: auto; } .pl-strip > :last-child { margin-right: auto; }
   .pl-strip .empty { margin: auto; color: var(--muted); font-size: 13px; align-self: center; }
   .pl-clip { flex: 0 0 auto; width: 132px; display: grid; gap: 4px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); cursor: grab; font: inherit; text-align: left; overflow: hidden; transition: transform .15s, border-color .15s, box-shadow .15s; }
@@ -3391,7 +3390,7 @@
     };
     const useLast = async c => {
       saved('Taking the last frame …');
-      try { p.start = (await post('/api/playground/frame', { id: p.id, kind: 'start', data: await plLastFrame(url(c.video)) })).start; paintPlay(); }
+      try { p.start = (await post('/api/playground/last_frame', { id: p.id, clip_playground: c.playground, video: c.video })).start; paintPlay(); }
       catch (e) { saved(e.message); }
     };
     box.querySelectorAll('.pl-drop').forEach(d => {

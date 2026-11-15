@@ -421,4 +421,20 @@ def loop_clip(req: dict) -> dict:
     return add_clip(play_id, tmp, snap, seed=meta.get("seed"), seconds=meta.get("render_seconds"))
 
 
-ACTIONS = {"loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
+def last_frame(req: dict) -> dict:
+    """"Last frame as start": the clip's last picture becomes this playground's start frame. Read with ffmpeg on the
+    server, not in the browser: a phone browser often never seeks a video it is not playing (2026-11-15)."""
+    mp4, _ = clip_meta(str(req.get("clip_playground") or req.get("id", "")), str(req.get("video", "")))
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ValueError("ffmpeg is not on PATH.")
+    # -sseof jumps near the end, -update 1 keeps overwriting one picture, so what stays is the last decoded frame
+    run = subprocess.run([ffmpeg, "-loglevel", "error", "-sseof", "-1", "-i", str(mp4), "-an", "-update", "1",
+                          "-f", "image2", "-c:v", "png", "pipe:1"], capture_output=True)
+    if run.returncode or not run.stdout:
+        raise ValueError(f"Could not read the last frame: {run.stderr.decode(errors='replace').strip()[-300:]}")
+    data = "data:image/png;base64," + base64.b64encode(run.stdout).decode()
+    return frame({"id": req.get("id"), "kind": "start", "data": data})
+
+
+ACTIONS = {"last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
