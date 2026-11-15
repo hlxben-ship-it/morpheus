@@ -1,0 +1,10 @@
+{
+ "name": "pre14_q4_480s",
+ "model": "q4",
+ "clip": "480s",
+ "ref": "base_q4_480s",
+ "note": "preload flag really applied (14000)",
+ "hooks": [
+  "hooks/dbg_args.py"
+ ]
+}

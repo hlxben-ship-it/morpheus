@@ -1,0 +1,16 @@
+{
+ "name": "fin_q6_720s",
+ "model": "q6",
+ "clip": "720s",
+ "ref": "base_q6_720s",
+ "note": "final stack, Q6",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 2
+}

@@ -1,0 +1,6 @@
+{
+ "name": "base_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "note": "baseline: Sol 1.3 + preload 14000"
+}

@@ -1,0 +1,16 @@
+{
+ "name": "fin_int8_1080s",
+ "model": "int8",
+ "clip": "1080s",
+ "ref": "base_int8_1080s",
+ "note": "final stack, 1080p",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 2
+}

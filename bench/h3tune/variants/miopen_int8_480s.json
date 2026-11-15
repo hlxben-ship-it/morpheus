@@ -1,0 +1,10 @@
+{
+ "name": "miopen_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "MIOpen find mode NORMAL (VAE convs)",
+ "env": {
+  "MIOPEN_FIND_MODE": "NORMAL"
+ }
+}

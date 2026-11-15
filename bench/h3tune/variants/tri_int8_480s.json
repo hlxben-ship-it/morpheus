@@ -1,0 +1,10 @@
+{
+ "name": "tri_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "int8 backend Triton instead of Kitchen HIP",
+ "hooks": [
+  "hooks/int8_triton.py"
+ ]
+}

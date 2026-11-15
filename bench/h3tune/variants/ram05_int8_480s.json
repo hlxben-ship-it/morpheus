@@ -1,0 +1,10 @@
+{
+ "name": "ram05_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "pinned RAM cap 5%",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

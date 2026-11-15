@@ -1,0 +1,15 @@
+{
+ "name": "r10p0_ltx_ltx2s",
+ "model": "ltx",
+ "clip": "ltx2s",
+ "ref": "base_ltx_ltx2s",
+ "note": "LTX on ROCm 10, preload 0",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "name": "r10_ltx_ltx2s",
+ "model": "ltx",
+ "clip": "ltx2s",
+ "ref": "base_ltx_ltx2s",
+ "note": "LTX on ROCm 10 + Triton dequant + RAM cap",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

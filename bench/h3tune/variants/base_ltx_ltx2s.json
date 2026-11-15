@@ -1,0 +1,7 @@
+{
+ "name": "base_ltx_ltx2s",
+ "model": "ltx",
+ "clip": "ltx2s",
+ "note": "LTX baseline (Morpheus as it was)",
+ "early_wgp": true
+}

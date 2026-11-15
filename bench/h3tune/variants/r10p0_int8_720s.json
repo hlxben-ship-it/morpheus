@@ -1,0 +1,12 @@
+{
+ "name": "r10p0_int8_720s",
+ "model": "int8",
+ "clip": "720s",
+ "ref": "r10_int8_720s",
+ "note": "ROCm 10, preload 0",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

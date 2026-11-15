@@ -1,0 +1,14 @@
+{
+ "name": "prof_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "base_q4_720s",
+ "note": "profile 720p",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/profile.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

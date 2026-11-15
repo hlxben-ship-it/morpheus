@@ -1,0 +1,15 @@
+{
+ "name": "solw_q4_480s",
+ "model": "q4",
+ "clip": "480s",
+ "ref": "base_q4_480s",
+ "note": "Sol kernel: extra autotune configs (warps 1, 2)",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_warps.py"
+ ],
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

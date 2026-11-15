@@ -1,0 +1,10 @@
+{
+ "name": "pre18_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "preload 18000: whole int8 model in VRAM",
+ "cli": {
+  "preload": 18000
+ }
+}

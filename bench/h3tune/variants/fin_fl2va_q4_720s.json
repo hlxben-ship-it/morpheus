@@ -1,0 +1,21 @@
+{
+ "name": "fin_fl2va_q4_720s",
+ "model": "fl2va_q4",
+ "clip": "720s",
+ "ref": "base_fl2va_q4_720s",
+ "note": "final stack, bridge start+end",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "settings": {
+  "image_prompt_type": "SE",
+  "image_end": "/mnt/c/dev/morpheus/bench/h3tune/in/yukomo.jpg",
+  "image_refs": null,
+  "video_prompt_type": ""
+ }
+}

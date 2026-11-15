@@ -1,0 +1,14 @@
+{
+ "name": "gtri0_ltx_ltx2s",
+ "model": "ltx",
+ "clip": "ltx2s",
+ "ref": "base_ltx_ltx2s",
+ "note": "LTX + Triton dequant + RAM cap 5%, preload 0",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

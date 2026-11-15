@@ -1,0 +1,11 @@
+{
+ "name": "ram05_int8_720s",
+ "model": "int8",
+ "clip": "720s",
+ "ref": "base_int8_720s",
+ "note": "pinned RAM cap 5%, 2 jobs",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ },
+ "repeat": 2
+}

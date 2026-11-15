@@ -1,0 +1,13 @@
+{
+ "name": "ram15_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "base_q4_720s",
+ "note": "pinned RAM cap 15% + Triton dequant",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.15
+ }
+}

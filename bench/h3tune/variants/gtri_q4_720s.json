@@ -1,0 +1,10 @@
+{
+ "name": "gtri_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "base_q4_720s",
+ "note": "Triton GGUF dequant kernel",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ]
+}

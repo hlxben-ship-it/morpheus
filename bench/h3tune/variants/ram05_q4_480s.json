@@ -1,0 +1,13 @@
+{
+ "name": "ram05_q4_480s",
+ "model": "q4",
+ "clip": "480s",
+ "ref": "base_q4_480s",
+ "note": "pinned RAM cap 5%",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

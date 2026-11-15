@@ -1,0 +1,11 @@
+{
+ "name": "ram15_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "pinned RAM cap 15% + preload 18000",
+ "cli": {
+  "perc-reserved-mem-max": 0.15,
+  "preload": 18000
+ }
+}

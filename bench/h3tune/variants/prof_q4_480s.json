@@ -1,0 +1,10 @@
+{
+ "name": "prof_q4_480s",
+ "model": "q4",
+ "clip": "480s",
+ "ref": "base_q4_480s",
+ "note": "profiler on",
+ "hooks": [
+  "hooks/profile.py"
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "name": "hipk_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "ref": "base_int8_480s",
+ "note": "WanGP fused Triton kernels admitted on HIP",
+ "hooks": [
+  "hooks/hip_kernels.py"
+ ]
+}

@@ -1,0 +1,6 @@
+{
+ "name": "base_int8_480s",
+ "model": "int8",
+ "clip": "480s",
+ "note": "baseline: Sol 1.3 + preload 14000"
+}

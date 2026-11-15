@@ -1,0 +1,3 @@
+#!/bin/bash
+# From Windows (Git Bash): go.sh <variant-name>...
+MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -u root -- bash /mnt/c/dev/morpheus/bench/h3tune/wsl_run.sh "$@" 2>&1 | tr -d '\0'

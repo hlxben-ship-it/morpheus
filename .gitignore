@@ -23,3 +23,6 @@ engine/wangp/ffmpeg_bins/
 # the agent chat's OpenRouter key (agent_chat.py)
 .env
 .pi-agent/
+
+# the tuning bench (bench/h3tune): the reference picture stays local
+bench/h3tune/in/

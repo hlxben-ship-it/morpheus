@@ -1,0 +1,15 @@
+{
+ "name": "pv8_q4_480s",
+ "model": "q4",
+ "clip": "480s",
+ "ref": "r10_q4_480s",
+ "note": "Sol int8 P.V",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_int8pv.py"
+ ],
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ }
+}

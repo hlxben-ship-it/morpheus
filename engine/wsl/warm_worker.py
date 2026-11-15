@@ -51,9 +51,14 @@ def mem():
 def main():
     os.chdir(WANGP); sys.path.insert(0, str(WANGP))
     from shared.api import init
-    import wgp
+    # --perc-reserved-mem-max: the share of RAM WanGP pins for transfers. Its Linux default (0.6) held ~12 GB for nothing here: the
+    # step is compute-bound, 0.05 renders the same clip at the same speed with ~11 GB more RAM free (Glia seed challenge_spike_h3_tuning).
     session = init(root=WANGP, console_output=False,
-                   cli_args=["--attention", "sdpa", "--profile", "4", "--preload", os.environ.get("WARM_PRELOAD", "14000")])
+                   cli_args=["--attention", "sdpa", "--profile", "4", "--preload", os.environ.get("WARM_PRELOAD", "14000"),
+                             "--perc-reserved-mem-max", os.environ.get("WARM_PINNED", "0.05")])
+    session._ensure_runtime()  # WanGP reads its flags when wgp is imported: importing it before init() dropped them all (until 2026-11-15)
+    import wgp
+    import gguf_triton  # noqa: F401  one Triton kernel per GGUF linear instead of PyTorch's dequantisation passes (Q4_K, Q6_K)
     jobs = queue.Queue()
     threading.Thread(target=lambda: [jobs.put(l) for l in sys.stdin], daemon=True).start()
     say({"event": "ready", "keep_warm": KEEP_WARM})

@@ -1,0 +1,15 @@
+{
+ "name": "r10_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "base_q4_720s",
+ "note": "ROCm 10 stack, 2 jobs",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05
+ },
+ "repeat": 2
+}
