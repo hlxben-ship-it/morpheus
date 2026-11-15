@@ -1783,4 +1783,6 @@ if __name__ == "__main__":
     print(f"Morpheus is running on http://127.0.0.1:{PORT}")
     threading.Thread(target=warm_up, daemon=True).start()
     threading.Thread(target=sample_gpu, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    # Listens on the home network too (the user, 2026-11-15): laptop and phone reach it at http://<this PC>:5196.
+    # There is no login: anyone on the home network can use it (the router keeps the internet out). MORPHEUS_HOST=127.0.0.1 closes it again.
+    ThreadingHTTPServer((os.environ.get("MORPHEUS_HOST", "0.0.0.0"), PORT), Handler).serve_forever()
