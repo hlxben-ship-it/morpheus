@@ -53,17 +53,18 @@ def size(resolution: str, aspect: str) -> tuple[int, int]:
         raise ValueError(f"No native size for {resolution} {aspect}. Native renders: {', '.join(SIZES)}.")
 
 
-def h3_prompt(prompt: str, start: bool, end: bool) -> str:
+def h3_prompt(prompt: str, start: int | None, end: int | None) -> str:
     """H3 is trained on a structured prompt. A plain prompt gets the header and sections the spike used; a prompt that
-    already is structured (it names its own sections) goes through untouched."""
+    already is structured (it names its own sections) goes through untouched. start / end: the <Picture N> number of
+    the first / last frame anchor, None without one."""
     text = prompt.strip()
     if re.search(r"^\s*(integrated_multimodal_description|detailed_description|subject_definitions)\s*:", text, re.M):
         return text
     head = []
     if start:
-        head.append("For the target video, at 0.00 seconds into the target video, Picture 1 (from Shot 1) is fully referenced.")
+        head.append(f"For the target video, at 0.00 seconds into the target video, Picture {start} (from Shot 1) is fully referenced.")
     if end:
-        head.append("At the end of the target video, Picture 2 (from Shot 1) is fully referenced.")
+        head.append(f"At the end of the target video, Picture {end} (from Shot 1) is fully referenced.")
     body = f"integrated_multimodal_description: [Shot 1] {text}\n\nnon_diegetic_music: N/A"
     return "\n\n".join(head + [body])
 
@@ -99,8 +100,17 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
     gone = [l["name"] for l in snap.get("loras", []) if l.get("missing")]
     if gone:
         raise ValueError(f"LoRA file missing: {', '.join(gone)}. Pick it again or remove it.")
-    start = str(folder / snap["start_frame"]) if snap.get("start_frame") else None
-    end = str(folder / snap["end_frame"]) if snap.get("end_frame") else None
+    h3 = model != "ltx23"
+    if h3:  # H3: the numbered list from playground.h3_pictures (main image, "Last frame" ref, references); no End slot
+        pics = snap.get("pictures") or []
+        if not pics:
+            raise ValueError("H3 needs a picture: add a main image or a reference.")
+        pick = lambda role: next(((n + 1, str(folder / p["file"])) for n, p in enumerate(pics) if p["role"] == role), (None, None))
+        (start_n, start), (end_n, end) = pick("start"), pick("end")
+        refs = [str(folder / p["file"]) for p in pics if p["role"] == "ref"]
+    else:
+        start = str(folder / snap["start_frame"]) if snap.get("start_frame") else None
+        end = str(folder / snap["end_frame"]) if snap.get("end_frame") else None
     s = {"model_type": MODELS[model], "seed": seed if seed is not None else random.randrange(1, 2**31),
          "resolution": f"{w}x{h}", "video_length": frames(snap["duration"]), "force_fps": FPS,
          "multi_prompts_gen_type": "FG",  # a multi-line prompt is one prompt, not one clip per line
@@ -127,15 +137,11 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
         s["video_length"] = h3_frames(snap["duration"])
         if s["video_length"] < H3_WANGP_MIN:
             s["_frames_minimum"] = s["video_length"]  # the worker lowers WanGP's floor for this one job
-        s.update({"prompt": h3_prompt(snap["prompt"], bool(start), bool(end)), "num_inference_steps": steps,
+        s.update({"prompt": h3_prompt(snap["prompt"], start_n, end_n), "num_inference_steps": steps,
                   "sample_solver": "euler", "guidance_scale": 1.0, "guidance_phases": 1,
                   "config": "distilled_4b,lightvae_int8"})  # distilled Qwen3-VL-4B encoder + LightVAE, both int8
-        # Ref2VA wants reference images ("I"); the spike passed the start picture as the reference too, and that is
-        # the proven setup. Without a start picture: no reference flag, text (+ end) only.
-        if start:
-            s["image_refs"], s["video_prompt_type"] = [start], "I"
-        else:
-            s["video_prompt_type"] = ""
+        # Ref2VA wants at least one reference image ("I"); h3_pictures repeats an anchor when there is no other
+        s["image_refs"], s["video_prompt_type"] = refs, "I"
     if loras:
         s["activated_loras"], s["loras_multipliers"] = loras, " ".join(mults)
     return s

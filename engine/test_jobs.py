@@ -1,18 +1,26 @@
 """Tests of the snapshot -> WanGP settings mapping (no GPU, no torch): python -m unittest engine.test_jobs (Morpheus root)."""
+import json
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import playground
 from engine import jobs
 
 DIR = Path("C:/play")
 
 
-def snap(model="ltx23", steps=8, res="720p", aspect="16:9", start="start_1.png", end=None, loras=(), render=None, prompt="A fox runs."):
+def snap(model="ltx23", steps=8, res="720p", aspect="16:9", start="start_1.png", end=None, loras=(), render=None, prompt="A fox runs.",
+         refs=(None,) * 4, main_first=True, last_ref=None):
     r = {"id": res, "label": res, "target": res}
     if render:
         r["render"] = render
+    state = {"start": start, "end": end, "refs": list(refs), "main_first": main_first, "last_ref": last_ref}
     return {"model": {"id": model, "label": model}, "prompt": prompt, "params": {"main.steps": steps}, "resolution": r,
-            "aspect": aspect, "duration": 3, "start_frame": start, "end_frame": end, "loras": list(loras)}
+            "aspect": aspect, "duration": 3, "start_frame": start, "end_frame": end, "loras": list(loras),
+            "pictures": playground.h3_pictures(state)}
 
 
 class Sizes(unittest.TestCase):
@@ -71,6 +79,11 @@ class Ltx(unittest.TestCase):
         self.assertEqual(s["image_prompt_type"], "SE")
         self.assertEqual(Path(s["image_end"]), DIR / "end_1.png")
 
+    def test_refs_are_h3_only(self):
+        s = jobs.render_settings(snap(refs=("r1.png", None, None, None), last_ref=0), DIR)
+        self.assertNotIn("image_refs", s)
+        self.assertEqual(s["image_prompt_type"], "S")
+
     def test_text_only(self):
         s = jobs.render_settings(snap(start=None), DIR)
         self.assertEqual(s["image_prompt_type"], "")
@@ -124,20 +137,117 @@ class H3(unittest.TestCase):
             with self.assertRaises(ValueError):
                 jobs.render_settings(snap(model="h3_minimax", steps=bad), DIR)
 
-    def test_without_start_no_reference_flag(self):
-        s = jobs.render_settings(snap(model="h3_minimax", start=None), DIR)
-        self.assertEqual(s["video_prompt_type"], "")
-        self.assertNotIn("image_refs", s)
-        self.assertNotIn("Picture 1", s["prompt"])
+    def test_no_picture_is_a_clear_error(self):
+        with self.assertRaisesRegex(ValueError, "main image or a reference"):
+            jobs.render_settings(snap(model="h3_minimax", start=None), DIR)
 
-    def test_end_frame_is_picture_2(self):
+    def test_stored_end_frame_is_not_sent(self):  # H3 has no End slot; an LTX end stays saved, unused
         s = jobs.render_settings(snap(model="h3_minimax", end="end_1.png"), DIR)
+        self.assertEqual(s["image_prompt_type"], "S")
+        self.assertNotIn("image_end", s)
+
+    def test_seed_example(self):  # main = first frame, Ref 2 = last frame, Ref 1 + 3 filled
+        s = jobs.render_settings(snap(model="h3_minimax", refs=("r1.png", "r2.png", "r3.png", None), last_ref=1), DIR)
         self.assertEqual(s["image_prompt_type"], "SE")
-        self.assertIn("Picture 2", s["prompt"])
+        self.assertEqual(Path(s["image_start"]), DIR / "start_1.png")
+        self.assertEqual(Path(s["image_end"]), DIR / "r2.png")
+        self.assertEqual([Path(x).name for x in s["image_refs"]], ["r1.png", "r3.png"])  # each image once
+        self.assertIn("Picture 1 (from Shot 1)", s["prompt"])
+        self.assertIn("At the end of the target video, Picture 2", s["prompt"])
+
+    def test_main_as_reference_only(self):
+        s = jobs.render_settings(snap(model="h3_minimax", main_first=False, refs=(None, "r2.png", None, None)), DIR)
+        self.assertEqual(s["image_prompt_type"], "")
+        self.assertNotIn("image_start", s)
+        self.assertEqual([Path(x).name for x in s["image_refs"]], ["start_1.png", "r2.png"])
+        self.assertTrue(s["prompt"].startswith("integrated_multimodal_description"))
+
+    def test_last_frame_without_main_is_picture_1(self):
+        s = jobs.render_settings(snap(model="h3_minimax", start=None, refs=("r1.png", None, None, None), last_ref=0), DIR)
+        self.assertEqual(s["image_prompt_type"], "E")
+        self.assertEqual(s["image_refs"], [s["image_end"]])  # the only anchor repeated as the reference
+        self.assertIn("At the end of the target video, Picture 1", s["prompt"])
 
     def test_structured_prompt_untouched(self):
         p = "subject_definitions:\n<Subject 1> is ...\ndetailed_description:\n[Shot 1] ..."
         self.assertEqual(jobs.render_settings(snap(model="h3_minimax", prompt=p), DIR)["prompt"], p)
+
+
+class H3Pictures(unittest.TestCase):
+    def names(self, **state):
+        return [(p["slot"], p["role"], p["tag"], p["shown"]) for p in playground.h3_pictures(state)]
+
+    def test_seed_example(self):
+        self.assertEqual(self.names(start="m.png", refs=["a", "b", "c", None], last_ref=1), [
+            ("main", "start", "<Picture 1>", True), ("ref2", "end", "<Picture 2>", True),
+            ("ref1", "ref", "<Picture 3>", True), ("ref3", "ref", "<Picture 4>", True)])
+
+    def test_first_frame_off(self):
+        self.assertEqual(self.names(start="m.png", main_first=False, refs=[None, "b", None, "d"]), [
+            ("main", "ref", "<Picture 1>", True), ("ref2", "ref", "<Picture 2>", True), ("ref4", "ref", "<Picture 3>", True)])
+
+    def test_no_last_frame_refs_with_gaps(self):
+        self.assertEqual(self.names(start="m.png", refs=[None, None, "c", None]), [
+            ("main", "start", "<Picture 1>", True), ("ref3", "ref", "<Picture 2>", True)])
+
+    def test_only_anchors_repeat_the_first_as_hidden_reference(self):
+        self.assertEqual(self.names(start="m.png", refs=[None, "b", None, None], last_ref=1), [
+            ("main", "start", "<Picture 1>", True), ("ref2", "end", "<Picture 2>", True), ("main", "ref", "<Picture 3>", False)])
+
+    def test_last_frame_on_an_empty_slot_is_ignored(self):
+        self.assertEqual(self.names(start="m.png", refs=["a", None, None, None], last_ref=2), [
+            ("main", "start", "<Picture 1>", True), ("ref1", "ref", "<Picture 2>", True)])
+
+    def test_nothing(self):
+        self.assertEqual(playground.h3_pictures({"start": None, "refs": [None] * 4}), [])
+        self.assertEqual(playground.h3_pictures({}), [])
+
+
+PNG = "data:image/png;base64,iVBORw0KGgo="
+
+
+class RefState(unittest.TestCase):
+    """The ref slots in a real playground folder (temp): store, toggles, removal, what is saved."""
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.patch = mock.patch.object(playground, "ROOT", self.tmp)
+        self.patch.start()
+        self.id = playground.new({})["id"]
+
+    def tearDown(self):
+        self.patch.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_fresh_state(self):
+        st = playground.load(self.id)
+        self.assertEqual((st["main_first"], st["refs"], st["last_ref"], st["pictures"]), (True, [None] * 4, None, []))
+
+    def test_ref_last_frame_and_removal(self):
+        st = playground.ref({"id": self.id, "slot": 2, "data": PNG})
+        self.assertTrue(st["refs"][2].startswith("ref3_"))
+        st = playground.save({"id": self.id, "last_ref": 2, "main_first": False})
+        self.assertEqual((st["last_ref"], st["main_first"]), (2, False))
+        self.assertEqual([(p["slot"], p["role"]) for p in st["pictures"]], [("ref3", "end"), ("ref3", "ref")])
+        saved = json.loads((self.tmp / self.id / "playground.json").read_text(encoding="utf-8"))
+        self.assertNotIn("pictures", saved)  # derived, never stored
+        st = playground.ref({"id": self.id, "slot": 2, "data": None})
+        self.assertEqual((st["refs"][2], st["last_ref"]), (None, None))
+
+    def test_bad_input(self):
+        for bad in (4, -1, "1", True, None):
+            with self.subTest(slot=bad), self.assertRaises(ValueError):
+                playground.ref({"id": self.id, "slot": bad, "data": PNG})
+        with self.assertRaises(ValueError):
+            playground.save({"id": self.id, "last_ref": 5})
+        with self.assertRaises(ValueError):
+            playground.ref({"id": self.id, "slot": 0, "data": "data:text/plain;base64,eA=="})
+
+    def test_deleted_ref_file_is_gone(self):
+        name = playground.ref({"id": self.id, "slot": 0, "data": PNG})["refs"][0]
+        playground.save({"id": self.id, "last_ref": 0})
+        (self.tmp / self.id / name).unlink()
+        st = playground.load(self.id)
+        self.assertEqual((st["refs"][0], st["last_ref"]), (None, None))
 
 
 class Upscale(unittest.TestCase):

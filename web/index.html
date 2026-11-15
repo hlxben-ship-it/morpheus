@@ -689,6 +689,17 @@
   .pl-drop.over, .pl-drop:hover { border-color: var(--accent); }
   .pl-drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .pl-drop .x { position: absolute; top: 6px; right: 6px; z-index: 1; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); color: #fff; cursor: pointer; }
+  /* H3: one big main image + a 2x2 reference grid; each slot carries its <Picture N> name from the server's h3_pictures */
+  .pl-h3 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+  .pl-refs { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 6px 8px; min-height: 0; }
+  .pl-refs > .pl-l { grid-column: 1 / -1; }
+  .pl-refs .pl-drop { font-size: 12px; padding: 0 6px; }
+  .pl-tog { position: absolute; top: 6px; right: 38px; z-index: 1; height: 26px; padding: 0 9px; border-radius: 7px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); color: #fff; font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
+  .pl-tog[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .pl-tog:hover { border-color: var(--accent); }
+  .pl-tag { position: absolute; left: 6px; bottom: 6px; z-index: 1; padding: 1px 6px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; font: 600 11px/1.5 'IBM Plex Mono', monospace; pointer-events: none; }
+  .pl-left.h3 .pl-prompt textarea { min-height: 260px; }
+  @media (max-width: 560px) { .pl-h3 { grid-template-columns: 1fr; } }
   .pl-lora { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
   .pl-lora .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .pl-lora .path { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); }
@@ -752,6 +763,8 @@
     .pl-prompt textarea { height: 100%; min-height: 0; resize: none; }
     .pl-frames { flex: 3 1 0; min-height: 0; grid-template-rows: minmax(0, 1fr); }
     .pl-frames .pl-grid { grid-template-columns: 1fr 1fr; min-height: 0; }
+    .pl-left.h3 .pl-prompt { flex: 4 1 0; } .pl-left.h3 .pl-prompt textarea { min-height: 0; }
+    .pl-left.h3 .pl-frames { flex: 3 1 0; } .pl-h3 { height: 100%; } .pl-h3 .pl-frame { min-height: 0; }
     .pl-drop { aspect-ratio: auto; height: 100%; }
     .pl-loras { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; align-content: start; }
     .pl-loras::-webkit-scrollbar { display: none; }
@@ -3313,6 +3326,17 @@
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
     if (!curModel().resolutions.some(r => r.id === p.resolution)) p.resolution = curModel().resolutions[0].id;  // the server resolves this too
     const frame = (k, hint) => `<div class="pl-frame"><label class="pl-l">${k === 'start' ? 'Start frame' : 'End frame'}</label><div class="pl-drop" data-k="${k}" tabindex="0">${p[k] ? `<img src="${esc(url(dir + p[k]))}" alt=""><button type="button" class="x" title="Remove" aria-label="Remove ${k} frame">${ACT_ICON.close}</button>` : hint}</div></div>`;
+    const isH3 = () => curModel().id.startsWith('h3');
+    // H3 slots: the <Picture N> name is the server's (playground.h3_pictures), never counted here
+    const tagOf = slot => (p.pictures || []).find(x => x.slot === slot && x.shown)?.tag || '';
+    const tagEl = slot => tagOf(slot) ? `<span class="pl-tag">${esc(tagOf(slot))}</span>` : '';
+    const refSlot = i => `<div class="pl-drop" data-ref="${i}" tabindex="0" aria-label="Reference ${i + 1}">${p.refs?.[i]
+      ? `<img src="${esc(url(dir + p.refs[i]))}" alt=""><button type="button" class="pl-tog" data-a="last" aria-pressed="${p.last_ref === i}" title="This reference is the clip's last frame (one of the four at most)">Last frame</button><button type="button" class="x" title="Remove" aria-label="Remove reference ${i + 1}">${ACT_ICON.close}</button>${tagEl('ref' + (i + 1))}`
+      : `Ref ${i + 1}`}</div>`;
+    const h3Frames = () => `<div class="pl-h3"><div class="pl-frame"><label class="pl-l">Main image</label><div class="pl-drop" data-k="start" tabindex="0">${p.start
+      ? `<img src="${esc(url(dir + p.start))}" alt=""><button type="button" class="pl-tog" data-a="first" aria-pressed="${p.main_first !== false}" title="On: the clip opens on this picture. Off: it is only a reference">First frame</button><button type="button" class="x" title="Remove" aria-label="Remove main image">${ACT_ICON.close}</button>${tagEl('main')}`
+      : 'Drop a picture, or drag a clip here for its last frame'}</div></div>
+      <div class="pl-refs"><label class="pl-l">References</label>${[0, 1, 2, 3].map(refSlot).join('')}</div></div>`;
     const lora = i => `<div class="pl-lora" data-i="${i}"><div class="row"><b>LoRA ${i + 1}</b><button type="button" class="sb-quiet" data-a="pick">Open a file …</button>
         <span class="path ${p.loras[i].missing ? 'bad' : ''}">${p.loras[i].path ? esc(p.loras[i].path) + (p.loras[i].missing ? ' — file missing' : '') : 'No file'}</span>
         <button type="button" class="sb-quiet danger" data-a="clear" title="Remove this LoRA" aria-label="Remove LoRA ${i + 1}" ${p.loras[i].path ? '' : 'hidden'}>✕</button></div>
@@ -3320,9 +3344,9 @@
       <dl class="pl-sum" hidden></dl><details class="pl-raw" hidden><summary>Raw header</summary><pre class="pl-dbg"></pre></details></div>`;
     const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" title="${esc(c.prompt)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b><i class="pl-star${c.cover ? ' on' : ''}" role="button" tabindex="0" aria-label="${c.cover ? 'Unstar' : 'Star: cover of this playground'}" title="${c.cover ? 'Starred: the gallery shows this clip' : 'Star: show this clip in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}</span><small>${esc(c.label)}</small></button>`;
     bar.innerHTML = `<h2 class="pl-title">Playground</h2><span class="pl-id">${esc(p.id)}</span><span class="sb-saved" id="pl-saved" style="margin-left:auto" aria-live="polite"></span>`;
-    box.innerHTML = `<div class="pl-left">
+    box.innerHTML = `<div class="pl-left${isH3() ? ' h3' : ''}">
         <section class="pl-box pl-prompt"><label class="pl-l" for="pl-prompt" style="margin:0">Prompt</label><textarea id="pl-prompt" placeholder="What happens in the clip …">${esc(p.prompt)}</textarea></section>
-        <section class="pl-box pl-frames"><div class="pl-grid two">${frame('start', 'Drop a picture, or drag a clip here for its last frame')}${frame('end', 'Drop a picture or click')}</div>
+        <section class="pl-box pl-frames">${isH3() ? h3Frames() : `<div class="pl-grid two">${frame('start', 'Drop a picture, or drag a clip here for its last frame')}${frame('end', 'Drop a picture or click')}</div>`}
           <input type="file" id="pl-file" accept="image/png,image/jpeg,image/webp" hidden></section>
       </div>
       <div class="pl-right">
@@ -3438,29 +3462,38 @@
       aspShow(false); aspBtn.focus();
     };
     for (const [k, num] of [['model', 0], ['duration', 1], ['resolution', 0]])
-      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); } persist(); };
+      $('pl-' + k).onchange = e => { p[k] = num ? +e.target.value : e.target.value; if (k === 'model') { p.params = {}; paintPipe(); paintResolutions(); persist(); return paintPlay(); } persist(); };
     $('pl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
     // prompt writer: one chat per page session, kept in wake.plChat across repaints; what it knows lives in its task
     // attribute (re-read on every message); frames go over once each as pictures, a changed frame once more
+    // the pictures the chat gets: H3 = every named slot of h3_pictures (key = slot), LTX = start / end
+    const writerPics = () => isH3()
+      ? [...new Map((p.pictures || []).filter(x => x.shown).map(x => [x.slot, x.file])).entries()]
+      : ['start', 'end'].filter(k => p[k]).map(k => [k, p[k]]);
     const writerTask = () => {
       const m = modelNow(), h3 = m.id.startsWith('h3'), f = wake.plFrames || {};
-      const fr = (k, pic) => f[k]?.file === p[k] && p[k] ? `${f[k].img} (= <Picture ${pic}> in the H3 render)` : 'none';
+      const img = (key, file) => f[key]?.file === file ? f[key].img : 'not handed over';
+      const fr = k => p[k] ? img(k, p[k]) : 'none';
+      const ROLE = { start: 'first frame', end: 'last frame', ref: 'reference (look guide, not placed in time)' };
+      const slotName = s => s === 'main' ? 'main image' : 'Ref ' + s.slice(3);
+      const pics = (p.pictures || []).filter(x => x.shown);
       return [`Video prompt for the Dawnforge Playground. Model: ${m.label} — ${h3 ? 'MiniMax H3 Ref2VA format, h3-prompt-writing skill' : 'LTX 2.3, ltx23-prompt-writing skill'}.`,
         `Duration ${p.duration} s, aspect ${p.aspect}, ${p.resolution}.`,
-        `Start frame: ${fr('start', 1)}. End frame: ${fr('end', 2)}. The newest picture of a frame wins; older ones are outdated.`,
+        h3 ? (pics.length ? `Pictures, named as the prompt must name them (this list is current; names change when the user flips a toggle, older names are outdated):\n${pics.map(x => `${x.tag} = ${ROLE[x.role]} (${slotName(x.slot)}): ${img(x.slot, x.file)}`).join('\n')}\nThe newest picture of a slot wins; older ones are outdated.` : 'No pictures yet.')
+          : `Start frame: ${fr('start')}. End frame: ${fr('end')}. The newest picture of a frame wins; older ones are outdated.`,
         p.prompt.trim() ? `Current prompt in the Playground:\n${p.prompt.trim()}` : 'The Playground prompt is empty.'].join('\n');
     };
     wake.plTask = () => wake.plChat?.setAttribute('task', writerTask());
     const handFrames = async () => {
       const el = wake.plChat, f = (wake.plFrames ||= {});
       if (!el) return;
-      for (const k of ['start', 'end']) {
-        if (!p[k] || f[k]?.file === p[k]) continue;
+      for (const [k, file] of writerPics()) {
+        if (f[k]?.file === file) continue;
         if (el.model && !el.model.vision) continue;
         try {
-          const b = await (await fetch(url(dir + p[k]))).blob();
+          const b = await (await fetch(url(dir + file))).blob();
           const data = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(b); });
-          f[k] = { file: p[k], img: `img${el.sent + el.images.length + 1}` };
+          f[k] = { file, img: `img${el.sent + el.images.length + 1}` };
           el.addImage(data);
         } catch { /* no picture this time; the task says "none" */ }
       }
@@ -3497,28 +3530,42 @@
       if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) return saved('A PNG, JPEG or WebP picture, please.');
       const fr = new FileReader(), k = pick;
       fr.onload = async () => {
-        // only the frame comes back into the page: the rest may hold edits the debounced save has not sent yet
-        try { p[k] = (await post('/api/playground/frame', { id: p.id, kind: k, data: fr.result }))[k]; paintPlay(); }
-        catch (e) { saved(e.message); }
+        // only the picture (and the names it changes) comes back: the rest may hold edits the debounced save has not sent yet
+        try {
+          if (typeof k === 'number') takePics(await post('/api/playground/ref', { id: p.id, slot: k, data: fr.result }));
+          else { const st = await post('/api/playground/frame', { id: p.id, kind: k, data: fr.result }); p[k] = st[k]; p.pictures = st.pictures; }
+          paintPlay();
+        } catch (e) { saved(e.message); }
       };
       fr.readAsDataURL(file);
     };
-    const useLast = async c => {
+    const takePics = st => { p.start = st.start; p.refs = st.refs; p.main_first = st.main_first; p.last_ref = st.last_ref; p.pictures = st.pictures; };
+    const useLast = async (c, slot = null) => {
       saved('Taking the last frame …');
-      try { p.start = (await post('/api/playground/last_frame', { id: p.id, clip_playground: c.playground, video: c.video })).start; paintPlay(); }
+      try { takePics(await post('/api/playground/last_frame', { id: p.id, clip_playground: c.playground, video: c.video, slot })); paintPlay(); }
+      catch (e) { saved(e.message); }
+    };
+    const setPics = async body => {
+      try { takePics(await post('/api/playground/save', { id: p.id, ...body })); paintPlay(); }
       catch (e) { saved(e.message); }
     };
     box.querySelectorAll('.pl-drop').forEach(d => {
-      const k = d.dataset.k, isClip = e => [...e.dataTransfer.types].includes('text/x-pl-clip');
+      const ref = d.dataset.ref == null ? null : +d.dataset.ref, k = ref ?? d.dataset.k, isClip = e => [...e.dataTransfer.types].includes('text/x-pl-clip');
       d.onclick = e => {
-        if (e.target.closest('.x')) { p[k] = null; post('/api/playground/save', { id: p.id, [k]: null }).then(() => paintPlay()); return; }
+        const tog = e.target.closest('.pl-tog')?.dataset.a;
+        if (tog === 'first') return setPics({ main_first: p.main_first === false });
+        if (tog === 'last') return setPics({ last_ref: p.last_ref === ref ? null : ref });  // one of the four at most
+        if (e.target.closest('.x')) {
+          if (ref != null) { post('/api/playground/ref', { id: p.id, slot: ref, data: null }).then(st => { takePics(st); paintPlay(); }, err => saved(err.message)); return; }
+          p[k] = null; post('/api/playground/save', { id: p.id, [k]: null }).then(st => { p.pictures = st.pictures; paintPlay(); }); return;
+        }
         pick = k; $('pl-file').value = ''; $('pl-file').click();
       };
-      d.ondragover = e => { if (isClip(e) && k !== 'start') return; e.preventDefault(); d.classList.add('over'); };
+      d.ondragover = e => { if (isClip(e) && k === 'end') return; e.preventDefault(); d.classList.add('over'); };
       d.ondragleave = () => d.classList.remove('over');
       d.ondrop = e => {
         e.preventDefault(); d.classList.remove('over');
-        if (isClip(e)) return useLast(shelf[+e.dataTransfer.getData('text/x-pl-clip')]);
+        if (isClip(e)) return useLast(shelf[+e.dataTransfer.getData('text/x-pl-clip')], ref);
         pick = k; send(e.dataTransfer.files[0]);
       };
     });
@@ -3610,6 +3657,7 @@
       b.ondragstart = e => { e.dataTransfer.setData('text/x-pl-clip', b.dataset.i); e.dataTransfer.effectAllowed = 'copy'; };
     });
     $('pl-render').onclick = async () => {
+      if (isH3() && !(p.pictures || []).length) return saved('H3 needs a picture: add a main image or a reference.');
       clearTimeout(timer);  // render what is on screen, not what was last autosaved
       try { await post('/api/playground/save', { id: p.id, model: p.model, params: p.params, duration: p.duration, resolution: p.resolution, aspect: p.aspect, prompt: p.prompt, loras: p.loras.map(l => ({ path: l.path, strength: l.strength })) }); saved('Saved'); }
       catch (e) { return saved(e.message); }

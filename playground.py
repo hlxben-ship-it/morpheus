@@ -22,6 +22,7 @@ ID = re.compile(r"[0-9a-z_]{1,40}")
 LISTS = {"durations": [2, 3, 4, 5, 6, 8, 10],
          "aspects": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"]}
 FRAMES = ("start", "end")
+REFS = 4  # H3 reference slots beside the main image (H3 takes up to 9)
 HEADER_MAX = 64 << 20  # a safetensors header is JSON; far above this is not a LoRA
 
 
@@ -40,12 +41,44 @@ def fresh_state(play_id: str) -> dict:
     model = pm.models()[0]
     return {"id": play_id, "kind": "video", "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": model["id"],
             "params": pm.resolve(model, {}), "duration": 5, "resolution": model["resolutions"][0]["id"], "aspect": "21:9",
-            "prompt": "", "start": None, "end": None,
+            "prompt": "", "start": None, "end": None, "main_first": True, "refs": [None] * REFS, "last_ref": None,
             "loras": [{"path": "", "strength": 1.0}, {"path": "", "strength": 1.0}]}
+
+
+def h3_pictures(state: dict) -> list:
+    """The pictures an H3 render sends, in H3's own numbering: the timeline anchors first (image_start, then image_end),
+    then the references (image_refs). The one source of the <Picture N> names: the engine, the slot labels and the prompt
+    writer all read this list. The main image ("start") is the first frame unless main_first is off, then it is a
+    reference; the ref with last_ref is the last frame. H3 needs at least one reference: with anchors only, the first
+    anchor is sent as a reference too (the spike setup), that copy has no visible name (shown False)."""
+    main, refs = state.get("start"), list(state.get("refs") or [])[:REFS]
+    refs += [None] * (REFS - len(refs))
+    last = state.get("last_ref")
+    if not (isinstance(last, int) and 0 <= last < REFS and refs[last]):
+        last = None
+    first = state.get("main_first", True) is not False
+    out = []
+
+    def add(slot, role, file, shown=True):
+        out.append({"slot": slot, "role": role, "file": file, "tag": f"<Picture {len(out) + 1}>", "shown": shown})
+
+    if main and first:
+        add("main", "start", main)
+    if last is not None:
+        add(f"ref{last + 1}", "end", refs[last])
+    if main and not first:
+        add("main", "ref", main)
+    for i, f in enumerate(refs):
+        if f and i != last:
+            add(f"ref{i + 1}", "ref", f)
+    if out and not any(p["role"] == "ref" for p in out):
+        add(out[0]["slot"], "ref", out[0]["file"], shown=False)
+    return out
 
 
 def write(state: dict) -> dict:
     """Through a temp name, so the file on disk is always a whole one."""
+    state.pop("pictures", None)  # derived on load, never stored
     path = folder(state["id"]) / "playground.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     state["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -80,6 +113,12 @@ def load(play_id: str) -> dict:
     for kind in FRAMES:  # a frame the user deleted by hand is just gone
         if state.get(kind) and not (folder(play_id) / state[kind]).is_file():
             state[kind] = None
+    refs = list(state.get("refs") or [])[:REFS]
+    state["refs"] = [r if r and (folder(play_id) / r).is_file() else None for r in refs + [None] * (REFS - len(refs))]
+    state.setdefault("main_first", True)
+    if not (isinstance(state.get("last_ref"), int) and 0 <= state["last_ref"] < REFS and state["refs"][state["last_ref"]]):
+        state["last_ref"] = None
+    state["pictures"] = h3_pictures(state)
     for lora in state.get("loras", []):
         lora["missing"] = bool(lora.get("path")) and not Path(lora["path"]).is_file()
     return state
@@ -117,8 +156,33 @@ def save(req: dict) -> dict:
         state["start"] = None
     if "end" in req and req["end"] is None:
         state["end"] = None
+    if "main_first" in req:
+        state["main_first"] = bool(req["main_first"])
+    if "last_ref" in req:  # at most one ref is the last frame: one index or None
+        last = req["last_ref"]
+        if last is not None and (not isinstance(last, int) or isinstance(last, bool) or not 0 <= last < REFS):
+            raise ValueError("Unknown reference slot.")
+        state["last_ref"] = last
     state.pop("missing", None)
     return load(write(state)["id"])
+
+
+def store_picture(state: dict, prefix: str, data) -> str:
+    """A data URL picture into the playground folder; returns its file name."""
+    head, _, body = str(data or "").partition(",")
+    ext = {"data:image/png;base64": "png", "data:image/jpeg;base64": "jpg", "data:image/webp;base64": "webp"}.get(head)
+    if not ext or not body:
+        raise ValueError("A PNG, JPEG or WebP picture, please.")
+    name = f"{prefix}_{time.time_ns() // 1_000_000}.{ext}"
+    (folder(state["id"]) / name).write_bytes(base64.b64decode(body))
+    return name
+
+
+def ref_slot(req: dict) -> int:
+    slot = req.get("slot")
+    if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < REFS:
+        raise ValueError("Unknown reference slot.")
+    return slot
 
 
 def frame(req: dict) -> dict:
@@ -126,14 +190,23 @@ def frame(req: dict) -> dict:
     kind = str(req.get("kind", ""))
     if kind not in FRAMES:
         raise ValueError("Start or end frame only.")
-    head, _, body = str(req.get("data", "")).partition(",")
-    ext = {"data:image/png;base64": "png", "data:image/jpeg;base64": "jpg", "data:image/webp;base64": "webp"}.get(head)
-    if not ext or not body:
-        raise ValueError("A PNG, JPEG or WebP picture, please.")
     state = load(str(req.get("id", "")))
-    name = f"{kind}_{int(time.time())}.{ext}"
-    (folder(state["id"]) / name).write_bytes(base64.b64decode(body))
-    state[kind] = name
+    state[kind] = store_picture(state, kind, req.get("data"))
+    state.pop("missing", None)
+    return load(write(state)["id"])
+
+
+def ref(req: dict) -> dict:
+    """One H3 reference slot (0-3): a data URL picture is stored, data None empties the slot (and takes its "Last frame"
+    toggle with it)."""
+    slot = ref_slot(req)
+    state = load(str(req.get("id", "")))
+    if req.get("data") is None:
+        state["refs"][slot] = None
+        if state.get("last_ref") == slot:
+            state["last_ref"] = None
+    else:
+        state["refs"][slot] = store_picture(state, f"ref{slot + 1}", req.get("data"))
     state.pop("missing", None)
     return load(write(state)["id"])
 
@@ -264,6 +337,8 @@ def snapshot(play_id: str) -> dict:
             "resolution": {k: res[k] for k in ("id", "label", "target", "render") if k in res},
             "aspect": state["aspect"], "duration": state["duration"],
             "start_frame": state["start"], "end_frame": state["end"],  # file names in the playground folder (never overwritten)
+            "main_first": state["main_first"], "refs": list(state["refs"]), "last_ref": state["last_ref"],
+            "pictures": h3_pictures(state),  # what an H3 render sends, numbered (render_settings reads this for H3)
             "loras": [lora_info(n + 1, l) for n, l in enumerate(state["loras"]) if l["path"]]}
 
 
@@ -443,6 +518,8 @@ def last_frame(req: dict) -> dict:
     if run.returncode or not run.stdout:
         raise ValueError(f"Could not read the last frame: {run.stderr.decode(errors='replace').strip()[-300:]}")
     data = "data:image/png;base64," + base64.b64encode(run.stdout).decode()
+    if req.get("slot") is not None:  # dragged onto an H3 reference slot
+        return ref({"id": req.get("id"), "slot": req.get("slot"), "data": data})
     return frame({"id": req.get("id"), "kind": "start", "data": data})
 
 
@@ -520,4 +597,4 @@ def delete(req: dict) -> dict:
     return {"ok": True}
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "pick_lora": pick_lora, "inspect": inspect, "delete_clip": delete_clip}
