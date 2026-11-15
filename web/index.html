@@ -3589,15 +3589,28 @@
         try {
           if (typeof k === 'number') takePics(await post('/api/playground/ref', { id: p.id, slot: k, data: fr.result }));
           else { const st = await post('/api/playground/frame', { id: p.id, kind: k, data: fr.result }); p[k] = st[k]; p.pictures = st.pictures; }
-          paintPlay();
+          await paintPlay();
+          if (k === 'start') matchAspect();
         } catch (e) { saved(e.message); }
       };
       fr.readAsDataURL(file);
     };
+    // a new start frame sets the aspect to the nearest listed ratio (log distance: 9:16 and 16:9 are equally far from 1:1);
+    // the end frame and the reference slots don't count. The user can still pick another aspect afterwards
+    const matchAspect = async () => {
+      if (!p.start) return;
+      const im = new Image(); im.src = url(dir + p.start);
+      try { await im.decode(); } catch { return; }
+      const r = Math.log(im.naturalWidth / im.naturalHeight), d = a => { const [w, h] = a.split(':').map(Number); return Math.abs(r - Math.log(w / h)); };
+      const best = (o.aspects || []).reduce((x, a) => x == null || d(a) < d(x) ? a : x, null);
+      if (!best || best === p.aspect) return;
+      p.aspect = best; persist(); await paintPlay();
+      toast(`Aspect → ${best} (matches start frame)`);
+    };
     const takePics = st => { p.start = st.start; p.refs = st.refs; p.main_first = st.main_first; p.last_ref = st.last_ref; p.pictures = st.pictures; };
     const useLast = async (c, slot = null) => {
       saved('Taking the last frame …');
-      try { takePics(await post('/api/playground/last_frame', { id: p.id, clip_playground: c.playground, video: c.video, slot })); paintPlay(); }
+      try { takePics(await post('/api/playground/last_frame', { id: p.id, clip_playground: c.playground, video: c.video, slot })); await paintPlay(); if (slot == null) matchAspect(); }
       catch (e) { saved(e.message); }
     };
     const setPics = async body => {
