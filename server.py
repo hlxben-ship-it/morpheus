@@ -1009,6 +1009,7 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/board/star": self.board_star,
                     "/api/board/render": self.board_render, "/api/board/picture": self.board_picture,
                     "/api/playground/render": self.playground_render, "/api/playground/upscale": self.playground_upscale,
+                    "/api/playground/remaster": self.playground_remaster,
                     "/api/playground/stop": self.wake_stop,
                     **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()},
                     "/api/image_playground/render": self.image_render, "/api/image_playground/stop": self.wake_stop,
@@ -1019,7 +1020,7 @@ class Handler(BaseHTTPRequestHandler):
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             handler = handlers[self.path]
             if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat", "/api/wake", "/api/board/render",
-                                                     "/api/playground/render", "/api/playground/upscale", "/api/image_playground/render"):
+                                                     "/api/playground/render", "/api/playground/upscale", "/api/playground/remaster", "/api/image_playground/render"):
                 # runs on after the page is gone (a reload mid-render); the page polls /api/job/<id> and finds it again
                 job_id = f"{time.time_ns():x}"
                 JOBS[job_id] = {"state": "running"}
@@ -1710,6 +1711,17 @@ class Handler(BaseHTTPRequestHandler):
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
                               engine=str(req.get("engine") or "wsl10"))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
+
+    def playground_remaster(self, req):
+        """Remaster (seed_2026_11_16_remix_remaster): playground.remaster_run renders the shots one after the other; each
+        one is a normal engine render (same GPU lock, same Stop)."""
+        job, engine = req.get("_job", {}), str(req.get("engine") or "wsl10")
+
+        def render(snap):
+            settings = engine_jobs.render_settings(snap, playground.folder(snap["playground"]), seed=snap["seed"])
+            return self.engine_job(job, {"kind": "render", "settings": settings}, snap["total_steps"], engine=engine), settings["seed"]
+
+        return playground.remaster_run(str(req.get("id", "")), job, render)
 
     def image_render(self, req):
         """Image Playground render (seed image_playground): settings frozen at Render (snapshot), the job runs in the WSL warm

@@ -361,6 +361,8 @@ def lora_info(slot: int, lora: dict) -> dict:
     path = lora_library.file_path(entry) if entry["file"] else Path("")
     info = {"slot": slot, "id": entry["id"], "name": entry["name"], "path": str(path), "file": entry["file"],
             "strength": lora["strength"], "missing": not entry["file"] or not path.is_file()}
+    if entry.get("sha256"):  # which file exactly: a LoRA deleted and uploaded again under its name keeps the id
+        info["sha256"] = entry["sha256"]
     if info["missing"]:
         return info
     info["bytes"] = path.stat().st_size
@@ -657,6 +659,119 @@ def export_remix(req: dict) -> dict:
             "clips": len(files), "seconds": round(sum(i["seconds"] for i in infos), 2)}
 
 
+# ---- Remaster (seed_2026_11_16_remix_remaster): an all-H3-GGUF-Q4 timeline re-rendered on GGUF Q6 at 1080p ----
+REMASTER_FROM, REMASTER_TO, REMASTER_RES = "h3_gguf_q4", "h3_gguf_q6", "1080p"
+REMASTER_SEC_PER_STEP = 9 * 60  # the H3 Flash note: 1080p is about 9 min per step (a ~5 s shot); Q6 unmeasured, a rough guide
+
+
+def remaster_snap(play_id: str, ref_: str, meta: dict) -> dict:
+    """The snapshot that renders a timeline clip again: everything from its meta (prompt, seed, pictures, frames, LoRAs,
+    duration, aspect, steps), only the model and the resolution change. LoRAs are read from the library again."""
+    model = next((m for m in pm.models() if m["id"] == REMASTER_TO), None)
+    if not model:
+        raise ValueError(f"The model {REMASTER_TO} is not in playground_models.json.")
+    res = next((r for r in model["resolutions"] if r["id"] == REMASTER_RES), None)
+    if not res:
+        raise ValueError(f"{model['label']} has no {REMASTER_RES}.")
+    if meta.get("seed") is None:
+        raise ValueError(f"{Path(ref_).name} has no recorded seed, so it cannot be rendered again.")
+    for p in meta.get("pictures") or []:
+        if not (folder(play_id) / str(p.get("file", ""))).is_file():
+            raise ValueError(f"A picture of {Path(ref_).name} is gone: {p.get('file')}.")
+    params = dict(meta.get("params") or {})
+    loras = []
+    for n, old in enumerate(meta.get("loras") or []):  # the same LoRA files as the original render, or no remaster
+        now = lora_info(int(old.get("slot") or n + 1), {"id": old.get("id", ""), "strength": old.get("strength", 1.0)})
+        name = old.get("name") or old.get("id")
+        if now["missing"]:
+            raise ValueError(f"{Path(ref_).name} used the LoRA {name}, which is no longer in the library.")
+        changed = (old.get("sha256") and now.get("sha256") != old["sha256"]) or                   (old.get("bytes") is not None and now.get("bytes") != old["bytes"])
+        if changed:
+            raise ValueError(f"The LoRA {name} is a different file now than when {Path(ref_).name} was rendered.")
+        loras.append(now)
+    snap = {k: v for k, v in meta.items() if k not in ("video", "created", "render_seconds", "seed", "upscale", "loop")}
+    snap.update(model={"id": model["id"], "label": model["label"]}, params=params, total_steps=pm.total_steps(model, params),
+                resolution={k: res[k] for k in ("id", "label", "target", "render") if k in res}, loras=loras,
+                seed=meta["seed"], remaster_of=ref_)
+    return snap
+
+
+def remaster_plan(req: dict) -> dict:
+    """What Remaster would do for this playground's timeline. Allowed only if every timeline clip is an H3 HyperFlow GGUF Q4_K_M
+    render (an upscale or loop of one does not count) or already a remaster. Each distinct clip renders once; one that
+    already has a remaster on the shelf is only swapped (that is how a cancelled run resumes)."""
+    play_id = str(req.get("id", ""))
+    state = load(play_id)
+    if not state["remix"]:
+        return {"ok": False, "reason": "The timeline is empty.", "shots": [], "swaps": {}, "seconds": 0}
+    done = {}  # source ref -> its remaster on the shelf
+    for j in sorted((folder(play_id) / "clips").glob("*.json")):
+        try:
+            m = json.loads(j.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        if m.get("remaster_of") and (folder(play_id) / str(m.get("video", ""))).is_file():
+            done[m["remaster_of"]] = m["video"]
+    shots, swaps, seconds = [], {}, 0
+    for ref_ in dict.fromkeys(state["remix"]):  # distinct, in timeline order
+        name = Path(ref_).name
+        if not (folder(play_id) / ref_).is_file():
+            return {"ok": False, "reason": f"A timeline clip is gone: {name}.", "shots": [], "swaps": {}, "seconds": 0}
+        try:
+            meta = json.loads((folder(play_id) / ref_).with_suffix(".json").read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            meta = {}
+        if meta.get("remaster_of"):
+            continue  # already remastered
+        if ref_ in done:
+            swaps[ref_] = done[ref_]
+            continue
+        model = (meta.get("model") or {}).get("id")
+        if model != REMASTER_FROM or meta.get("upscale") or meta.get("loop"):
+            why = "is an upscale" if meta.get("upscale") else "is a loop" if meta.get("loop") else                   f"was rendered with {(meta.get('model') or {}).get('label') or 'no recorded model'}"
+            return {"ok": False, "reason": f"Remaster needs every timeline clip from H3 HyperFlow GGUF Q4_K_M: {name} {why}.",
+                    "shots": [], "swaps": {}, "seconds": 0}
+        steps = int((meta.get("params") or {}).get("main.steps") or 4)
+        seconds += steps * REMASTER_SEC_PER_STEP * max(1.0, float(meta.get("duration") or 5) / 5)
+        shots.append({"ref": ref_, "steps": steps, "duration": meta.get("duration")})
+    if not shots and not swaps:
+        return {"ok": False, "reason": "Every timeline clip is already remastered.", "shots": [], "swaps": {}, "seconds": 0}
+    return {"ok": True, "reason": "", "shots": shots, "swaps": swaps, "seconds": round(seconds)}
+
+
+def remaster_run(play_id: str, job: dict, render) -> dict:
+    """Run a Remaster: swap in the remasters that exist, then render the rest one after the other. `render(snap)` does
+    one engine render and returns (out, seed), out = {"file", "seconds"}. After each shot the new clip replaces its source
+    on the timeline, so a Stop keeps what is finished and the next Remaster carries on from there."""
+    plan = remaster_plan({"id": play_id})
+    if not plan["ok"]:
+        raise ValueError(plan["reason"])
+    for old, new_ in plan["swaps"].items():
+        swap_remix(play_id, old, new_)
+    n = len(plan["shots"])
+    job.update(shots=n, shots_done=0)
+    for i, shot in enumerate(plan["shots"]):
+        if job.get("_stop"):
+            raise ValueError("Stopped.")
+        job["shot"] = i + 1
+        _, meta = clip_meta(play_id, f"playground/{play_id}/{shot['ref']}")
+        snap = remaster_snap(play_id, shot["ref"], meta)
+        snap["playground"] = play_id
+        out, seed = render(snap)
+        clip = add_clip(play_id, Path(out["file"]), snap, seed=seed, seconds=out["seconds"])
+        swap_remix(play_id, shot["ref"], clip["video"])
+        job["shots_done"] = i + 1
+    return {"shots": n, "swapped": len(plan["swaps"]), "remix": load(play_id)["remix"]}
+
+
+def swap_remix(play_id: str, old: str, new: str) -> list:
+    """Every timeline entry of `old` becomes `new` (playground-relative clip refs); the rest of the cut stays."""
+    state = load(play_id)
+    state["remix"] = [new if r == old else r for r in state["remix"]]
+    write(state)
+    return state["remix"]
+
+
 def list_all() -> list:
     """The Local gallery: every playground, starred first, then newest first. The mini is the newest clip's thumbnail
     (none = the page shows a plain placeholder)."""
@@ -801,4 +916,4 @@ def use_clip(req: dict) -> dict:
     return load(write(state)["id"])
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip, "remix_export": export_remix}
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip, "remix_export": export_remix, "remaster_plan": remaster_plan}

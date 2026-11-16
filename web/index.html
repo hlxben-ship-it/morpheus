@@ -3423,7 +3423,7 @@
     if (wake.plFollowing || !wake.plJob) return;
     wake.plFollowing = true;
     const j = wake.plJob;
-    let msg = 'Done: the clip is in the shelf.';
+    let msg = j.what === 'Remaster' ? 'Remaster done: the 1080p shots are on the shelf and in the timeline.' : 'Done: the clip is in the shelf.';
     try {
       while (true) {
         const r = await fetch('/api/job/' + j.id);
@@ -3431,7 +3431,12 @@
         const job = await r.json();
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
-        window.plProgress({ phase: `${j.what}: ${job.phase || 'Starting'}`, step: job.step || 0, total: job.total || 0, since: j.since });
+        const shotTxt = job.shots ? ` shot ${job.shot || 1} of ${job.shots}` : '';
+        if (job.shots && job.shots_done !== j.shotsDone) {  // Remaster: a shot is finished, its remaster is on the shelf and the timeline
+          if (j.shotsDone !== undefined && wake.view === 'play' && $('sb-play')) { wake.play = null; wake.playClips = null; paintPlay(); }
+          j.shotsDone = job.shots_done; j.since = Date.now();
+        }
+        window.plProgress({ phase: `${j.what}${shotTxt}: ${job.phase || 'Starting'}`, step: job.step || 0, total: job.total || 0, since: j.since });
         const live = $('ipl-live');  // Image Playground: the step preview the worker writes (seed G8)
         if (live && job.previews && live.dataset.n !== String(job.previews)) {
           live.dataset.n = job.previews; live.hidden = false;
@@ -3445,6 +3450,7 @@
     wake.plJob = null; wake.plFollowing = false; store.set('pl.job', null);
     window.plProgress(null);
     wake.playClips = null;
+    if (j.what === 'Remaster') wake.play = null;  // the timeline changed on the server
     if (wake.view === 'play' && $('sb-play')) await paintPlay();
     if (wake.view === 'iplay' && $('sb-iplay')) { wake.iplayImgs = null; await paintIPlay(); }
     if ($('pl-prog-text')) $('pl-prog-text').textContent = j.what === 'Image' && msg.startsWith('Done') ? 'Done: the pictures are on the shelf.' : msg;
@@ -3498,6 +3504,7 @@
     const p = wake.play, dir = `playground/${p.id}/`, shelf = wake.playClips;
     // Remix (seed_2026_11_16_remix_mode): open/closed is a per-viewer convenience in localStorage; the timeline itself is p.remix
     const remixKey = 'morpheus.remix.' + p.id;
+    let rmPlan = null, rmAsk = 0;  // Remaster: the last plan; declared before the first paintTl() runs remasterCheck()
     const remixOn = () => { try { return localStorage.getItem(remixKey) === '1'; } catch { return false; } };
     const opt = (list, v, lab = x => x) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? lab(x))}</option>`).join('');
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
@@ -4042,6 +4049,7 @@
       const total = ok.reduce((t, x) => t + (x.seconds || 0), 0);
       tl.innerHTML = `<div class="pl-tl-acts"><button type="button" class="pl-tl-play" data-a="play" ${ok.length ? '' : 'disabled'}>▶ Play</button>
           <button type="button" class="sb-quiet" data-a="export" ${ok.length && ok.length === items.length ? '' : 'disabled'} title="${items.length > ok.length ? 'Remove the missing clips first' : 'Cut the timeline into one mp4 and download it'}">⤓ Export</button>
+          <button type="button" class="sb-quiet" data-a="remaster" id="pl-remaster" disabled title="Checking …">⟳ Remaster</button>
           <span class="pl-tl-sum">${items.length} clip${items.length === 1 ? '' : 's'} · ${fmtS(total)}</span></div>
         <ol class="pl-tl-row" id="pl-tl-row">${items.length ? items.map((x, i) => x.missing
           ? `<li class="pl-tl-clip missing" draggable="true" tabindex="0" data-i="${i}" title="${esc(x.ref)} was deleted" aria-label="Clip ${i + 1}: missing">missing<button type="button" class="x" data-a="rm" aria-label="Remove clip ${i + 1}">✕</button></li>`
@@ -4050,6 +4058,7 @@
       const row = $('pl-tl-row'), list = () => [...(p.remix || [])];
       tl.querySelector('[data-a="play"]').onclick = () => playRemix(0);
       tl.querySelector('[data-a="export"]').onclick = e => exportRemix(e.currentTarget);
+      remasterCheck();
       row.querySelectorAll('.pl-tl-clip').forEach(li => {
         const i = +li.dataset.i;
         li.querySelector('[data-a="rm"]').onclick = e => { e.stopPropagation(); const l = list(); l.splice(i, 1); remixSet(l); };
@@ -4128,6 +4137,36 @@
       };
       dlg.showModal();
       jump(Math.min(startAt || 0, list.length - 1));
+    }
+    // Remaster (seed_2026_11_16_remix_remaster): an all-H3-GGUF-Q4 timeline rendered again on GGUF Q6 at 1080p, shot by shot
+    async function remasterCheck() {
+      const btn = $('pl-remaster'), ask = ++rmAsk;
+      if (!btn) return;
+      try { rmPlan = await post('/api/playground/remaster_plan', { id: p.id }); } catch (err) { rmPlan = { ok: false, reason: err.message }; }
+      if (ask !== rmAsk || !$('pl-remaster')) return;
+      const b = $('pl-remaster'), busy = !!wake.plJob;
+      b.disabled = !rmPlan.ok || busy;
+      b.title = busy ? 'Something is rendering' : rmPlan.ok ? `Render the ${rmPlan.shots.length} shot${rmPlan.shots.length === 1 ? '' : 's'} again on H3 GGUF Q6 at 1080p, same seed and pictures` : rmPlan.reason;
+      b.onclick = () => remasterAsk();
+    }
+    function remasterAsk() {
+      if (!rmPlan?.ok || wake.plJob) return;
+      const n = rmPlan.shots.length, sw = Object.keys(rmPlan.swaps).length, h = rmPlan.seconds / 3600;
+      const est = h >= 1 ? `about ${h.toFixed(1)} hours` : `about ${Math.max(1, Math.round(rmPlan.seconds / 60))} minutes`;
+      const dlg = $('pl-modal');
+      dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remaster</h2></div></div>
+        <div class="pl-rm-body" style="padding:4px 20px 18px;max-width:520px">
+          <p>${n ? `Renders <b>${n} shot${n === 1 ? '' : 's'}</b> again, one after the other, on <b>H3 GGUF Q6 at 1080p</b>, with the same seed, prompt, pictures, LoRAs and steps.` : ''}${sw ? ` ${sw} shot${sw === 1 ? ' has' : 's have'} a remaster already and ${sw === 1 ? 'is' : 'are'} only swapped in.` : ''} Each finished shot lands on the shelf and replaces its original on the timeline.</p>
+          ${n ? `<p role="alert" style="color:var(--warn, #F08AA8)"><b>⚠ This blocks the GPU for ${est}</b> (rough estimate). Nothing else can render in the meantime. Stop keeps the finished shots; Remaster again carries on.</p>` : ''}
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button type="button" class="sb-quiet" data-a="no">Cancel</button><button type="button" class="pl-tl-play" data-a="go">⟳ Remaster</button></div></div>`;
+      dlg.onclose = null;
+      dlg.onclick = e => {
+        const a = e.target === dlg ? 'no' : e.target.closest('[data-a]')?.dataset.a;
+        if (a === 'no') dlg.close();
+        if (a === 'go') { dlg.close(); const go = plStart('/api/playground/remaster', { id: p.id, engine: plEngine() }, 'Remaster'); setTimeout(remasterCheck, 300); return go; }
+      };
+      dlg.showModal();
+      dlg.querySelector('[data-a="no"]').focus();
     }
     async function exportRemix(btn) {
       const label = btn.textContent; btn.disabled = true; btn.textContent = 'Exporting …';
