@@ -9,6 +9,8 @@ if [ "$3" = "10" ] && [ -x /root/venv10/bin/python ]; then
   unset ROCM_HOME ROCM_PATH LD_LIBRARY_PATH
   export PATH=/root/venv10/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 else
+  # k2 (Krea 2): the ROCm 7 venv with transformers 4.57 + tokenizers 0.22 in /root/k2site first (Qwen3-VL; the venv has 4.54)
+  [ "$3" = "k2" ] && export PYTHONPATH=/root/k2site
   export ROCM_HOME=/opt/rocm-7.2.4 ROCM_PATH=/opt/rocm-7.2.4
   export PATH=/opt/rocm-7.2.4/bin:/root/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 fi

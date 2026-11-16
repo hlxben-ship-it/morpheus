@@ -42,6 +42,19 @@ class Schema(unittest.TestCase):
         with self.assertRaises(ValueError):
             im.resolve_size(m, "1x1", strict=True)
 
+    def test_toggle_param(self):
+        base = im.get("muse_krea2")   # no live model has a checkbox today: a made-up one on top of a real entry
+        m = {**base, "params": {**base["params"], "free_pose": {"label": "x", "toggle": True, "default": True}}}
+        im.check({"models": [m]})
+        self.assertIs(im.defaults(m)["free_pose"], True)
+        self.assertIs(im.resolve(m, {"free_pose": False}, strict=True)["free_pose"], False)
+        with self.assertRaises(ValueError):
+            im.resolve(m, {"free_pose": 1}, strict=True)          # a number is no tick
+        self.assertIs(im.resolve(m, {"free_pose": "no"})["free_pose"], True)  # stored junk: back to the default
+        bad = {"models": [{**m, "params": {"free_pose": {"toggle": True, "default": 1}}}]}
+        with self.assertRaises(ValueError):
+            im.check(bad)
+
     def test_broken_schema_says_what(self):
         with self.assertRaises(ValueError):
             im.check({"models": []})

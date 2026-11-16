@@ -64,6 +64,15 @@ class LibraryTest(unittest.TestCase):
         self.assertNotEqual(lib.detect_family(LTX_KEYS), "qwen_edit")  # LTX's transformer_blocks are no Qwen blocks
         self.assertIn("h3_image", lib.FAMILIES)                   # H3-Image: picked by hand (its keys look like H3 video)
 
+    def test_detect_krea2(self):
+        krea = ["diffusion_model.blocks.0.attn.wq.lora_A.weight", "diffusion_model.blocks.0.attn.gate.alpha",
+                "diffusion_model.txtfusion.layerwise_blocks.1.mlp.down.lora_B.weight"]
+        self.assertEqual(lib.detect_family(krea), "krea2")
+        self.assertEqual(lib.detect_family(["lora_unet_blocks_3_attn_wk.lora_down.weight"]), "krea2")
+        self.assertNotEqual(lib.detect_family(H3_KEYS), "krea2")   # H3: attn.q_proj, not attn.wq
+        self.assertNotEqual(lib.detect_family(LTX_KEYS), "krea2")  # LTX: to_gate_logits is no attn.gate
+        self.assertIsNone(lib.detect_family(krea + H3_KEYS))
+
     def test_model_families(self):
         self.assertEqual(lib.family_of_model("ltx23"), "ltx2")
         self.assertEqual(lib.family_of_model("h3_gguf_q6"), "minimax_h3")

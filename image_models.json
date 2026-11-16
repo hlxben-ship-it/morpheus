@@ -1,5 +1,5 @@
 {
-  "_doc": "Image Playground models (Glia seed image_playground). Read on every request, checked by image_models.py. A param is a range {min,max,step?,default}, a choice {choices:[...],default} or fixed {default,fixed:true}. 'advanced': true puts it in the collapsed Advanced block. Sizes are WxH strings; the first is the default.",
+  "_doc": "Image Playground models (Glia seed image_playground). Read on every request, checked by image_models.py. A param is a range {min,max,step?,default}, a choice {choices:[...],default}, a checkbox {toggle:true,default:true|false,note?} or fixed {default,fixed:true}. 'advanced': true puts it in the collapsed Advanced block. Sizes are WxH strings; the first is the default.",
   "models": [
     {
       "id": "janku_v5",
@@ -60,6 +60,26 @@
       "params": {
         "steps": {"label": "Steps", "default": 6, "fixed": true},
         "edit_mode": {"label": "With pictures", "choices": ["KI", "I"], "labels": {"KI": "Keep picture 1's proportions", "I": "Use the chosen size"}, "default": "KI", "needs_input": true}
+      }
+    },
+    {
+      "id": "muse_krea2",
+      "label": "Muse V4 (Krea 2)",
+      "note": "Photoreal Krea 2 finetune by Stable Yogi, Q4_0 GGUF (8.3 GB; Q8 dropped after a blind test, 2026-11-16). Text to image; with 1-2 pictures + the Krea 2 Identity / General Edit LoRA: picture 1 = scene, picture 2 = person. Own loop in WSL (ComfyUI math).",
+      "family": "krea2",
+      "checkpoint": "muse_v4_q4_0.gguf",
+      "inputs": {"min": 0, "max": 2, "label": "References (1 = scene, 2 = person; needs an edit LoRA)"},
+      "negative": true,
+      "max_count": 4,
+      "prompt_default": "",
+      "negative_default": "",
+      "sizes": ["1024x1024", "1024x1536", "1536x1024", "896x1152", "1152x896", "1536x1536", "1344x768", "768x1344", "2048x2048"],
+      "params": {
+        "steps": {"label": "Steps", "min": 4, "max": 30, "default": 12},
+        "cfg": {"label": "CFG (1 = off; >1 uses the negative, keep <= 3)", "min": 1, "max": 3, "step": 0.1, "default": 1},
+        "sampler": {"label": "Sampler", "choices": ["er_sde", "euler"], "default": "er_sde"},
+        "scheduler": {"label": "Scheduler", "choices": ["beta", "simple"], "default": "beta"},
+        "ref_scale": {"label": "Reference size (smaller = faster, may cost detail)", "choices": [1, 0.75, 0.5], "labels": {"1": "100 %", "0.75": "75 %", "0.5": "50 %"}, "default": 0.75, "needs_input": true, "advanced": true}
       }
     }
   ]

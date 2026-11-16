@@ -268,6 +268,8 @@ def worker_job(play_id: str, snap: dict) -> dict:
             params["denoise"] = 1.0
     else:
         params["images"] = pics
+        if m.get("checkpoint"):  # Krea 2: which finetune (GGUF file in /root/models/image/krea2)
+            params["checkpoint"] = m["checkpoint"]
     return {"kind": "image", "family": m["family"], "count": snap["count"], "params": params}
 
 

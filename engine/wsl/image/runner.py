@@ -12,8 +12,9 @@ import torch
 from . import common
 
 PARK_BUDGET_GB = 12   # RAM an inactive image model may keep inside the 24 GB VM
-PARK_GB = {"sdxl": 7.0, "qwen_edit": 25.0}  # what a family holds in RAM when parked (Qwen never fits: freed instead)
+PARK_GB = {"sdxl": 7.0, "qwen_edit": 25.0, "krea2": 20.0}  # what a family holds in RAM when parked (Qwen, Krea 2 never fit: freed)
 SDXL_ROOT = Path("/root/models/image/sdxl")
+KREA2_ROOT = Path("/root/models/image/krea2")
 
 _loaded = {}   # family -> (key, pipeline)
 _active = None
@@ -26,6 +27,9 @@ def _build(family, key):
     if family == "qwen_edit":
         from .qwen_edit import QwenEdit
         return QwenEdit()
+    if family == "krea2":
+        from .krea2 import Krea2
+        return Krea2(key)
     raise ValueError(f"Unknown image family {family!r}.")
 
 
@@ -74,7 +78,7 @@ def release_all():
     common.free_vram()
 
 
-HEAVY = {"qwen_edit"}  # own pipelines that hold >10 GB of RAM: freed after HEAVY_IDLE (warm_worker.py)
+HEAVY = {"qwen_edit", "krea2"}  # own pipelines that hold >10 GB of RAM: freed after HEAVY_IDLE (warm_worker.py)
 
 
 def release_heavy():
@@ -96,7 +100,7 @@ def run(job, say, stopped=lambda: False):
     """job: {id, family, params, count, out_dir}. Writes img_<n>_<seed>.png into out_dir; previews to out_dir/preview.jpg."""
     jid, fam, p = job.get("id"), job["family"], dict(job["params"])
     out = Path(job["out_dir"]); out.mkdir(parents=True, exist_ok=True)
-    key = str(SDXL_ROOT / p["checkpoint"]) if fam == "sdxl" else "qwen-image-edit-2511"
+    key = str(SDXL_ROOT / p["checkpoint"]) if fam == "sdxl" else str(KREA2_ROOT / p["checkpoint"]) if fam == "krea2" else "qwen-image-edit-2511"
     t0 = time.time()
     say({"event": "progress", "id": jid, "phase": "loading_model", "step": None, "total": None})
     pipe = pipeline(fam, key)

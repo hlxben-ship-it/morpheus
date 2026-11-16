@@ -872,6 +872,7 @@
   .ipl-p .lab { color: var(--muted); } .ipl-p output { text-align: right; font-weight: 600; }
   .ipl-p .seg { flex-wrap: wrap; justify-self: start; grid-column: 2 / -1; }
   .ipl-p .fixed { grid-column: 2 / -1; color: var(--muted); }
+  .ipl-p .check { grid-column: 2 / -1; justify-self: start; }
   .ipl details summary { cursor: pointer; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0; }
   .ipl-live { display: grid; place-items: center; min-height: 120px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); overflow: hidden; }
   .ipl-live img { max-width: 100%; max-height: 360px; }
@@ -886,7 +887,7 @@
   .pl-modal .ipl-big:fullscreen { max-height: none; border-radius: 0; }
   .ipl-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
   .ipl-acts small { color: var(--muted); margin-left: auto; font-size: 12px; }
-  @media (max-width: 560px) { .ipl-p { grid-template-columns: 1fr 5ch; } .ipl-p .lab { grid-column: 1 / -1; } .ipl-p .seg, .ipl-p .fixed { grid-column: 1 / -1; } }
+  @media (max-width: 560px) { .ipl-p { grid-template-columns: 1fr 5ch; } .ipl-p .lab { grid-column: 1 / -1; } .ipl-p .seg, .ipl-p .fixed, .ipl-p .check { grid-column: 1 / -1; } }
   /* prompt writer (web/agent-chat.js): a drawer over the right side; a third column on wide screens */
   .pl-writer { color: var(--accent); }
   .pl-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -4219,6 +4220,7 @@
       if (s.needs_input && !hasInput) return '';
       const v = p.params[k], lab = `<span class="lab">${esc(s.label || k)}</span>`;
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
+      if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
       if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span></div>`;
       return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
     };
@@ -4308,6 +4310,11 @@
         const r = e.target.closest('input[type=range][data-k]');
         if (!r) return;
         p.params[r.dataset.k] = +r.value; r.nextElementSibling.textContent = r.value; persist();
+      };
+      el.onchange = e => {
+        const t = e.target.closest('input[type=checkbox][data-t]');
+        if (!t) return;
+        p.params[t.dataset.t] = t.checked; persist();
       };
       el.onclick = e => {
         const b = e.target.closest('.seg button');

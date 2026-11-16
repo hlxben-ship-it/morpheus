@@ -4,6 +4,7 @@ comfy/k_diffusion/sampling.py, comfy/model_sampling.py) so a picture made here c
 Two model kinds:
   eps   SDXL: discrete DDPM schedule (scaled_linear 0.00085..0.012, 1000 steps), the model predicts the noise.
   flow  Qwen-Image: rectified flow, sigma in (0, 1], shifted (ComfyUI ModelSamplingAuraFlow), the model predicts velocity.
+        Krea 2: the same, with ComfyUI's ModelSamplingFlux time shift (FluxShift, mu 1.15).
 
 Every model is wrapped as denoise(x, sigma) -> denoised x0 (k-diffusion convention); the samplers only see that.
 
@@ -15,8 +16,8 @@ import math
 
 import torch
 
-SAMPLERS = ("euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde")
-SCHEDULERS = ("normal", "karras", "simple")
+SAMPLERS = ("euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "er_sde")
+SCHEDULERS = ("normal", "karras", "simple", "beta")
 
 
 # ---- model sampling (the sigma table of a model) ----
@@ -75,6 +76,19 @@ class Flow:
         return self._shift(torch.as_tensor(t, dtype=torch.float32))
 
 
+class FluxShift(Flow):
+    """ComfyUI ModelSamplingFlux (Krea 2: shift 1.15): sigma = e^mu / (e^mu + 1/t - 1), a 10000-entry table."""
+
+    def __init__(self, shift=1.15, timesteps=10000):
+        super().__init__(shift, timesteps)
+
+    def _shift(self, t):
+        return math.exp(self.shift) / (math.exp(self.shift) + (1 / t - 1))
+
+    def percent_to_sigma(self, percent):
+        return 1.0 if percent <= 0 else 0.0 if percent >= 1 else float(self._shift(torch.tensor(1.0 - percent)))
+
+
 # ---- schedulers ----
 
 def normal(ms, steps):
@@ -102,7 +116,21 @@ def simple(ms, steps):
     return torch.tensor([float(ms.sigmas[-(1 + int(x * ss))]) for x in range(steps)] + [0.0], dtype=torch.float32)
 
 
-SCHEDULE = {"normal": normal, "karras": karras, "simple": simple}
+def beta(ms, steps, alpha=0.6, b=0.6):
+    """ComfyUI beta_scheduler: table entries at the quantiles of a Beta(0.6, 0.6), repeats dropped."""
+    import numpy
+    import scipy.stats
+    total = len(ms.sigmas) - 1
+    ts = numpy.rint(scipy.stats.beta.ppf(1 - numpy.linspace(0, 1, steps, endpoint=False), alpha, b) * total)
+    sigs, last = [], -1
+    for t in ts:
+        if t != last:
+            sigs.append(float(ms.sigmas[int(t)]))
+        last = t
+    return torch.tensor(sigs + [0.0], dtype=torch.float32)
+
+
+SCHEDULE = {"normal": normal, "karras": karras, "simple": simple, "beta": beta}
 
 
 def sigmas_for(ms, scheduler, steps, denoise=1.0):
@@ -163,10 +191,12 @@ def _ancestral_flow(sigma, sigma_next, eta=1.0):
     return down, renoise, alpha_ip1 / alpha_down
 
 
-def sample(name, denoise, x, sigmas, kind, seed, callback=None, eta=1.0, stopped=lambda: False):
+def sample(name, denoise, x, sigmas, kind, seed, callback=None, eta=1.0, stopped=lambda: False, ms=None):
     """Run one sampler. denoise(x, sigma_tensor) -> x0. callback(i, total, x0) after each step."""
     if name not in SAMPLERS:
         raise ValueError(f"Sampler: one of {', '.join(SAMPLERS)}.")
+    if name == "er_sde":
+        return _er_sde(denoise, x, sigmas, kind, seed, callback, stopped, ms)
     n = len(sigmas) - 1
     noise = NoiseSampler(x, seed)
     s_in = x.new_ones([x.shape[0]])
@@ -221,6 +251,53 @@ def sample(name, denoise, x, sigmas, kind, seed, callback=None, eta=1.0, stopped
                     x = x + noise(x) * s_next * math.sqrt(-math.expm1(-2 * eta_h))
                 h_last = h
             old_d = x0
+        if callback:
+            callback(i + 1, n, x0)
+    return x
+
+
+def _er_sde(denoise, x, sigmas, kind, seed, callback, stopped, ms=None, max_stage=3, s_noise=1.0):
+    """ComfyUI sample_er_sde (ER-SDE-Solver-3, arXiv 2309.06169) for flow (CONST) and eps models."""
+    noise = NoiseSampler(x, seed)
+    s_in = x.new_ones([x.shape[0]])
+    scaler = lambda v: v * ((v ** 0.3).exp() + 10.0)
+    points = 200.0
+    idx = torch.arange(0, points, dtype=torch.float32, device=x.device)
+    sigmas = sigmas.to(x.device).float().clone()
+    if kind == "flow" and len(sigmas) > 1 and sigmas[0] >= 1:  # offset_first_sigma_for_snr
+        sigmas[0] = ms.percent_to_sigma(1e-4) if hasattr(ms, "percent_to_sigma") else 1.0 - 1e-4
+    half_log_snr = sigmas.logit().neg() if kind == "flow" else sigmas.log().neg()
+    lam = half_log_snr.neg().exp()  # sigma_t / alpha_t
+    old, old_d = None, None
+    n = len(sigmas) - 1
+    for i in range(n):
+        if stopped():
+            raise InterruptedError("Stopped.")
+        x0 = denoise(x, sigmas[i] * s_in)
+        stage = min(max_stage, i + 1)
+        if sigmas[i + 1] == 0:
+            x = x0
+        else:
+            ls, lt = lam[i], lam[i + 1]
+            a_s, a_t = sigmas[i] / ls, sigmas[i + 1] / lt
+            r = scaler(lt) / scaler(ls)
+            x = (a_t / a_s) * r * x + a_t * (1 - r) * x0
+            if stage >= 2:
+                dt = lt - ls
+                step = -dt / points
+                pos = lt + idx * step
+                sp = scaler(pos)
+                sm = torch.sum(1 / sp) * step
+                d = (x0 - old) / (ls - lam[i - 1])
+                x = x + a_t * (dt + sm * scaler(lt)) * d
+                if stage >= 3:
+                    su = torch.sum((pos - ls) / sp) * step
+                    u = (d - old_d) / ((ls - lam[i - 2]) / 2)
+                    x = x + a_t * ((dt ** 2) / 2 + su * scaler(lt)) * u
+                old_d = d
+            if s_noise > 0:
+                x = x + a_t * noise(x) * s_noise * (lt ** 2 - ls ** 2 * r ** 2).sqrt().nan_to_num(nan=0.0)
+        old = x0
         if callback:
             callback(i + 1, n, x0)
     return x

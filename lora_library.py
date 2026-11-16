@@ -22,7 +22,7 @@ DIR = morpheus.ROOT / "models" / "loras" / "video"
 UPLOADS = Path(tempfile.gettempdir()) / "morpheus-uploads"  # where server.py's /api/upload stores raw bytes
 FAMILIES = {"ltx2": "LTX 2.3", "minimax_h3": "MiniMax H3",
             # Image Playground (Glia seed image_playground G6): one library, a family per image model kind
-            "sdxl": "SDXL", "qwen_edit": "Qwen-Image-Edit", "h3_image": "H3-Image"}
+            "sdxl": "SDXL", "qwen_edit": "Qwen-Image-Edit", "h3_image": "H3-Image", "krea2": "Krea 2"}
 HEADER_MAX = 64 << 20
 PICTURES = {"data:image/png;base64": "png", "data:image/jpeg;base64": "jpg", "data:image/webp;base64": "webp"}
 LOCK = threading.Lock()
@@ -35,6 +35,8 @@ H3 = re.compile(r"(^|[._])blocks[._]\d+[._](attn[._](q|k|v|out)_proj|mlp[._]fc[1
 # kohya SDXL LoRAs name lora_unet_* / lora_te1_* / lora_te2_*; diffusers-style ones the UNet's down/up/mid blocks
 SDXL = re.compile(r"^lora_unet_(input_blocks|output_blocks|middle_block|down_blocks|up_blocks|mid_block)_|^lora_te[12]_text_model|(^|[._])(down_blocks|up_blocks|mid_block)[._]\d")
 # Qwen-Image(-Edit) DiT: transformer_blocks.N.{img_mod,txt_mod,img_mlp,txt_mlp,attn.add_q_proj,...}
+# Krea 2 (ComfyUI / ai-toolkit names): blocks.N.attn.wq|wk|wv|wo|gate, txtfusion.*
+KREA2 = re.compile(r"(^|[._])(txtfusion[._]|blocks[._]\d+[._]attn[._](w[qkvo]|gate)[._])")
 QWEN = re.compile(r"(^|[._])transformer_blocks[._]\d+[._](img_mod|txt_mod|img_mlp|txt_mlp|attn[._]add_[qkv]_proj)")
 
 
@@ -123,9 +125,9 @@ def read_header(path: Path) -> dict:
 
 
 def detect_family(keys) -> str | None:
-    """ltx2 / minimax_h3 / sdxl / qwen_edit from the tensor names, None when they say none or several. An H3-Image LoRA
+    """ltx2 / minimax_h3 / sdxl / qwen_edit / krea2 from the tensor names, None when they say none or several. An H3-Image LoRA
     looks like an H3 video one (same block names): the user picks h3_image by hand."""
-    hits = {f for f, rx in (("ltx2", LTX), ("minimax_h3", H3), ("sdxl", SDXL), ("qwen_edit", QWEN)) if any(rx.search(k) for k in keys)}
+    hits = {f for f, rx in (("ltx2", LTX), ("minimax_h3", H3), ("sdxl", SDXL), ("qwen_edit", QWEN), ("krea2", KREA2)) if any(rx.search(k) for k in keys)}
     return hits.pop() if len(hits) == 1 else None
 
 

@@ -92,7 +92,7 @@ def main():
         idle_since = None
         if job["kind"] in ("image", "render"):  # what this job leaves loaded: Qwen-Edit and H3 (image or video) count as big
             mt = str((job.get("settings") or {}).get("model_type", ""))
-            heavy = job.get("family") in ("qwen_edit", "h3_image") or "h3" in mt
+            heavy = job.get("family") in ("qwen_edit", "h3_image", "krea2") or "h3" in mt
         if job["kind"] == "unload":
             try: wgp.release_model()
             except Exception as e: say({"event": "error", "id": jid, "message": f"unload: {e}"})
@@ -109,7 +109,7 @@ def main():
                 Path(job["out_dir"]).mkdir(parents=True, exist_ok=True)
                 for k in ("save_path", "image_save_path", "audio_save_path", "mesh_save_path"):
                     wgp.server_config[k] = job["out_dir"]  # what shared.api does for output_dir, per job here
-            if job["kind"] == "image" and job.get("family") != "h3_image":  # own pipelines (engine/wsl/image): SDXL, Qwen-Edit
+            if job["kind"] == "image" and job.get("family") != "h3_image":  # own pipelines (engine/wsl/image): SDXL, Qwen-Edit, Krea 2
                 from image import runner as image_runner
                 wgp.release_model()  # never a video model and an image model in RAM together (seed image_playground G2)
                 res = image_runner.run(job, say)

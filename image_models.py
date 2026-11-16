@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 FILE = Path(__file__).parent / "image_models.json"
-FAMILIES = ("sdxl", "qwen_edit", "h3_image")
+FAMILIES = ("sdxl", "qwen_edit", "h3_image", "krea2")
 ID = re.compile(r"[a-z0-9_]{1,40}")
 SIZE = re.compile(r"(\d{3,4})x(\d{3,4})")
 
@@ -28,8 +28,8 @@ def check(data) -> list:
         seen.add(mid)
         if m.get("family") not in FAMILIES:
             _fail(mid, f"family: one of {', '.join(FAMILIES)}")
-        if m["family"] == "sdxl" and not m.get("checkpoint"):
-            _fail(mid, "an sdxl model names its checkpoint")
+        if m["family"] in ("sdxl", "krea2") and not m.get("checkpoint"):
+            _fail(mid, f"an {m['family']} model names its checkpoint")
         inp = m.get("inputs") or {}
         if not (isinstance(inp.get("min"), int) and isinstance(inp.get("max"), int) and 0 <= inp["min"] <= inp["max"] <= 4):
             _fail(mid, "inputs: {min, max} with 0 <= min <= max <= 4")
@@ -39,6 +39,9 @@ def check(data) -> list:
             if "choices" in p:
                 if p.get("default") not in p["choices"]:
                     _fail(f"{mid}.{k}", "default must be one of the choices")
+            elif p.get("toggle"):
+                if not isinstance(p.get("default"), bool):
+                    _fail(f"{mid}.{k}", "a toggle needs a true/false default")
             elif p.get("fixed"):
                 if "default" not in p:
                     _fail(f"{mid}.{k}", "a fixed param needs a default")
@@ -60,6 +63,8 @@ def get(model_id) -> dict:
 
 
 def _fits(p, v):
+    if p.get("toggle"):
+        return isinstance(v, bool)
     if "choices" in p:
         return v in p["choices"]
     if p.get("fixed"):
