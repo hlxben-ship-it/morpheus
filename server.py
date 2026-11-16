@@ -28,12 +28,13 @@ import agents
 import lora_library
 import morpheus
 import playground
+import image_playground
 from engine import jobs as engine_jobs, wsl_runner as engine_wsl
 import yumeko
 import yumeko_auto
 import soulforge
 
-PORT = 5196
+PORT = int(os.environ.get("MORPHEUS_PORT", 5196))
 WEB = morpheus.ROOT / "web"
 RESOLUTIONS = [
     {"label": "Square", "width": 1024, "height": 1024},
@@ -862,6 +863,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(playground.clips((q.get("id") or [None])[0]))
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 404)
+        if route == "/api/image_playground/options":
+            try:
+                return self.send_json(image_playground.options())
+            except ValueError as e:  # a broken image_models.json: say what is wrong
+                return self.send_json({"error": str(e)}, 500)
+        if route == "/api/image_playground/images":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                return self.send_json(image_playground.images((q.get("id") or [""])[0]))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
+        if route.startswith("/api/image_playground/"):
+            try:
+                return self.send_json(image_playground.load(route.removeprefix("/api/image_playground/")))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 404)
         if route == "/api/playground/list":  # the Local tab's gallery
             return self.send_json(playground.list_all())
         if route.startswith("/api/playground/"):
@@ -993,14 +1010,16 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/board/render": self.board_render, "/api/board/picture": self.board_picture,
                     "/api/playground/render": self.playground_render, "/api/playground/upscale": self.playground_upscale,
                     "/api/playground/stop": self.wake_stop,
-                    **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()}}
+                    **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()},
+                    "/api/image_playground/render": self.image_render, "/api/image_playground/stop": self.wake_stop,
+                    **{f"/api/image_playground/{k}": v for k, v in image_playground.ACTIONS.items()}}
         if self.path not in handlers:
             return self.send_error(404)
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             handler = handlers[self.path]
             if req.get("background") and self.path in ("/api/generate", "/api/chat", "/api/edit", "/api/soul/new", "/api/soul/chat", "/api/wake", "/api/board/render",
-                                                     "/api/playground/render", "/api/playground/upscale"):
+                                                     "/api/playground/render", "/api/playground/upscale", "/api/image_playground/render"):
                 # runs on after the page is gone (a reload mid-render); the page polls /api/job/<id> and finds it again
                 job_id = f"{time.time_ns():x}"
                 JOBS[job_id] = {"state": "running"}
@@ -1647,6 +1666,16 @@ class Handler(BaseHTTPRequestHandler):
 
         def progress(ev):
             job["phase"] = self.ENGINE_PHASES.get(ev.get("phase"), str(ev.get("phase") or "Working").replace("_", " ").capitalize())
+            if ev.get("image") and job.get("count", 1) > 1:
+                job["phase"] += f" {ev['image']}/{job['count']}"
+            if ev.get("preview"):  # the image worker's step preview (a small JPEG it rewrites), served by /api/job/<id>/preview
+                try:
+                    pv = str(ev["preview"])
+                    pv = pv[5].upper() + ":" + pv[6:] if pv.startswith("/mnt/") else pv
+                    job["_preview"] = Path(pv).read_bytes()
+                    job["previews"] = job.get("previews", 0) + 1
+                except OSError:
+                    pass
             step, of = ev.get("step"), ev.get("total")
             if step is None or not of:
                 return
@@ -1681,6 +1710,18 @@ class Handler(BaseHTTPRequestHandler):
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
                               engine=str(req.get("engine") or "wsl10"))
         return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
+
+    def image_render(self, req):
+        """Image Playground render (seed image_playground): settings frozen at Render (snapshot), the job runs in the WSL warm
+        worker (own SDXL / Qwen-Edit loops, H3-Image via WanGP), the pictures land on the playground's shelf with a sidecar."""
+        play_id = str(req.get("id", ""))
+        snap = image_playground.snapshot(play_id)
+        job = req.get("_job", {})
+        job["count"] = snap["count"]
+        out = self.engine_job(job, image_playground.worker_job(play_id, snap), snap["total_steps"], engine=str(req.get("engine") or "wsl10"))
+        files = out.get("files") or [out["file"]]
+        return {"images": image_playground.add_images(play_id, files, out.get("seeds") or [], snap, seconds=out.get("seconds")),
+                "state": image_playground.load(play_id)}
 
     def playground_upscale(self, req):
         """Upscale a shelf clip (G4/G13): RelayVSR (quick) or SeedVR2 3B (best), x1.5 to x4 in 0.5 steps. The result is

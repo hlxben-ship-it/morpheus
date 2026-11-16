@@ -725,6 +725,7 @@
   .pl-ltile { display: grid; gap: 3px; text-align: left; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); cursor: pointer; min-width: 0; }
   .pl-ltile:hover:not(:disabled), .pl-ltile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .pl-ltile:disabled { opacity: .4; cursor: default; }
+  .pl-lprompt { color: var(--muted); font-size: 11px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .pl-ltile .pic { aspect-ratio: 1; border-radius: 7px; overflow: hidden; background: var(--panel); display: grid; }
   .pl-ltile .pic img { width: 100%; height: 100%; object-fit: cover; } .pl-ltile .pic .ph { display: grid; place-items: center; font: 700 30px/1 Montserrat, sans-serif; color: var(--accent); }
   .pl-ltile b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -760,6 +761,43 @@
   @keyframes pl-sheen { from { background-position: 160% 0, 0 0; } to { background-position: -60% 0, 0 0; } }
   .pl-prog span { position: relative; font-size: 13px; color: var(--muted); padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .pl-prog.running span { color: var(--text); font-weight: 500; letter-spacing: .01em; text-shadow: 0 0 4px var(--panel), 0 0 8px var(--panel); }
+  .pl-shelf { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: stretch; min-width: 0; }
+  .pl-shelf.remix { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.15fr); }
+  @media (max-width: 999px) { .pl-shelf.remix { grid-template-columns: auto minmax(0, 1fr); } .pl-shelf.remix .pl-tl { grid-column: 1 / -1; } }
+  .pl-remix-btn { align-self: center; width: 52px; display: grid; justify-items: center; gap: 2px; padding: 9px 2px; line-height: 1.2; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--muted); font: 600 12px Montserrat, sans-serif; letter-spacing: .04em; cursor: pointer; }
+  .pl-remix-btn:hover, .pl-remix-btn:focus-visible { color: var(--text); border-color: var(--accent); outline: 0; }
+  .pl-remix-btn[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+  .pl-tl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 10px; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+  .pl-tl[hidden] { display: none; }
+  .pl-tl.over { border-style: solid; border-color: var(--accent); box-shadow: 0 0 18px var(--glow, rgba(177, 77, 255, .4)); }
+  .pl-tl-acts { display: grid; gap: 6px; justify-items: stretch; min-width: 118px; }
+  .pl-tl-acts button { padding: 7px 12px; font-size: 13px; }
+  .pl-tl-acts .pl-tl-play { border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+  .pl-tl-acts button:disabled { opacity: .5; cursor: not-allowed; }
+  .pl-tl-sum { color: var(--muted); font: 11px "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+  .pl-tl-row { display: flex; gap: 6px; margin: 0; padding: 2px; list-style: none; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; min-height: 64px; align-items: center; }
+  .pl-tl-row .empty { margin: auto; color: var(--muted); font-size: 13px; }
+  .pl-tl-clip { position: relative; flex: 0 0 auto; width: 96px; height: 58px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--raised); cursor: grab; }
+  .pl-tl-clip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pl-tl-clip img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .pl-tl-clip .n { position: absolute; top: 3px; left: 3px; padding: 0 5px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; font: 600 10px/1.5 'IBM Plex Mono', monospace; }
+  .pl-tl-clip .s { position: absolute; bottom: 3px; left: 3px; padding: 0 5px; border-radius: 5px; background: rgba(0, 0, 0, .65); color: #fff; font: 10px/1.5 'IBM Plex Mono', monospace; }
+  .pl-tl-clip .x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; cursor: pointer; opacity: 0; }
+  .pl-tl-clip:hover .x, .pl-tl-clip:focus-within .x { opacity: 1; } .pl-tl-clip .x:hover { background: var(--danger); }
+  @media (hover: none) { .pl-tl-clip .x { opacity: 1; } }
+  .pl-tl-clip.missing { border-color: var(--danger); display: grid; place-items: center; color: var(--danger); font-size: 11px; }
+  .pl-tl-clip.ins::before, .pl-tl-row.ins-end::after { content: ''; position: absolute; top: 4px; bottom: 4px; left: -5px; width: 3px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .pl-tl-row.ins-end { position: relative; } .pl-tl-row.ins-end::after { position: static; flex: 0 0 3px; height: 50px; }
+  .pl-tl-clip.ins { overflow: visible; } .pl-tl-clip.ins img { border-radius: 7px; }
+  .pl-tl-clip.dragging { opacity: .35; }
+  .pl-rx-stage { position: relative; aspect-ratio: var(--ar, 16 / 9); max-height: 66vh; margin: 0 auto; background: #000; border-radius: 10px; overflow: hidden; cursor: pointer; }
+  .pl-rx-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; max-height: none; border-radius: 0; }
+  .pl-rx-stage video.on { opacity: 1; }
+  .pl-rx-stage:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; max-height: none; margin: 0; border-radius: 0; }  /* else the page's 66vh cap leaves a band below */
+  .pl-rx-bar { display: flex; gap: 3px; margin-top: 10px; }
+  .pl-rx-bar button { position: relative; flex: 1 1 0; height: 10px; padding: 0; border: 0; border-radius: 4px; background: var(--line); overflow: hidden; cursor: pointer; }
+  .pl-rx-bar button b { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
+  .pl-rx-bar button.done b { width: 100%; }
   .pl-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; min-height: 138px; }
   .pl-strip > :first-child { margin-left: auto; } .pl-strip > :last-child { margin-right: auto; }
   .pl-strip .empty { margin: auto; color: var(--muted); font-size: 13px; align-self: center; }
@@ -820,8 +858,35 @@
     .pl-left.h3 .pl-frames { flex: 3 1 0; } .pl-h3 { height: 100%; } .pl-h3 .pl-frame { min-height: 0; }
     .pl-drop { aspect-ratio: auto; height: 100%; }
     .pl-loras { flex: none; overflow: hidden; }
-    .pl-prog, .pl-strip { grid-column: 1 / -1; }
+    .pl-prog, .pl-shelf { grid-column: 1 / -1; }
   }
+  /* Image Playground (seed image_playground): same boxes as the video Playground, a scrolling page */
+  .ipl { grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1000px) { .ipl:not([hidden]) { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } .ipl .ipl-wide { grid-column: 1 / -1; } }
+  .pl-runrow.ipl-run { display: grid; grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1.1fr); gap: 10px; align-items: end; }
+  .pl-runrow.ipl-run .pl-engine { min-width: 0; } .pl-runrow.ipl-run select, .pl-runrow.ipl-run input { width: 100%; box-sizing: border-box; }
+  .ipl-ins { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .ipl-ins .pl-drop { aspect-ratio: 1; font-size: 12px; }
+  .ipl-params { display: grid; gap: 8px; }
+  .ipl-p { display: grid; grid-template-columns: 150px minmax(0, 1fr) 6ch; align-items: center; gap: 10px; font-size: 13px; }
+  .ipl-p .lab { color: var(--muted); } .ipl-p output { text-align: right; font-weight: 600; }
+  .ipl-p .seg { flex-wrap: wrap; justify-self: start; grid-column: 2 / -1; }
+  .ipl-p .fixed { grid-column: 2 / -1; color: var(--muted); }
+  .ipl details summary { cursor: pointer; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 4px 0; }
+  .ipl-live { display: grid; place-items: center; min-height: 120px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); overflow: hidden; }
+  .ipl-live img { max-width: 100%; max-height: 360px; }
+  .ipl-live[hidden] { display: none; }
+  .ipl-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .ipl-shelf .empty { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+  .ipl-tile { position: relative; display: block; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); cursor: pointer; aspect-ratio: 1; }
+  .ipl-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ipl-tile .pl-star { position: absolute; top: 6px; left: 6px; }
+  .ipl-tile small { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl-modal .ipl-big { display: block; width: 100%; max-height: 66vh; object-fit: contain; border-radius: 10px; background: #000; }
+  .pl-modal .ipl-big:fullscreen { max-height: none; border-radius: 0; }
+  .ipl-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .ipl-acts small { color: var(--muted); margin-left: auto; font-size: 12px; }
+  @media (max-width: 560px) { .ipl-p { grid-template-columns: 1fr 5ch; } .ipl-p .lab { grid-column: 1 / -1; } .ipl-p .seg, .ipl-p .fixed { grid-column: 1 / -1; } }
   /* prompt writer (web/agent-chat.js): a drawer over the right side; a third column on wide screens */
   .pl-writer { color: var(--accent); }
   .pl-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -2733,8 +2798,8 @@
     state.forge = f; store.set('forge', f);
     document.body.classList.toggle('soul-mode', f === 'soul');
     const sbF = f === 'wake' || f === 'local';  // Local shares the Dawnforge panel: its gallery and the Playground live in #wake
-    if (f === 'local' && (!['local', 'play'].includes(wake.view) || (wake.view === 'play' && !wake.playId))) wake.view = 'local';
-    if (f === 'wake' && ['local', 'play'].includes(wake.view)) wake.view = 'home';
+    if (f === 'local' && (!['local', 'play', 'iplay'].includes(wake.view) || (['play', 'iplay'].includes(wake.view) && !wake.playId))) wake.view = 'local';
+    if (f === 'wake' && ['local', 'play', 'iplay'].includes(wake.view)) wake.view = 'home';
     document.body.classList.toggle('wake-mode', sbF);
     document.body.classList.toggle('yumeko-mode', f === 'yumeko');
     $('yumeko').hidden = f !== 'yumeko';
@@ -2749,7 +2814,7 @@
     document.body.classList.toggle('settings-mode', f === 'settings');
     $('settingstab').hidden = f !== 'settings';
     if (f === 'settings') { if (!$('settingstab').src) $('settingstab').src = '/settings'; else try { $('settingstab').contentWindow.refresh?.(); } catch {} }
-    if (f !== 'settings' && wake.play) wake.loraLib = null;  // the Playground re-reads the library on its next paint
+    if (f !== 'settings' && (wake.play || wake.iplay)) wake.loraLib = null;  // the Playground re-reads the library on its next paint
     $('wake').hidden = !sbF;
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
     if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
@@ -3115,6 +3180,7 @@
         <div id="sb-local" class="sbh" hidden></div>
         <div id="sb-board"></div>
         <div id="sb-play" class="pl" hidden></div>
+        <div id="sb-iplay" class="pl ipl" hidden></div>
         <div id="sb-clips" class="sb-clips"><div class="wake-strip" id="wake-strip"></div><div id="wake-player"></div></div>
       </div><dialog class="wake-dialog" id="wake-dialog"></dialog>`;
       $('sb-back').onclick = () => showWake(state.forge === 'local' ? 'local' : 'home');
@@ -3128,18 +3194,22 @@
   }
   async function paintView() {
     $('sb-back').hidden = wake.view === 'home' || wake.view === 'local';
-    $('sb-back').textContent = wake.view === 'play' ? '← Playgrounds' : '← Scenes';
+    $('sb-back').textContent = wake.view === 'play' || wake.view === 'iplay' ? '← Playgrounds' : '← Scenes';
     $('sb-local').hidden = wake.view !== 'local';
     if (wake.view === 'local') paintLocal();
     if (wake.view === 'board' && !wake.board) await openBoard(wake.boards[0]?.id);
     $('sb-board').hidden = $('sb-bar').hidden = wake.view !== 'board';
     $('sb-home').hidden = wake.view !== 'home';
     $('sb-play').hidden = $('sb-play-bar').hidden = wake.view !== 'play';
-    $('sb-back').closest('.sb-bar').classList.toggle('pl-nobar', wake.view === 'play');  // the Playground keeps its back + saved in the Prompt header
+    $('sb-iplay').hidden = wake.view !== 'iplay';
+    if (wake.view !== 'play') $('sb-play').innerHTML = '';    // the two playground pages share element ids (progress bar, Render)
+    if (wake.view !== 'iplay') $('sb-iplay').innerHTML = '';
+    $('sb-back').closest('.sb-bar').classList.toggle('pl-nobar', wake.view === 'play' || wake.view === 'iplay');  // the Playground keeps its back + saved in the Prompt header
     $('wake').classList.toggle('pl-on', wake.view === 'play');
     wakeUrl();
     if (wake.view === 'home') paintHome();
     if (wake.view === 'play') paintPlay();
+    if (wake.view === 'iplay') paintIPlay();
     $('sb-clips').hidden = wake.view !== 'clips';
     if (wake.view === 'clips') {
       const singles = await (await fetch('/api/wake/clips')).json();
@@ -3158,7 +3228,7 @@
   }
   function wakeUrl() {
     if (state.forge === 'local') {
-      const path = wake.view === 'play' ? '/local/playground/' + (wake.playId || '') : '/local';
+      const path = wake.view === 'play' ? '/local/playground/' + (wake.playId || '') : wake.view === 'iplay' ? '/local/image/' + (wake.playId || '') : '/local';
       if (location.pathname !== path) history[wake.push ? 'pushState' : 'replaceState'](null, '', path);
       wake.push = false; return;
     }
@@ -3228,24 +3298,28 @@
     try { all = await (await fetch('/api/playground/list')).json(); } catch {}
     if (!Array.isArray(all)) all = [];
     const when = t => t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
-    const tile = p => `<a class="sbh-card" href="/local/playground/${esc(p.id)}" data-id="${esc(p.id)}">
+    const tile = p => `<a class="sbh-card" href="/local/${p.kind === 'image' ? 'image' : 'playground'}/${esc(p.id)}" data-id="${esc(p.id)}">
         <span class="sbh-pic">${p.thumb ? `<img src="${esc(url(p.thumb))}" alt="" loading="lazy">` : '<span class="sbh-none">▶</span>'}
           ${p.video ? `<video muted loop playsinline preload="none" data-src="${esc(url(p.video))}"></video>` : ''}</span>
         <span class="sbh-tag">${p.kind === 'image' ? 'Image' : 'Video'}</span>
         <span class="sbh-acts">${p.video ? '<button type="button" data-a="full" aria-label="Fullscreen" title="Play the starred (else newest) render fullscreen">⛶</button>' : ''}<button type="button" data-a="star" class="${p.starred ? 'on' : ''}" aria-label="${p.starred ? 'Remove from favourites' : 'Favourite'}" title="Favourite">${p.starred ? '★' : '☆'}</button><button type="button" data-a="del" aria-label="Delete" title="Delete">✕</button></span>
-        <span class="sbh-cap"><b>${esc(p.prompt || p.id)}</b><small>${esc(p.model)} · ${p.clips} clip${p.clips === 1 ? '' : 's'} · ${when(p.updated || p.created)}</small></span>
+        <span class="sbh-cap"><b>${esc(p.prompt || p.id)}</b><small>${esc(p.model)} · ${p.clips} ${p.kind === 'image' ? 'picture' : 'clip'}${p.clips === 1 ? '' : 's'} · ${when(p.updated || p.created)}</small></span>
       </a>`;
     box.innerHTML = `<section class="sbh-shelf"><div class="sbh-head"><h2>Playgrounds</h2><span class="count">${all.length} ${all.length === 1 ? 'playground' : 'playgrounds'}</span></div>
         <div class="sbh-grid"><button type="button" class="sbh-card sbh-newcard" id="loc-new"><span class="sbh-pic"><span class="sbh-none">+</span></span><span class="sbh-cap"><b>New Playground</b><small>Image or video</small></span></button>${all.map(tile).join('')}</div></section>
       <dialog class="wake-dialog loc-kind" id="loc-kind"><button type="button" class="loc-x" data-k="close" aria-label="Close">✕</button><h3>New Playground</h3>
-        <div class="loc-kinds"><button type="button" data-k="video" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="14" height="14" rx="2.5"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><b>Video</b><small>Local models</small></button><button type="button" class="soon" data-k="image" aria-disabled="true"><span class="badge">SOON</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg><b>Image</b><small>Coming soon</small></button></div></dialog>`;
+        <div class="loc-kinds"><button type="button" data-k="video" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="14" height="14" rx="2.5"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><b>Video</b><small>Local models</small></button><button type="button" data-k="image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg><b>Image</b><small>JANKU · Qwen-Edit · H3</small></button></div></dialog>`;
     box.querySelectorAll('.sbh-grid').forEach(sbhEdges);
     const dlg = $('loc-kind');
     $('loc-new').onclick = () => dlg.showModal();
     dlg.onclick = async e => {
       const k = e.target.closest('[data-k]')?.dataset.k;
       if (e.target === dlg || k === 'close') return dlg.close();
-      if (k === 'image') return;  // a placeholder for now
+      if (k === 'image') {
+        dlg.close();
+        try { wake.playId = (await post('/api/image_playground/new', {})).id; } catch (err) { return alert(err.message); }
+        wake.iplay = null; return showWake('iplay');
+      }
       if (k === 'video') {
         dlg.close();
         try { wake.playId = (await post('/api/playground/new', {})).id; } catch (err) { return alert(err.message); }
@@ -3271,14 +3345,14 @@
           return paintLocal();
         }
         if (a === 'del') {
-          if (!confirm(`Delete this playground and all its clips? This can't be undone.`)) return;
+          if (!confirm(`Delete this playground and all its ${p.kind === 'image' ? 'pictures' : 'clips'}? This can't be undone.`)) return;
           try { await post('/api/playground/delete', { id: p.id }); } catch (err) { alert(err.message); }
           if (wake.playId === p.id) { wake.playId = null; wake.play = null; }
           return paintLocal();
         }
         if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
         e.preventDefault();
-        wake.playId = p.id; wake.play = null; showWake('play');
+        wake.playId = p.id; wake.play = null; wake.iplay = null; showWake(p.kind === 'image' ? 'iplay' : 'play');
       };
       const v = c.querySelector('video'), img = c.querySelector('.sbh-pic img');
       const ar = el => { const w = el.videoWidth || el.naturalWidth, h = el.videoHeight || el.naturalHeight; if (w && h) { c.style.setProperty('--ar', w / h); c.classList.toggle('wide', w / h > 1.05); } };
@@ -3292,9 +3366,9 @@
     });
   }
   addEventListener('popstate', () => {
-    const lm = location.pathname.match(/^\/local(?:\/playground\/([^/]+))?\/?$/);
+    const lm = location.pathname.match(/^\/local(?:\/(playground|image)\/([^/]+))?\/?$/);
     if (lm) {
-      if (lm[1]) { wake.playId = lm[1]; wake.play = null; wake.view = 'play'; } else wake.view = 'local';
+      if (lm[2]) { wake.playId = lm[2]; wake.play = null; wake.iplay = null; wake.view = lm[1] === 'image' ? 'iplay' : 'play'; } else wake.view = 'local';
       if (state.forge !== 'local') return setForge('local');
       return showWake(wake.view, false);
     }
@@ -3358,6 +3432,11 @@
         if (job.state === 'error') throw new Error(job.error);
         if (job.state === 'done') break;
         window.plProgress({ phase: `${j.what}: ${job.phase || 'Starting'}`, step: job.step || 0, total: job.total || 0, since: j.since });
+        const live = $('ipl-live');  // Image Playground: the step preview the worker writes (seed G8)
+        if (live && job.previews && live.dataset.n !== String(job.previews)) {
+          live.dataset.n = job.previews; live.hidden = false;
+          live.innerHTML = `<img src="/api/job/${encodeURIComponent(j.id)}/preview?n=${job.previews}" alt="The picture forming">`;
+        }
         tabTitle(job.total ? `${Math.round(100 * (job.step || 0) / job.total)}% · Morpheus` : '⋯ Morpheus');
         await new Promise(res => setTimeout(res, 1000));
       }
@@ -3367,7 +3446,8 @@
     window.plProgress(null);
     wake.playClips = null;
     if (wake.view === 'play' && $('sb-play')) await paintPlay();
-    if ($('pl-prog-text')) $('pl-prog-text').textContent = msg;
+    if (wake.view === 'iplay' && $('sb-iplay')) { wake.iplayImgs = null; await paintIPlay(); }
+    if ($('pl-prog-text')) $('pl-prog-text').textContent = j.what === 'Image' && msg.startsWith('Done') ? 'Done: the pictures are on the shelf.' : msg;
   }
   wake.plJob = store.get('pl.job', null);
   if (wake.plJob) plFollow();
@@ -3416,6 +3496,9 @@
     }
     wake.playClips ??= await (await fetch('/api/playground/clips?id=' + encodeURIComponent(wake.play.id))).json();  // only this playground's renders
     const p = wake.play, dir = `playground/${p.id}/`, shelf = wake.playClips;
+    // Remix (seed_2026_11_16_remix_mode): open/closed is a per-viewer convenience in localStorage; the timeline itself is p.remix
+    const remixKey = 'morpheus.remix.' + p.id;
+    const remixOn = () => { try { return localStorage.getItem(remixKey) === '1'; } catch { return false; } };
     const opt = (list, v, lab = x => x) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? lab(x))}</option>`).join('');
     const curModel = () => o.models.find(m => m.id === p.model) || o.models[0];
     if (!curModel().resolutions.some(r => r.id === p.resolution)) p.resolution = curModel().resolutions[0].id;  // the server resolves this too
@@ -3443,6 +3526,7 @@
           ${e ? pic(e) : `<span class="empty">+</span>`}</button>
         <div class="pl-ldet">${e ? `<div class="pl-lname"><b title="${esc(e.name)}">${esc(e.name)}</b>${bad ? '<span class="bad">file missing</span>' : ''}
           ${e.keywords ? `<button type="button" class="pl-lbtn" data-a="kw" title="Add to the prompt: ${esc(e.keywords)}" aria-label="Add the keywords to the prompt">+T</button>` : ''}
+          ${e.prompt ? `<button type="button" class="pl-lbtn" data-a="lp" title="Add its prompt: ${esc(e.prompt)}" aria-label="Add the LoRA's prompt to the prompt">+P</button>` : ''}
           <button type="button" class="pl-lbtn" data-a="clear" title="Remove" aria-label="Remove LoRA ${i + 1}">✕</button></div>
           ${kw3(e).length ? `<div class="pl-lkw" title="${esc(e.keywords)}">${kw3(e).map(w => `<span>${esc(w)}</span>`).join('')}</div>` : ''}
           <div class="pl-lstr"><input type="range" class="banded" style="${band(e)}" min="0" max="2" step="0.05" value="${p.loras[i].strength}" title="Strength · recommended ${e.strength_min}–${e.strength_max}" aria-label="Strength LoRA ${i + 1}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>`
@@ -3451,7 +3535,7 @@
       const dlg = $('pl-lpick'), lib = libFor();
       dlg.innerHTML = `<div class="gal-head"><h2 class="h">LoRA ${i + 1}</h2><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></div>
         ${lib.length ? `<div class="pl-lgrid">${lib.map(x => `<button type="button" class="pl-ltile" data-id="${esc(x.id)}" aria-pressed="${x.id === p.loras[i].id}" ${p.loras[1 - i].id === x.id ? 'disabled title="Already in the other slot"' : `title="${esc(x.info || x.name)}"`}>
-            <span class="pic">${pic(x)}</span><b>${esc(x.name)}</b><small>${esc(x.keywords || '')}</small><em>${x.strength_min}–${x.strength_max}</em></button>`).join('')}</div>`
+            <span class="pic">${pic(x)}</span><b>${esc(x.name)}</b><small>${esc(x.keywords || '')}</small>${x.prompt ? `<span class="pl-lprompt" title="${esc(x.prompt)}">${esc(x.prompt)}</span>` : ''}<em>${x.strength_min}–${x.strength_max}</em></button>`).join('')}</div>`
           : `<p class="hint">No ${esc(wake.loraLib?.families?.[famNow()] || '')} LoRAs yet. Upload them in ⚙ Settings.</p>`}`;
       dlg.querySelector('[data-a="close"]').onclick = () => dlg.close();
       dlg.querySelectorAll('.pl-ltile').forEach(t => t.onclick = () => {
@@ -3484,7 +3568,9 @@
         <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
       </div>
       <div class="pl-prog" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
+      <div class="pl-shelf${remixOn() ? ' remix' : ''}" id="pl-shelf"><button type="button" class="pl-remix-btn" id="pl-remix-btn" aria-pressed="${remixOn()}" aria-controls="pl-tl" title="Remix: cut this playground's clips into one movie"><span style="font-size:17px">✂</span>Remix</button>
       <div class="pl-strip" id="pl-strip">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your Playground renders show up here. Drag one onto the start frame to continue from its last frame.</span>'}</div>
+      <div class="pl-tl" id="pl-tl" role="region" aria-label="Remix timeline"${remixOn() ? '' : ' hidden'}></div></div>
       <div class="pl-chat" id="pl-chat" hidden><button type="button" class="pl-chat-x" id="pl-chat-x" title="Close (the chat stays)" aria-label="Close prompt writer">${ACT_ICON.close}</button></div>
       <dialog class="wake-dialog pl-modal" id="pl-modal"></dialog>
       <dialog class="wake-dialog pl-modal pl-pe" id="pl-pe"></dialog>
@@ -3806,6 +3892,12 @@
         if (!words || ta.value.includes(words)) return;
         ta.value = (ta.value.trim() ? ta.value.trimEnd() + ' ' : '') + words; p.prompt = ta.value; persist();
       };
+      const lp = el.querySelector('[data-a="lp"]');
+      if (lp) lp.onclick = () => {
+        const words = entryOf(i)?.prompt || '', ta = $('pl-prompt');
+        if (!words || ta.value.includes(words)) return;
+        ta.value = (ta.value.trim() ? ta.value.trimEnd() + ' ' : '') + words; p.prompt = ta.value; persist();
+      };
     });
     // the shelf: click a clip for the big player, drag it onto the start frame
     // render time and seed of a shelf clip (a clip from before they were kept shows what it has)
@@ -3825,7 +3917,7 @@
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(c.label)}</h2>${clipFacts(c)}</div>
           <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete clip" aria-label="Delete clip">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span>
-          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
+          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="remix" title="Add this clip to the end of the Remix timeline">✂ Add to Remix</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
         <div class="pl-up" id="pl-up" hidden>
           <div class="row"><span class="pl-l">Method</span><span class="seg" data-k="method"><button type="button" data-v="relayvsr" aria-pressed="true">RelayVSR · quick</button><button type="button" data-v="seedvr2" aria-pressed="false">SeedVR2 · real detail</button></span>
             <span class="pl-l">Factor</span><span class="seg" data-k="factor">${[1.5, 2, 3, 4].map(f => `<button type="button" data-v="${f}" aria-pressed="${f === 1.5}">×${f}</button>`).join('')}</span></div>
@@ -3840,6 +3932,7 @@
         if (a === 'close') dlg.close();
         if (a === 'full') v.requestFullscreen?.();
         if (a === 'use') { dlg.close(); useLast(c); }
+        if (a === 'remix') { dlg.close(); remixSet([...p.remix, remixRef(c)], true); toast('Added to the Remix timeline'); }
         if (a === 'copy') { try { await navigator.clipboard.writeText(c.prompt); toast('Prompt copied'); } catch { toast('Could not copy', true); } }
         if (a === 'settings') {
           if (!await ask({ title: 'Use these settings?', text: 'Prompt, model, pipeline, frames, LoRAs and seed of this clip replace what is in the Playground now.', ok: 'Use them', thumb: c.thumb ? url(c.thumb) : null })) return;
@@ -3921,6 +4014,131 @@
       };
       b.onpointerleave = () => clearTimeout(zoomWait);  // once open, the big one closes on its own leave
     });
+    // ---- Remix: a timeline of this playground's shelf clips, played through and exported as one mp4 ----
+    const remixRef = c => 'clips/' + c.video.split('/').pop();  // what playground.json stores (REMIX_REF on the server)
+    const remixItems = () => (p.remix || []).map(ref => shelf.find(c => c.video === dir + ref) || { ref, missing: true });
+    const remixSave = async list => {
+      try { p.remix = (await post('/api/playground/save', { id: p.id, remix: list })).remix; }
+      catch (err) { toast(err.message, true); }
+    };
+    // change the timeline: the strip repaints at once, the save follows; open = also switch Remix on
+    const remixSet = (list, open = false) => {
+      p.remix = list;
+      if (open && !remixOn()) toggleRemix(true);
+      paintTl(); remixSave(list);
+    };
+    const fmtS = s => s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min` : `${(+s).toFixed(1)} s`;
+    function toggleRemix(on) {
+      try { localStorage.setItem(remixKey, on ? '1' : '0'); } catch {}
+      $('pl-remix-btn').setAttribute('aria-pressed', String(on));
+      $('pl-shelf').classList.toggle('remix', on);
+      $('pl-tl').hidden = !on;
+      if (on) paintTl();
+    }
+    $('pl-remix-btn').onclick = () => toggleRemix(!remixOn());
+    function paintTl() {
+      const tl = $('pl-tl'); if (!tl || tl.hidden) return;
+      const items = remixItems(), ok = items.filter(x => !x.missing);
+      const total = ok.reduce((t, x) => t + (x.seconds || 0), 0);
+      tl.innerHTML = `<div class="pl-tl-acts"><button type="button" class="pl-tl-play" data-a="play" ${ok.length ? '' : 'disabled'}>▶ Play</button>
+          <button type="button" class="sb-quiet" data-a="export" ${ok.length && ok.length === items.length ? '' : 'disabled'} title="${items.length > ok.length ? 'Remove the missing clips first' : 'Cut the timeline into one mp4 and download it'}">⤓ Export</button>
+          <span class="pl-tl-sum">${items.length} clip${items.length === 1 ? '' : 's'} · ${fmtS(total)}</span></div>
+        <ol class="pl-tl-row" id="pl-tl-row">${items.length ? items.map((x, i) => x.missing
+          ? `<li class="pl-tl-clip missing" draggable="true" tabindex="0" data-i="${i}" title="${esc(x.ref)} was deleted" aria-label="Clip ${i + 1}: missing">missing<button type="button" class="x" data-a="rm" aria-label="Remove clip ${i + 1}">✕</button></li>`
+          : `<li class="pl-tl-clip" draggable="true" tabindex="0" data-i="${i}" title="${esc(x.prompt || x.label)}\nAlt+←/→ moves · Delete removes · double-click plays from here" aria-label="Clip ${i + 1} of ${items.length}, ${fmtS(x.seconds || 0)}">${x.thumb ? `<img src="${esc(url(x.thumb))}" alt="" draggable="false">` : ''}<span class="n">${i + 1}</span>${x.seconds ? `<span class="s">${fmtS(x.seconds)}</span>` : ''}<button type="button" class="x" data-a="rm" aria-label="Remove clip ${i + 1}">✕</button></li>`).join('')
+          : '<li class="empty">Drag clips from the shelf here, in the order they should play.</li>'}</ol>`;
+      const row = $('pl-tl-row'), list = () => [...(p.remix || [])];
+      tl.querySelector('[data-a="play"]').onclick = () => playRemix(0);
+      tl.querySelector('[data-a="export"]').onclick = e => exportRemix(e.currentTarget);
+      row.querySelectorAll('.pl-tl-clip').forEach(li => {
+        const i = +li.dataset.i;
+        li.querySelector('[data-a="rm"]').onclick = e => { e.stopPropagation(); const l = list(); l.splice(i, 1); remixSet(l); };
+        li.ondragstart = e => { e.dataTransfer.setData('text/x-pl-tl', String(i)); e.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); };
+        li.ondragend = () => li.classList.remove('dragging');
+        li.onkeydown = e => {
+          const l = list();
+          if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); l.splice(i, 1); remixSet(l); $('pl-tl-row').querySelector(`[data-i="${Math.min(i, l.length - 1)}"]`)?.focus(); return; }
+          const to = !e.altKey ? -1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'ArrowRight' ? i + 1 : -1;
+          if (to >= 0 && to < l.length) { e.preventDefault(); l.splice(to, 0, l.splice(i, 1)[0]); remixSet(l); $('pl-tl-row').querySelector(`[data-i="${to}"]`)?.focus(); }
+        };
+        if (!li.classList.contains('missing')) li.ondblclick = () => playRemix(remixItems().slice(0, i).filter(x => !x.missing).length);
+      });
+      // drop: from the shelf (copy, repeats allowed) or within the timeline (move); the marker shows where it lands
+      const clearMark = () => { row.classList.remove('ins-end'); row.querySelectorAll('.ins').forEach(x => x.classList.remove('ins')); tl.classList.remove('over'); };
+      const slot = e => { const tiles = [...row.querySelectorAll('.pl-tl-clip')]; const k = tiles.findIndex(t => { const r = t.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; }); return k < 0 ? tiles.length : k; };
+      const ours = e => [...e.dataTransfer.types].some(t => t === 'text/x-pl-clip' || t === 'text/x-pl-tl');
+      tl.ondragover = e => {
+        if (!ours(e)) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = [...e.dataTransfer.types].includes('text/x-pl-tl') ? 'move' : 'copy';
+        clearMark(); tl.classList.add('over');
+        const k = slot(e), tile = row.querySelector(`.pl-tl-clip[data-i="${k}"]`);
+        tile ? tile.classList.add('ins') : row.classList.add('ins-end');
+      };
+      tl.ondragleave = e => { if (!tl.contains(e.relatedTarget)) clearMark(); };
+      tl.ondrop = e => {
+        if (!ours(e)) return;
+        e.preventDefault(); clearMark();
+        const k = slot(e), l = list(), from = e.dataTransfer.getData('text/x-pl-tl');
+        if (from !== '') { const f = +from, item = l.splice(f, 1)[0]; l.splice(k > f ? k - 1 : k, 0, item); }
+        else { const c = shelf[+e.dataTransfer.getData('text/x-pl-clip')]; if (!c) return; l.splice(k, 0, remixRef(c)); }
+        remixSet(l);
+      };
+    }
+    paintTl();
+    // play the timeline as one film: two <video>s, the next one preloaded and swapped in on "ended" (hard cuts)
+    function playRemix(startAt) {
+      const list = remixItems().filter(x => !x.missing);
+      if (!list.length) return;
+      const total = list.reduce((t, x) => t + (x.seconds || 0), 0);
+      const dlg = $('pl-modal');
+      dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remix</h2><p class="pl-facts">${list.length} clips · ${fmtS(total)} · hard cuts</p></div>
+          <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="restart" title="From the start" aria-label="From the start">↺</button><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span></div>
+        <div class="pl-rx-stage" id="pl-rx-stage" title="Click: pause / play"><video muted playsinline preload="auto"></video><video muted playsinline preload="auto"></video></div>
+        <div class="pl-rx-bar" role="group" aria-label="Remix clips">${list.map((x, i) => `<button type="button" data-i="${i}" style="flex-grow:${x.seconds || 1}" title="Clip ${i + 1}" aria-label="Jump to clip ${i + 1}"><b></b></button>`).join('')}</div>`;
+      const stage = $('pl-rx-stage'), vs = [...stage.querySelectorAll('video')], segs = [...dlg.querySelectorAll('.pl-rx-bar button')];
+      let k = 0, cur = 0;
+      const load = (v, i) => { v.dataset.i = i; v.src = url(list[i].video); v.load(); };
+      const mark = () => segs.forEach((b, i) => { b.classList.toggle('done', i < cur); if (i !== cur) b.firstChild.style.width = ''; });
+      const jump = i => {
+        cur = i;
+        if (vs[k].dataset.i !== String(i)) load(vs[k], i);
+        vs.forEach((v, j) => v.classList.toggle('on', j === k));
+        vs[k].currentTime = 0; vs[k].play().catch(() => {}); mark();
+        if (i + 1 < list.length && vs[1 - k].dataset.i !== String(i + 1)) load(vs[1 - k], i + 1);
+      };
+      vs.forEach((v, j) => {
+        v.onloadedmetadata = () => { if (j === k && v.videoWidth) stage.style.setProperty('--ar', `${v.videoWidth} / ${v.videoHeight}`); };
+        v.ontimeupdate = () => { if (j === k && v.duration) segs[cur].firstChild.style.width = (v.currentTime / v.duration * 100) + '%'; };
+        v.onended = () => {
+          if (j !== k) return;
+          if (cur + 1 >= list.length) { segs[cur].classList.add('done'); return; }  // the end: ↺, a click or a segment plays again
+          k = 1 - k; jump(cur + 1);
+        };
+      });
+      dlg.onclose = () => vs.forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
+      dlg.onclick = e => {
+        if (e.target === dlg) return dlg.close();
+        const seg = e.target.closest('.pl-rx-bar button');
+        if (seg) return jump(+seg.dataset.i);
+        if (e.target.closest('#pl-rx-stage')) { const v = vs[k]; if (v.ended) jump(0); else if (v.paused) v.play(); else v.pause(); return; }
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a === 'close') dlg.close();
+        if (a === 'restart') jump(0);
+        if (a === 'full') stage.requestFullscreen?.();
+      };
+      dlg.showModal();
+      jump(Math.min(startAt || 0, list.length - 1));
+    }
+    async function exportRemix(btn) {
+      const label = btn.textContent; btn.disabled = true; btn.textContent = 'Exporting …';
+      try {
+        const r = await post('/api/playground/remix_export', { id: p.id });
+        const a = Object.assign(document.createElement('a'), { href: url(r.video), download: r.name });
+        document.body.append(a); a.click(); a.remove();
+        toast(`Remix exported: ${r.clips} clips, ${fmtS(r.seconds)}`);
+      } catch (err) { toast(err.message, true); }
+      finally { btn.disabled = false; btn.textContent = label; }
+    }
     $('pl-render').onclick = async () => {
       if (isH3() && !(p.pictures || []).length) return saved('H3 needs a picture: add a main image or a reference.');
       clearTimeout(timer);  // render what is on screen, not what was last autosaved
@@ -3930,6 +4148,293 @@
     };
     if ($('pl-engine')) $('pl-engine').onchange = e => { try { localStorage.setItem('morpheus.plEngine', e.target.value); } catch {} };
     $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').textContent = 'Stopping …'; post('/api/playground/stop', { job: wake.plJob?.id }); };
+    paintPlayProgress();
+  }
+
+  // ---------- Image Playground (Local tab): /local/image/<id>, state in output/playground/<id>/ (seed image_playground) ----------
+  // The settings are drawn from image_models.json (/api/image_playground/options); every render runs in the WSL warm worker.
+  async function paintIPlay() {
+    const box = $('sb-iplay');
+    if (!wake.iplayOpts) {
+      const d = await (await fetch('/api/image_playground/options')).json();
+      if (d.error) { box.innerHTML = `<p class="sbh-empty">${esc(d.error)}</p>`; return; }
+      wake.iplayOpts = d;
+    }
+    const o = wake.iplayOpts;
+    try { wake.loraLib = await (await fetch('/api/loras/video')).json(); } catch { wake.loraLib ??= { loras: [] }; }
+    if (wake.iplay?.id !== wake.playId) {
+      const r = await fetch('/api/image_playground/' + encodeURIComponent(wake.playId || '-'));
+      const d = await r.json();
+      if (!r.ok) { wake.iplay = null; box.innerHTML = `<p class="sbh-empty">${esc(d.error)}</p>`; return; }
+      wake.iplay = d; wake.iplayImgs = null;
+    }
+    wake.iplayImgs ??= await (await fetch('/api/image_playground/images?id=' + encodeURIComponent(wake.iplay.id))).json();
+    const p = wake.iplay, dir = `playground/${p.id}/`, shelf = Array.isArray(wake.iplayImgs) ? wake.iplayImgs : [];
+    const m = o.models.find(x => x.id === p.model) || o.models[0];
+    const hasInput = p.inputs.some(Boolean);
+    const opt = (list, v) => list.map(x => `<option value="${esc(x.id ?? x)}" ${(x.id ?? x) == v ? 'selected' : ''}>${esc(x.label ?? x)}</option>`).join('');
+    // sizes stay WxH in the schema; the page names each by its nearest ratio (832x1216 -> 2:3), like the video Playground
+    const ratioOf = z => { const [w, h] = z.split('x').map(Number), r = Math.log(w / h);
+      return Object.keys(PL_ASPECT).reduce((b, a) => { const [x, y] = a.split(':').map(Number); return Math.abs(r - Math.log(x / y)) < Math.abs(r - Math.log(b.split(':')[0] / b.split(':')[1])) ? a : b; }, '1:1'); };
+    const param = (k, s) => {
+      if (s.needs_input && !hasInput) return '';
+      const v = p.params[k], lab = `<span class="lab">${esc(s.label || k)}</span>`;
+      if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
+      if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span></div>`;
+      return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
+    };
+    const ps = Object.entries(m.params || {});
+    const basic = ps.filter(([, s]) => !s.advanced).map(([k, s]) => param(k, s)).join('');
+    const adv = ps.filter(([, s]) => s.advanced).map(([k, s]) => param(k, s)).join('');
+    const nIn = m.inputs?.max || 0;
+    const inSlot = i => `<div class="pl-drop" data-slot="${i}" tabindex="0" aria-label="Input ${i + 1}">${p.inputs[i]
+      ? `<img src="${esc(url(dir + p.inputs[i]))}" alt=""><button type="button" class="x" title="Remove" aria-label="Remove input ${i + 1}">${ACT_ICON.close}</button>${m.family === 'h3_image' ? `<span class="pl-tag">&lt;Picture ${i + 1}&gt;</span>` : ''}`
+      : (m.family === 'h3_image' ? `Picture ${i + 1}` : i === 0 ? 'Drop a picture or click' : `Picture ${i + 1}`)}</div>`;
+    const lib = () => (wake.loraLib?.loras || []).filter(e => e.family === m.family);
+    // LoRA slots: the video Playground's picture slots + library grid, only the model's family
+    const entryOf = i => (wake.loraLib?.loras || []).find(e => e.id === p.loras[i].id) || null;
+    const band = e => e ? `--lo:${e.strength_min / 2 * 100}%;--hi:${e.strength_max / 2 * 100}%` : '';
+    const pic = e => e?.picture ? `<img src="/api/loras/video/picture/${encodeURIComponent(e.id)}?v=${esc(e.picture)}" alt="" loading="lazy">` : `<span class="ph">${esc((e?.name || '?').slice(0, 1))}</span>`;
+    const kw3 = e => (e.keywords || '').split(',').map(w => w.trim()).filter(Boolean).slice(0, 3);
+    const lora = i => { const e = entryOf(i), bad = e?.missing; return `<div class="pl-lora${e ? ' on' : ''}" data-i="${i}">
+        <button type="button" class="pl-lpic" data-a="pick" title="${e ? esc(e.name + (e.info ? '\n\n' + e.info : '') + '\n\nClick to change') : 'Pick a LoRA'}" aria-label="LoRA ${i + 1}: ${e ? esc(e.name) : 'none'}, pick">
+          ${e ? pic(e) : `<span class="empty">+</span>`}</button>
+        <div class="pl-ldet">${e ? `<div class="pl-lname"><b title="${esc(e.name)}">${esc(e.name)}</b>${bad ? '<span class="bad">file missing</span>' : ''}
+          ${e.keywords ? `<button type="button" class="pl-lbtn" data-a="kw" title="Add to the prompt: ${esc(e.keywords)}" aria-label="Add the keywords to the prompt">+T</button>` : ''}
+          ${e.prompt ? `<button type="button" class="pl-lbtn" data-a="lp" title="Add its prompt: ${esc(e.prompt)}" aria-label="Add the LoRA's prompt to the prompt">+P</button>` : ''}
+          <button type="button" class="pl-lbtn" data-a="clear" title="Remove" aria-label="Remove LoRA ${i + 1}">✕</button></div>
+          ${kw3(e).length ? `<div class="pl-lkw" title="${esc(e.keywords)}">${kw3(e).map(w => `<span>${esc(w)}</span>`).join('')}</div>` : ''}
+          <div class="pl-lstr"><input type="range" class="banded" style="${band(e)}" min="0" max="2" step="0.05" value="${p.loras[i].strength}" title="Strength · recommended ${e.strength_min}–${e.strength_max}" aria-label="Strength LoRA ${i + 1}"><output>${(+p.loras[i].strength).toFixed(2)}</output></div>`
+          : `<span class="pl-lnone">LoRA ${i + 1}<small>Click the square to pick one</small></span>`}</div></div>`; };
+    const fmtRun = sec => { const t = Math.round(sec || 0); return t ? (t >= 60 ? `${Math.floor(t / 60)} min ${String(t % 60).padStart(2, '0')} s` : `${t} s`) : ''; };
+    const label = c => [c.model.replace(/\s*\(.*\)$/, ''), c.seed != null && `seed ${c.seed}`].filter(Boolean).join(' · ');
+    const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" aria-label="${esc(label(c))}"><span class="pic"><img src="${esc(url(c.image))}" alt="" loading="lazy" draggable="false"><i class="pl-star${c.cover ? ' on' : ''}" role="button" tabindex="0" data-a="star" aria-label="${c.cover ? 'Unstar' : 'Star: cover of this playground'}" title="${c.cover ? 'Starred: the gallery shows this picture' : 'Star: show this picture in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size.replace('x', '×'))}</em>` : ''}<i class="pl-del" role="button" tabindex="0" data-a="del" aria-label="Delete picture" title="Delete picture">${ACT_ICON.trash}</i></span><small>${esc(label(c))}</small></button>`;
+    box.innerHTML = `<div class="pl-left">
+        <section class="pl-box"><div class="pl-prompt-head"><span class="pl-ph-left"><button type="button" class="sb-quiet pl-back" id="ipl-back" title="Back to the playgrounds" aria-label="Back to the playgrounds">←</button><label class="pl-l" for="ipl-prompt" style="margin:0">Prompt</label></span><span class="pl-ph-acts"><span class="sb-saved" id="ipl-saved" aria-live="polite"></span>${(m.prompt_default || '').trim() ? `<button type="button" class="sb-quiet pl-writer" id="ipl-defp" title="Put the model's default in front: ${esc(m.prompt_default.trim())}">+ Default</button>` : ''}</span></div>
+          <textarea id="ipl-prompt" placeholder="${m.family === 'qwen_edit' ? 'What to change …' : 'What the picture shows …'}">${esc(p.prompt)}</textarea>
+          ${m.negative ? `<label class="pl-l" for="ipl-neg">Negative</label><textarea id="ipl-neg" style="min-height:70px">${esc(p.negative)}</textarea>` : ''}</section>
+        ${nIn ? `<section class="pl-box"><label class="pl-l">${esc(m.inputs.label)}</label><div class="ipl-ins">${Array.from({ length: nIn }, (_, i) => inSlot(i)).join('')}</div><input type="file" id="ipl-file" accept="image/png,image/jpeg,image/webp" hidden></section>` : ''}
+        <div class="ipl-live" id="ipl-live" hidden></div>
+      </div>
+      <div class="pl-right">
+        <section class="pl-box"><div class="pl-grid">
+          <div><label class="pl-l" for="ipl-model">Model</label><select id="ipl-model">${opt(o.models, p.model)}</select></div>
+          <div class="pl-asp"><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect" title="${esc(p.size.replace('x', '×'))} px">${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span></button>
+            <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${[...m.sizes].sort((x, y) => Object.keys(PL_ASPECT).indexOf(ratioOf(x)) - Object.keys(PL_ASPECT).indexOf(ratioOf(y))).map(z => `<button type="button" class="ratio" data-v="${esc(z)}" aria-pressed="${z === p.size}" title="${esc(z.replace('x', '×'))} px">${plAspectIcon(ratioOf(z))}<span>${esc(ratioOf(z))}</span></button>`).join('')}</div></div></div>
+          <p class="pl-hint">${esc(m.note || '')}</p>
+          <div class="ipl-params">${basic}</div>
+          ${adv ? `<details><summary>Advanced</summary><div class="ipl-params">${adv}</div></details>` : ''}</section>
+        <section class="pl-box pl-loras"><b>LoRAs</b><div class="pl-lpair">${p.loras.map((_, i) => lora(i)).join('')}</div></section>
+        <div class="pl-runrow ipl-run"><div class="pl-engine"><label class="pl-l" for="ipl-seed">Seed</label><input id="ipl-seed" inputmode="numeric" autocomplete="off" placeholder="random" value="${p.seed ?? ''}" title="Empty: random. Batch pictures use seed, seed+1, …"></div>
+          <div class="pl-engine"><label class="pl-l" for="ipl-count">Pictures</label><select id="ipl-count">${opt(Array.from({ length: m.max_count || 1 }, (_, i) => i + 1), p.count)}</select></div>
+          <div class="pl-engine"><label class="pl-l" for="pl-engine">Keep warm</label><select id="pl-engine">${PL_ENGINES.map(([v, t]) => `<option value="${v}"${plEngine() === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div></div>
+        <button type="button" class="pl-render" id="pl-render">Render</button>
+        <button type="button" class="sb-quiet danger pl-stop" id="pl-stop" hidden>Stop</button>
+      </div>
+      <div class="pl-prog ipl-wide" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
+      <div class="pl-strip ipl-wide" id="ipl-shelf">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your renders land here. Drag one onto an input slot to edit it further.</span>'}</div>
+      <dialog class="wake-dialog pl-modal" id="ipl-view"></dialog>
+      <dialog class="wake-dialog pl-modal" id="pl-lpick"></dialog>`;
+    const saved = t => $('ipl-saved').textContent = t;
+    const body = () => ({ id: p.id, model: p.model, params: p.params, size: p.size, prompt: p.prompt, negative: p.negative, seed: p.seed ?? null, count: p.count, loras: p.loras.map(l => ({ id: l.id || '', strength: l.strength })) });
+    let timer;
+    const persist = () => { clearTimeout(timer); saved('Saving …'); timer = setTimeout(async () => { try { await post('/api/image_playground/save', body()); saved('Saved'); } catch (e) { saved(e.message); } }, 400); };
+    const swap = async req => { try { wake.iplay = await post('/api/image_playground/save', { id: p.id, ...req }); paintIPlay(); } catch (e) { saved(e.message); } };
+    $('ipl-back').onclick = () => showWake('local');
+    $('ipl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
+    if ($('ipl-defp')) $('ipl-defp').onclick = () => {  // the model's default prompt in front, once (not when it already starts with it)
+      const d = m.prompt_default.trim().replace(/,\s*$/, ''), ta = $('ipl-prompt'), cur = ta.value.trim();
+      if (cur.startsWith(d)) return toast('The prompt already starts with the default.');
+      ta.value = cur ? `${d}, ${cur.replace(/^,\s*/, '')}` : `${d}, `; p.prompt = ta.value; persist(); ta.focus();
+    };
+    if ($('ipl-neg')) $('ipl-neg').oninput = e => { p.negative = e.target.value; persist(); };
+    $('ipl-seed').oninput = e => { const v = e.target.value.trim(); p.seed = v === '' ? null : v; persist(); };
+    $('ipl-count').onchange = e => { p.count = +e.target.value; persist(); };
+    const aspPop = $('pl-aspect'), aspBtn = $('pl-asp-btn');
+    const aspShow = open => { aspPop.hidden = !open; aspBtn.setAttribute('aria-expanded', String(open)); };
+    aspBtn.onclick = () => aspShow(aspPop.hidden);
+    aspPop.onkeydown = e => { if (e.key === 'Escape') { aspShow(false); aspBtn.focus(); } };
+    document.addEventListener('pointerdown', e => { if (!e.target.closest?.('.pl-asp') && $('pl-aspect')) $('pl-aspect').hidden = true; }, { capture: true, once: true });
+    aspPop.onclick = e => {
+      const b = e.target.closest('.ratio[data-v]');
+      if (!b) return;
+      p.size = b.dataset.v;
+      aspPop.querySelectorAll('.ratio').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      aspBtn.innerHTML = `${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span>`; aspBtn.title = p.size.replace('x', '×') + ' px';
+      aspShow(false); persist();
+    };
+    $('ipl-model').onchange = e => { clearTimeout(timer); swap({ model: e.target.value }); };  // the server swaps untouched default prompts for the new model's
+    box.querySelectorAll('.ipl-params').forEach(el => {
+      el.oninput = e => {
+        const r = e.target.closest('input[type=range][data-k]');
+        if (!r) return;
+        p.params[r.dataset.k] = +r.value; r.nextElementSibling.textContent = r.value; persist();
+      };
+      el.onclick = e => {
+        const b = e.target.closest('.seg button');
+        if (!b) return;
+        const k = b.closest('.seg').dataset.k, s = m.params[k];
+        p.params[k] = s.choices.find(c => String(c) === b.dataset.v);
+        b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        persist();
+      };
+    });
+    const setLoras = () => { clearTimeout(timer); swap({ ...body(), loras: p.loras }); };
+    const openLoraPick = i => {
+      const dlg = $('pl-lpick'), list = lib();
+      dlg.innerHTML = `<div class="gal-head"><h2 class="h">LoRA ${i + 1}</h2><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></div>
+        ${list.length ? `<div class="pl-lgrid">${list.map(x => `<button type="button" class="pl-ltile" data-id="${esc(x.id)}" aria-pressed="${x.id === p.loras[i].id}" ${p.loras.some((l, j) => j !== i && l.id === x.id) ? 'disabled title="Already in another slot"' : `title="${esc(x.info || x.name)}"`}>
+            <span class="pic">${pic(x)}</span><b>${esc(x.name)}</b><small>${esc(x.keywords || '')}</small>${x.prompt ? `<span class="pl-lprompt" title="${esc(x.prompt)}">${esc(x.prompt)}</span>` : ''}<em>${x.strength_min}–${x.strength_max}</em></button>`).join('')}</div>`
+          : `<p class="hint">No ${esc(o.families?.[m.family] || m.family)} LoRAs yet. Upload them in ⚙ Settings.</p>`}`;
+      dlg.querySelector('[data-a="close"]').onclick = () => dlg.close();
+      dlg.querySelectorAll('.pl-ltile').forEach(t => t.onclick = () => {
+        const e = list.find(x => x.id === t.dataset.id);
+        p.loras[i] = { id: e.id, strength: Math.round((e.strength_min + e.strength_max) / 2 * 20) / 20 };  // starts mid-range
+        dlg.close(); setLoras();
+      });
+      dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+      dlg.showModal();
+    };
+    box.querySelectorAll('.pl-lora').forEach(el => {
+      const i = +el.dataset.i, range = el.querySelector('input[type=range]'), out = el.querySelector('output');
+      if (range) range.oninput = () => { p.loras[i].strength = +range.value; out.textContent = (+range.value).toFixed(2); persist(); };
+      el.querySelector('[data-a="pick"]').onclick = () => openLoraPick(i);
+      const clear = el.querySelector('[data-a="clear"]');
+      if (clear) clear.onclick = () => { p.loras[i] = { id: '', strength: 1.0 }; setLoras(); };
+      const kw = el.querySelector('[data-a="kw"]');
+      if (kw) kw.onclick = () => {
+        const words = entryOf(i)?.keywords || '', ta = $('ipl-prompt');
+        if (!words || ta.value.includes(words)) return;
+        ta.value = (ta.value.trim() ? ta.value.trimEnd() + ', ' : '') + words; p.prompt = ta.value; persist();
+      };
+      const lp = el.querySelector('[data-a="lp"]');
+      if (lp) lp.onclick = () => {
+        const words = entryOf(i)?.prompt || '', ta = $('ipl-prompt');
+        if (!words || ta.value.includes(words)) return;
+        ta.value = (ta.value.trim() ? ta.value.trimEnd().replace(/,$/, '') + ', ' : '') + words; p.prompt = ta.value; persist();
+      };
+    });
+    // inputs: click / drop a file, or drag a shelf picture in ("use as input", G7)
+    let pick = 0;
+    // a new first picture sets the aspect to the model's nearest size (log distance, like the video Playground's start
+    // frame), so img2img / edits are not cropped; the other slots don't count, the user can still pick another
+    const matchAspect = async () => {
+      const st = wake.iplay, mm = o.models.find(x => x.id === st.model), first = st.inputs[0];
+      if (!first || !mm) return;
+      const im = new Image(); im.src = url(`playground/${st.id}/${first}`);
+      try { await im.decode(); } catch { return; }
+      const r = Math.log(im.naturalWidth / im.naturalHeight), d = z => { const [w, h] = z.split('x').map(Number); return Math.abs(r - Math.log(w / h)); };
+      const best = mm.sizes.reduce((x, z) => d(z) < d(x) ? z : x);
+      if (best === st.size) return;
+      try { wake.iplay = await post('/api/image_playground/save', { id: st.id, size: best }); } catch { return; }
+      await paintIPlay();
+      toast(`Aspect → ${ratioOf(best)} (matches the picture)`);
+    };
+    const took = async (st, k) => { wake.iplay = st; await paintIPlay(); if (k === 0) matchAspect(); };
+    const send = file => {
+      if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) return saved('A PNG, JPEG or WebP picture, please.');
+      const fr = new FileReader(), k = pick;
+      fr.onload = async () => { try { await took(await post('/api/image_playground/input', { id: p.id, slot: k, data: fr.result }), k); } catch (e) { saved(e.message); } };
+      fr.readAsDataURL(file);
+    };
+    box.querySelectorAll('.ipl-ins .pl-drop').forEach(d => {
+      const k = +d.dataset.slot;
+      d.onclick = e => {
+        if (e.target.closest('.x')) { post('/api/image_playground/input', { id: p.id, slot: k, data: null }).then(st => { wake.iplay = st; paintIPlay(); }, err => saved(err.message)); return; }
+        pick = k; $('ipl-file').value = ''; $('ipl-file').click();
+      };
+      d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
+      d.ondragleave = () => d.classList.remove('over');
+      d.ondrop = async e => {
+        e.preventDefault(); d.classList.remove('over');
+        const i = e.dataTransfer.getData('text/x-ipl-image');
+        if (i !== '') { try { await took(await post('/api/image_playground/use_as_input', { id: p.id, slot: k, image: shelf[+i].image }), k); } catch (err) { saved(err.message); } return; }
+        pick = k; send(e.dataTransfer.files[0]);
+      };
+    });
+    if ($('ipl-file')) $('ipl-file').onchange = e => send(e.target.files[0]);
+    // shelf: the video shelf's cards; a click opens the big view (the video player's layout), drag one onto an input slot
+    const deletePic = async (c, before) => {
+      if (!await ask({ title: 'Delete picture?', text: 'The picture and its settings are removed from disk and cannot be restored.', ok: 'Delete', danger: true, thumb: url(c.image) })) return;
+      try { await post('/api/image_playground/delete_image', { id: p.id, image: c.image }); } catch (err) { return alert(err.message); }
+      before?.(); wake.iplayImgs = null; paintIPlay();
+    };
+    const view = c => {
+      const dlg = $('ipl-view'), free = p.inputs.findIndex(x => !x);
+      const facts = [fmtRun(c.render_seconds) && `Rendered in ${fmtRun(c.render_seconds)}`, c.seed != null && `Seed ${c.seed}`, c.size && c.size.replace('x', '×')].filter(Boolean);
+      dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(c.model)}</h2>${facts.length ? `<p class="pl-facts">${esc(facts.join(' · '))}</p>` : ''}</div>
+          <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><a class="wake-open pl-ico" href="${esc(url(c.image))}" download title="Download" aria-label="Download">${ACT_ICON.open}</a><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete picture" aria-label="Delete picture">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span>
+          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Picture actions">${nIn ? `<button type="button" class="wake-open pl-act" data-a="input" ${free < 0 ? 'disabled title="All input slots are full"' : 'title="Into the first free input slot"'}>${ACT_ICON.lastframe}Use as input</button>` : ''}<button type="button" class="wake-open pl-act" data-a="reuse" title="Model, settings, prompts, LoRAs, inputs and seed of this picture into the Playground">${ACT_ICON.variant}Use these settings</button><button type="button" class="wake-open pl-act" data-a="star" aria-pressed="${!!c.cover}">${c.cover ? '★ Starred' : '☆ Star'}</button></div></div></div>
+        <img class="ipl-big" src="${esc(url(c.image))}" alt="">${c.prompt ? `<div class="pl-cprompt"><p class="hint">${esc(c.prompt)}</p><button type="button" class="wake-open pl-ico" data-a="copy" title="Copy prompt" aria-label="Copy prompt">${ACT_ICON.copy}</button></div>` : ''}`;
+      dlg.onclick = async e => {
+        if (e.target === dlg) return dlg.close();
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        try {
+          if (a === 'close') dlg.close();
+          if (a === 'full') dlg.querySelector('.ipl-big').requestFullscreen?.();
+          if (a === 'copy') { try { await navigator.clipboard.writeText(c.prompt); toast('Prompt copied'); } catch { toast('Could not copy', true); } }
+          if (a === 'del') deletePic(c, () => dlg.close());
+          if (a === 'star') { await post('/api/image_playground/star_image', { id: p.id, image: c.image, starred: !c.cover }); dlg.close(); wake.iplayImgs = null; paintIPlay(); }
+          if (a === 'input') { const st = await post('/api/image_playground/use_as_input', { id: p.id, slot: free, image: c.image }); dlg.close(); took(st, free); }
+          if (a === 'reuse') {
+            if (!await ask({ title: 'Use these settings?', text: 'Model, settings, prompts, LoRAs, inputs and seed of this picture replace what is in the Playground now.', ok: 'Use them', thumb: url(c.image) })) return;
+            clearTimeout(timer);
+            wake.iplay = await post('/api/image_playground/reuse', { id: p.id, image: c.image }); dlg.close(); await paintIPlay(); toast('Settings taken from the picture');
+          }
+        } catch (err) { toast(err.message, true); }
+      };
+      dlg.showModal();
+    };
+    // hover: the card grows over the shelf like the video shelf's (fixed, ×2.4 upwards, same handlers); it closes when the
+    // pointer leaves it, on a shelf scroll and on every repaint
+    let zoom, zoomWait;
+    const closeZoom = () => { clearTimeout(zoomWait); zoom?.remove(); zoom = null; };
+    wake.plCloseZoom?.(); wake.plCloseZoom = closeZoom;
+    $('ipl-shelf').onscroll = closeZoom;
+    const wirePic = (t, c) => {
+      t.ondragstart = e => { e.dataTransfer.setData('text/x-ipl-image', t.dataset.i); e.dataTransfer.effectAllowed = 'copy'; };
+      t.onclick = async e => {
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        closeZoom();
+        if (a === 'del') return deletePic(c);
+        if (a === 'star') {
+          try { await post('/api/image_playground/star_image', { id: p.id, image: c.image, starred: !c.cover }); } catch (err) { return toast(err.message, true); }
+          wake.iplayImgs = null; return paintIPlay();
+        }
+        view(c);
+      };
+    };
+    box.querySelectorAll('#ipl-shelf .pl-clip').forEach(t => {
+      const c = shelf[+t.dataset.i];
+      wirePic(t, c);
+      t.onpointerenter = e => {
+        if (e.pointerType !== 'mouse') return;
+        clearTimeout(zoomWait);
+        zoomWait = setTimeout(() => {
+          closeZoom();
+          const r = t.getBoundingClientRect(), x = r.left < 110 ? 'left' : innerWidth - r.right < 110 ? 'right' : 'center';
+          const here = zoom = document.createElement('div');
+          here.className = 'pl-zoom';
+          here.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;transform-origin:${x} bottom`;
+          here.innerHTML = tile(c, t.dataset.i);
+          const z = here.firstElementChild;
+          wirePic(z, c);
+          z.ondragend = closeZoom;
+          here.onpointerleave = () => { if (zoom === here) closeZoom(); };
+          document.body.append(here);
+          requestAnimationFrame(() => here.classList.add('on'));
+        }, 120);
+      };
+      t.onpointerleave = () => clearTimeout(zoomWait);  // once open, the big one closes on its own leave
+    });
+    $('pl-render').onclick = async () => {
+      if ((m.inputs?.min || 0) > p.inputs.filter(Boolean).length) return saved(`${m.label} needs at least ${m.inputs.min} picture${m.inputs.min === 1 ? '' : 's'}.`);
+      clearTimeout(timer);
+      try { await post('/api/image_playground/save', body()); saved('Saved'); } catch (e) { return saved(e.message); }
+      plStart('/api/image_playground/render', { id: p.id, engine: plEngine() }, 'Image');
+    };
+    $('pl-engine').onchange = e => { try { localStorage.setItem('morpheus.plEngine', e.target.value); } catch {} };
+    $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').textContent = 'Stopping …'; post('/api/image_playground/stop', { job: wake.plJob?.id }); };
     paintPlayProgress();
   }
 
@@ -4658,8 +5163,8 @@
   {
     const old = location.pathname.match(/^\/dawnforge\/playground\/([^/]+)/);  // the Playground moved to Local (2026-11-15)
     if (old) history.replaceState(null, '', '/local/playground/' + old[1]);
-    const lm = location.pathname.match(/^\/local(?:\/playground\/([^/]+))?\/?$/);
-    if (lm) { state.forge = 'local'; wake.view = lm[1] ? 'play' : 'local'; if (lm[1]) wake.playId = lm[1]; }
+    const lm = location.pathname.match(/^\/local(?:\/(playground|image)\/([^/]+))?\/?$/);
+    if (lm) { state.forge = 'local'; wake.view = lm[2] ? (lm[1] === 'image' ? 'iplay' : 'play') : 'local'; if (lm[2]) wake.playId = lm[2]; }
     const m = location.pathname.match(/^\/dawnforge(?:\/([^/]+)(?:\/([^/]+))?)?/);
     if (m) {
       state.forge = 'wake';

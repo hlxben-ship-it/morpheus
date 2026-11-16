@@ -152,6 +152,7 @@ function openForm({ entry = null, upload = null }) {
     <label>Keywords (trigger words)<input type="text" name="keywords" maxlength="300" value="${esc(v.keywords ?? '')}" placeholder="e.g. dr34ml4y style"></label>
     <div class="two"><label>Recommended strength, min<input type="text" inputmode="decimal" name="strength_min" value="${v.strength_min ?? 0.6}" placeholder="0–2"></label>
       <label>max<input type="text" inputmode="decimal" name="strength_max" value="${v.strength_max ?? 1.0}" placeholder="0–2"></label></div>
+    <label>Prompt (a prompt that works with it; the Playground's +P puts it in)<textarea name="prompt" rows="3" style="min-height:0;height:auto" maxlength="4000" placeholder="e.g. kiri_8dc80, 1girl, solo, blue hair, bob cut, goggles on head …">${esc(v.prompt ?? '')}</textarea></label>
     <label>Info (recommendations, notes)<textarea name="info" maxlength="20000" placeholder="What it does, prompts that work, what to avoid …">${esc(v.info ?? '')}</textarea></label>
     ${upload?.probe.summary?.length ? `<details><summary class="note">What the file says</summary><dl>${upload.probe.summary.map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join('')}</dl></details>` : ''}
     <p class="bad" id="err" style="margin:0" hidden></p>
@@ -177,7 +178,7 @@ function openForm({ entry = null, upload = null }) {
     ev.preventDefault();
     const d = Object.fromEntries(new FormData(f));
     const num = x => Number(String(x).trim().replace(',', '.'));  // 0,5 and 0.5 both work
-    const body = { name:d.name, url:d.url, keywords:d.keywords, info:d.info, strength_min:num(d.strength_min), strength_max:num(d.strength_max), ...(picture !== null && { picture }) };
+    const body = { name:d.name, url:d.url, keywords:d.keywords, prompt:d.prompt, info:d.info, strength_min:num(d.strength_min), strength_max:num(d.strength_max), ...(picture !== null && { picture }) };
     $('save').disabled = true; $('err').hidden = true;
     $('save').classList.add('busy'); $('save').title = upload ? 'Checking and copying …' : 'Saving …';
     try {

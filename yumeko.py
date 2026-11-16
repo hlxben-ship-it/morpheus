@@ -967,10 +967,30 @@ def register(job: dict) -> None:
     if job.get("lora"):
         morpheus.LORAS[f"yumeko-{job['id']}"] = {"label": job["agent"]["name"], "note": f"Yumeko LoRA, stage {job['lora']['stage']}",
                                                  "file": job["lora"]["file"], "model": MODEL, "strength": job["lora"]["strength"], "trigger": job["lora"]["trigger"]}
+        # ... and in the LoRA library (family sdxl), so the Image Playground's JANKU slots offer her too
+        try:
+            import lora_library
+            st = float(job["lora"]["strength"])
+            b0 = (job.get("bases") or [{}])[0].get("file")
+            look = (job.get("auto") or {}).get("permanent") or (job.get("look") or {}).get("identity") or job["agent"].get("identity_summary") or ""
+            look = "" if ". " in look else ", ".join(t.strip() for t in look.split(",") if t.strip() and t.strip() not in ("1girl", "solo"))
+            lora_library.link(f"yumeko-{job['id']}", "sdxl", morpheus.COMFY_MODELS / "loras" / job["lora"]["file"],
+                              {"name": job["agent"]["name"], "keywords": job["lora"]["trigger"],
+                               "prompt": ", ".join(x for x in [job["lora"]["trigger"], "1girl, solo", look] if x),
+                               "info": f"Yumeko character LoRA, stage {job['lora']['stage']}. Put the trigger word in the prompt.",
+                               "strength_min": round(max(0.0, st - 0.2), 2), "strength_max": round(min(2.0, st + 0.1), 2)},
+                              picture=ROOT / job["id"] / b0 if b0 else None)
+        except Exception as e:  # noqa: BLE001 - the library is a convenience; Yumeko must keep working
+            print("LoRA library link failed:", e)
 
 
 def unregister(job: dict) -> None:
     morpheus.LORAS.pop(f"yumeko-{job['id']}", None)
+    try:
+        import lora_library
+        lora_library.unlink_key(f"yumeko-{job['id']}")
+    except Exception as e:  # noqa: BLE001
+        print("LoRA library unlink failed:", e)
     if job.get("lora"):
         (morpheus.COMFY_MODELS / "loras" / job["lora"]["file"]).unlink(missing_ok=True)
 

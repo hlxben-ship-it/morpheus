@@ -5,6 +5,8 @@
 stdin     one JSON job per line, the Morpheus engine job shape:
             {"kind": "render", "settings": {...}, "out_dir": "...", "result": "...json", "id": "..."}
             {"kind": "upscale", "video": "...", "upsampling": "relayvsr*1.5", "out_dir": "...", "result": "...", "id": "..."}
+            {"kind": "image", "family": "sdxl"|"qwen_edit", "params": {...}, "count": N, "out_dir": "...", "id": "..."}   own pipelines
+            {"kind": "image", "family": "h3_image", "settings": {...WanGP...}, ...}                                         H3-Image via WanGP
             {"kind": "unload"}   frees the model, stays alive        {"kind": "quit"}
 stdout    "@@ {json}" lines: {"event": "ready"}, progress, done, error (each with the job "id"), {"event": "idle_exit"}
 Exits by itself after --keep-warm seconds without a job (default 600), so RAM goes back to Windows when nobody renders.
@@ -17,6 +19,9 @@ from pathlib import Path
 
 WANGP = Path(os.environ.get("WARM_WANGP", "/root/wangp"))
 KEEP_WARM = float(sys.argv[sys.argv.index("--keep-warm") + 1]) if "--keep-warm" in sys.argv else 600.0
+# Big models (Qwen-Edit ~17 GB, H3 ~20 GB) leave Windows almost no RAM in the 24 GB VM: whatever keep-warm says, they go
+# after HEAVY_IDLE without a job; a light model (SDXL) left behind keeps the worker for the rest of KEEP_WARM (2026-11-16)
+HEAVY_IDLE = min(float(os.environ.get("WARM_HEAVY_IDLE", 600)), KEEP_WARM)
 sys.argv = sys.argv[:1]  # WanGP parses sys.argv itself and rejects unknown flags
 
 
@@ -62,14 +67,32 @@ def main():
     jobs = queue.Queue()
     threading.Thread(target=lambda: [jobs.put(l) for l in sys.stdin], daemon=True).start()
     say({"event": "ready", "keep_warm": KEEP_WARM})
+    heavy = False   # a big model is loaded (set after each job)
+    idle_since = time.time()
     while True:
+        if idle_since is None:  # a job just ended (every path below ends in continue): the idle clock starts now
+            idle_since = time.time()
+        wait = (HEAVY_IDLE if heavy else KEEP_WARM) - (time.time() - idle_since)
         try:
-            line = jobs.get(timeout=KEEP_WARM)
+            line = jobs.get(timeout=max(1.0, wait))
         except queue.Empty:
+            if heavy:
+                heavy = False
+                left = False
+                try: wgp.release_model()
+                except Exception: pass
+                if "image.runner" in sys.modules:
+                    left = sys.modules["image.runner"].release_heavy()
+                if left and KEEP_WARM > HEAVY_IDLE:  # SDXL stays warm for the rest of keep-warm
+                    say({"event": "heavy_released"}); continue
             say({"event": "idle_exit"}); break
         if not line.strip(): continue
         job = to_linux(json.loads(line)); jid = job.get("id")
         if job["kind"] == "quit": break
+        idle_since = None
+        if job["kind"] in ("image", "render"):  # what this job leaves loaded: Qwen-Edit and H3 (image or video) count as big
+            mt = str((job.get("settings") or {}).get("model_type", ""))
+            heavy = job.get("family") in ("qwen_edit", "h3_image") or "h3" in mt
         if job["kind"] == "unload":
             try: wgp.release_model()
             except Exception as e: say({"event": "error", "id": jid, "message": f"unload: {e}"})
@@ -86,7 +109,18 @@ def main():
                 Path(job["out_dir"]).mkdir(parents=True, exist_ok=True)
                 for k in ("save_path", "image_save_path", "audio_save_path", "mesh_save_path"):
                     wgp.server_config[k] = job["out_dir"]  # what shared.api does for output_dir, per job here
-            if job["kind"] == "render":
+            if job["kind"] == "image" and job.get("family") != "h3_image":  # own pipelines (engine/wsl/image): SDXL, Qwen-Edit
+                from image import runner as image_runner
+                wgp.release_model()  # never a video model and an image model in RAM together (seed image_playground G2)
+                res = image_runner.run(job, say)
+                out = {"event": "done", "id": jid, "file": to_windows(res["files"][-1]), "files": [to_windows(f) for f in res["files"]],
+                       "seeds": res["seeds"], "load_seconds": res["load_seconds"], "resident": res["resident"],
+                       "seconds": round(time.time() - t0, 1), **mem()}
+                if job.get("result"): Path(job["result"]).write_text(json.dumps(out), encoding="utf-8")
+                say(out); continue
+            if job["kind"] in ("render", "image"):  # an "image" job here is H3-Image: a WanGP task like a video render
+                if "image.runner" in sys.modules:  # an own image model is loaded: free it before WanGP loads one
+                    sys.modules["image.runner"].release_all()
                 settings = dict(job["settings"])
                 floor = settings.pop("_frames_minimum", None)
                 if floor: wgp.get_model_def(settings["model_type"])["frames_minimum"] = int(floor)
@@ -105,7 +139,8 @@ def main():
             if not result.success or not result.generated_files:
                 out = {"event": "error", "id": jid, "message": "; ".join(e.message for e in result.errors) or "WanGP made no file."}
             else:
-                out = {"event": "done", "id": jid, "file": to_windows(Path(result.generated_files[-1]).resolve()), "seconds": round(time.time() - t0, 1), **mem()}
+                files = [to_windows(Path(f).resolve()) for f in result.generated_files]
+                out = {"event": "done", "id": jid, "file": files[-1], "files": files, "seconds": round(time.time() - t0, 1), **mem()}
         except Exception as e:  # noqa: BLE001
             import traceback; traceback.print_exc(file=sys.__stderr__)
             out = {"event": "error", "id": jid, "message": f"{type(e).__name__}: {e}"}

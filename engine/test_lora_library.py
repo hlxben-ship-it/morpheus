@@ -53,6 +53,17 @@ class LibraryTest(unittest.TestCase):
         self.assertIsNone(lib.detect_family(LTX_KEYS + H3_KEYS))
         self.assertEqual(lib.detect_family(["lora_unet_blocks_2_attn_q_proj.lora_down.weight"]), "minimax_h3")
 
+    def test_detect_image_families(self):
+        sdxl = ["lora_unet_input_blocks_4_1_transformer_blocks_0_attn1_to_q.lora_down.weight", "lora_te1_text_model_encoder_layers_0_mlp_fc1.alpha"]
+        qwen = ["transformer_blocks.0.attn.add_k_proj.lora_down.weight", "transformer_blocks.9.txt_mlp.net.2.alpha"]
+        self.assertEqual(lib.detect_family(sdxl), "sdxl")
+        self.assertEqual(lib.detect_family(["unet.down_blocks.1.attentions.0.proj_in.lora_A.weight"]), "sdxl")
+        self.assertEqual(lib.detect_family(qwen), "qwen_edit")
+        self.assertEqual(lib.detect_family(["diffusion_model.transformer_blocks.3.img_mod.1.lora_B.weight"]), "qwen_edit")
+        self.assertIsNone(lib.detect_family(sdxl + qwen))        # two families: the user picks
+        self.assertNotEqual(lib.detect_family(LTX_KEYS), "qwen_edit")  # LTX's transformer_blocks are no Qwen blocks
+        self.assertIn("h3_image", lib.FAMILIES)                   # H3-Image: picked by hand (its keys look like H3 video)
+
     def test_model_families(self):
         self.assertEqual(lib.family_of_model("ltx23"), "ltx2")
         self.assertEqual(lib.family_of_model("h3_gguf_q6"), "minimax_h3")

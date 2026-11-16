@@ -25,6 +25,8 @@ LISTS = {"durations": [2, 3, 4, 5, 6, 8, 10],
 FRAMES = ("start", "end")
 REFS = 4  # H3 reference slots beside the main image (H3 takes up to 9)
 HEADER_MAX = 64 << 20  # a safetensors header is JSON; far above this is not a LoRA
+REMIX_REF = re.compile(r"clips/[0-9A-Za-z_.-]+\.mp4")  # a remix timeline entry: one of this playground's shelf clips
+REMIX_MAX = 200
 
 
 def folder(play_id: str) -> Path:
@@ -121,6 +123,8 @@ def load(play_id: str) -> dict:
         state = json.loads((folder(play_id) / "playground.json").read_text(encoding="utf-8"))
     except OSError:
         raise ValueError("This playground does not exist.")
+    if state.get("kind") == "image":  # its settings are image_playground.py's; a video save would overwrite them
+        raise ValueError("This is an image playground.")
     ms = pm.models()
     model = next((m for m in ms if m["id"] == state.get("model")), ms[0])  # a model taken out of the schema file: the first
     given = dict(state.get("params") or {})
@@ -138,6 +142,8 @@ def load(play_id: str) -> dict:
         state["last_ref"] = None
     state["pictures"] = h3_pictures(state)
     state["loras"] = clean_slots(state.get("loras"), model["id"])
+    remix = state.get("remix")
+    state["remix"] = [r for r in (remix if isinstance(remix, list) else []) if isinstance(r, str) and REMIX_REF.fullmatch(r)][:REMIX_MAX]
     try:  # a playground made before the seed field, or a seed edited by hand: random
         state["seed"] = clean_seed(state.get("seed"))
     except ValueError:
@@ -214,6 +220,11 @@ def save(req: dict) -> dict:
         state["last_ref"] = last
     if "seed" in req:
         state["seed"] = clean_seed(req["seed"])
+    if "remix" in req:  # the Remix timeline: shelf clips in play order, repeats allowed; a deleted clip may stay (export refuses it)
+        remix = req["remix"]
+        if not isinstance(remix, list) or len(remix) > REMIX_MAX or not all(isinstance(r, str) and REMIX_REF.fullmatch(r) for r in remix):
+            raise ValueError("Unknown remix timeline.")
+        state["remix"] = list(remix)
     state.pop("missing", None)
     return load(write(state)["id"])
 
@@ -440,6 +451,17 @@ def upscaled_snap(source: dict, video: str, method: str, label: str, factor: flo
 
 
 SIZES: dict = {}  # (path, mtime) -> "720p" | "1080p" | "2K": read once per file
+LENGTHS: dict = {}  # (path, mtime) -> seconds, for the Remix timeline
+
+
+def clip_seconds(mp4: Path) -> float | None:
+    key = (str(mp4), mp4.stat().st_mtime)
+    if key not in LENGTHS:
+        try:
+            LENGTHS[key] = round(video_info(mp4)["seconds"], 2)
+        except Exception:
+            LENGTHS[key] = None
+    return LENGTHS[key]
 
 
 def size_label(mp4: Path) -> str:
@@ -489,7 +511,7 @@ def clips(play_id: str | None = None) -> list:
         out.append({"video": rel(mp4), "thumb": rel(thumb) if thumb.is_file() else "", "prompt": meta.get("prompt", ""),
                     "created": meta.get("created") or time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(mp4.stat().st_mtime)),
                     "label": label or "Playground", "origin": "playground", "playground": js.parent.parent.name,
-                    "size": size_label(mp4), "looped": bool(meta.get("loop")),
+                    "size": size_label(mp4), "seconds": clip_seconds(mp4), "looped": bool(meta.get("loop")),
                     "seed": meta.get("seed"), "render_seconds": meta.get("render_seconds"), "settings": bool(meta.get("model"))})
     out.sort(key=lambda c: c["created"], reverse=True)
     if not play_id:
@@ -564,6 +586,77 @@ def last_frame(req: dict) -> dict:
     return frame({"id": req.get("id"), "kind": "start", "data": data})
 
 
+def video_info(mp4: Path) -> dict:
+    """Width, height, fps, codec and length of a clip (OpenCV; the shelf's size badge reads it the same way)."""
+    import cv2
+    cap = cv2.VideoCapture(str(mp4))
+    try:
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps, n, cc = cap.get(cv2.CAP_PROP_FPS), cap.get(cv2.CAP_PROP_FRAME_COUNT), int(cap.get(cv2.CAP_PROP_FOURCC))
+    finally:
+        cap.release()
+    if not (w and h and fps):
+        raise ValueError(f"Could not read {mp4.name}.")
+    return {"w": w, "h": h, "fps": round(fps, 3), "codec": cc, "seconds": n / fps}
+
+
+def export_remix(req: dict) -> dict:
+    """Remix export: the timeline's clips cut together, hard cuts, into output/playground/<id>/remix/remix_<ts>.mp4.
+    All clips alike (size, fps, codec) → ffmpeg concat with stream copy (fast, lossless). Otherwise every clip is
+    letterboxed into the first clip's frame and fps, then re-encoded (seed decision #2). No audio: the clips have none."""
+    play_id = str(req.get("id", ""))
+    state = load(play_id)
+    if not state["remix"]:
+        raise ValueError("The timeline is empty: drag clips from the shelf into it.")
+    files = []
+    for ref_ in state["remix"]:
+        f = folder(play_id) / ref_
+        if not f.is_file():
+            raise ValueError(f"A timeline clip is gone: {Path(ref_).name}. Remove it from the timeline.")
+        files.append(f)
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ValueError("ffmpeg is not on PATH.")
+    infos = [video_info(f) for f in files]
+    first = infos[0]
+    out_dir = folder(play_id) / "remix"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    out = out_dir / f"remix_{stamp}.mp4"
+    n = 1
+    while out.exists():
+        n += 1
+        out = out_dir / f"remix_{stamp}_{n}.mp4"
+    tmp = out.with_name(out.stem + ".tmp.mp4")
+    copy = all((i["w"], i["h"], i["fps"], i["codec"]) == (first["w"], first["h"], first["fps"], first["codec"]) for i in infos)
+    if copy:
+        listing = out.with_name(out.stem + ".txt")
+        quote = lambda f: f.resolve().as_posix().replace("'", "'\\''")  # the concat list's own quoting
+        listing.write_text("".join(f"file '{quote(f)}'\n" for f in files), encoding="utf-8")
+        cmd = [ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing), "-an", "-c", "copy",
+               "-movflags", "+faststart", str(tmp)]
+    else:
+        w, h = first["w"] - first["w"] % 2, first["h"] - first["h"] % 2  # libx264 wants even sides
+        legs = "".join(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,"
+                       f"setsar=1,fps={first['fps']},format=yuv420p[v{i}];" for i in range(len(files)))
+        graph = legs + "".join(f"[v{i}]" for i in range(len(files))) + f"concat=n={len(files)}:v=1:a=0[v]"
+        cmd = [ffmpeg, "-y", "-loglevel", "error", *[a for f in files for a in ("-i", str(f))], "-filter_complex", graph,
+               "-map", "[v]", "-an", "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p",
+               "-movflags", "+faststart", str(tmp)]
+        listing = None
+    try:
+        run = subprocess.run(cmd, capture_output=True, text=True)
+    finally:
+        if listing:
+            listing.unlink(missing_ok=True)
+    if run.returncode or not tmp.is_file():
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"ffmpeg failed: {run.stderr.strip()[-300:]}")
+    tmp.replace(out)
+    return {"video": out.relative_to(morpheus.OUTPUT).as_posix(), "name": out.name, "copied": copy,
+            "clips": len(files), "seconds": round(sum(i["seconds"] for i in infos), 2)}
+
+
 def list_all() -> list:
     """The Local gallery: every playground, starred first, then newest first. The mini is the newest clip's thumbnail
     (none = the page shows a plain placeholder)."""
@@ -572,6 +665,15 @@ def list_all() -> list:
         try:
             st = json.loads(js.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError):
+            continue
+        if st.get("kind") == "image":  # Image Playground (image_playground.py): the starred or newest picture is the mini
+            imgs = [p for p in (js.parent / "images").glob("*.png")] if (js.parent / "images").is_dir() else []
+            cover = js.parent / str(st.get("cover") or "-")
+            pick = cover if st.get("cover") and cover.is_file() else max(imgs, key=lambda p: p.stat().st_mtime, default=None)
+            out.append({"id": js.parent.name, "kind": "image", "created": st.get("created", ""),
+                        "updated": st.get("updated") or st.get("created", ""), "model": st.get("model", ""),
+                        "prompt": (st.get("prompt") or "").strip()[:120], "clips": len(imgs), "starred": bool(st.get("starred")),
+                        "thumb": pick.relative_to(morpheus.OUTPUT).as_posix() if pick else "", "video": ""})
             continue
         clips_dir = js.parent / "clips"
         metas = sorted(clips_dir.glob("*.json")) if clips_dir.is_dir() else []
@@ -699,4 +801,4 @@ def use_clip(req: dict) -> dict:
     return load(write(state)["id"])
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip}
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip, "remix_export": export_remix}

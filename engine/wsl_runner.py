@@ -160,7 +160,8 @@ def wait_for_ram(stopped=lambda: False) -> None:
 def run(job: dict, on_event, stopped, idle_timeout: float = 900, keep_warm: int = 600, preload_mb: int = 14000) -> dict:
     """Run one render in the warm WSL worker (started if needed) and return its done/error object, like runner.run."""
     with WARM.lock:
-        stack = "10" if job.get("settings", {}).get("model_type") in ROCM10_MODELS else "7"
+        # H3 (video and H3-Image) on the ROCm 10 stack; LTX, upscales and the own image pipelines (SDXL, Qwen-Edit) on ROCm 7
+        stack = "10" if job.get("settings", {}).get("model_type") in ROCM10_MODELS or job.get("family") == "h3_image" else "7"
         if WARM.alive() and (WARM.keep_warm != keep_warm or WARM.stack != stack):
             WARM.release()  # the idle timer and the Python stack are fixed at start
         if not WARM.alive():

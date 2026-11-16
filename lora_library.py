@@ -20,7 +20,9 @@ import morpheus
 
 DIR = morpheus.ROOT / "models" / "loras" / "video"
 UPLOADS = Path(tempfile.gettempdir()) / "morpheus-uploads"  # where server.py's /api/upload stores raw bytes
-FAMILIES = {"ltx2": "LTX 2.3", "minimax_h3": "MiniMax H3"}
+FAMILIES = {"ltx2": "LTX 2.3", "minimax_h3": "MiniMax H3",
+            # Image Playground (Glia seed image_playground G6): one library, a family per image model kind
+            "sdxl": "SDXL", "qwen_edit": "Qwen-Image-Edit", "h3_image": "H3-Image"}
 HEADER_MAX = 64 << 20
 PICTURES = {"data:image/png;base64": "png", "data:image/jpeg;base64": "jpg", "data:image/webp;base64": "webp"}
 LOCK = threading.Lock()
@@ -30,6 +32,10 @@ LOCK = threading.Lock()
 # checkpoint names blocks.N.{attn.q_proj,mlp.fc1,adaln_proj}, so an H3 LoRA carries those module names.
 LTX = re.compile(r"(^|[._])(audio_attn\d|to_gate_logits|audio_to_video_attn|video_to_audio_attn)([._]|$)")
 H3 = re.compile(r"(^|[._])blocks[._]\d+[._](attn[._](q|k|v|out)_proj|mlp[._]fc[12]|adaln_proj)([._]|$)")
+# kohya SDXL LoRAs name lora_unet_* / lora_te1_* / lora_te2_*; diffusers-style ones the UNet's down/up/mid blocks
+SDXL = re.compile(r"^lora_unet_(input_blocks|output_blocks|middle_block|down_blocks|up_blocks|mid_block)_|^lora_te[12]_text_model|(^|[._])(down_blocks|up_blocks|mid_block)[._]\d")
+# Qwen-Image(-Edit) DiT: transformer_blocks.N.{img_mod,txt_mod,img_mlp,txt_mlp,attn.add_q_proj,...}
+QWEN = re.compile(r"(^|[._])transformer_blocks[._]\d+[._](img_mod|txt_mod|img_mlp|txt_mlp|attn[._]add_[qkv]_proj)")
 
 
 def index_path() -> Path:
@@ -56,7 +62,39 @@ def get(lora_id: str) -> dict | None:
 
 
 def file_path(entry: dict) -> Path:
+    if entry.get("linked"):  # a file another part of Morpheus owns (Yumeko's character LoRAs): used in place, never moved or deleted
+        return Path(entry["linked"])
     return DIR / entry["family"] / entry["file"]
+
+
+def link(key: str, family: str, path: Path, props: dict, picture: Path | None = None) -> dict:
+    """Add or refresh an entry that points at a file elsewhere (key = its owner's id, e.g. "yumeko-<job>").
+    Name, keywords and strengths come from the owner on every call; the picture is copied once."""
+    with LOCK:
+        items = entries()
+        e = next((x for x in items if x.get("link_key") == key), None)
+        if not e:
+            e = {"id": slug(props["name"], {x["id"] for x in items}), "family": family, "file": "", "picture": None,
+                 "link_key": key, "family_source": "owner", "added": time.strftime("%Y-%m-%dT%H:%M:%S"), "url": "", "info": ""}
+            items.append(e)
+        e.update({k: v for k, v in props.items() if k in ("name", "keywords", "info", "strength_min", "strength_max")})
+        if props.get("prompt") and not e.get("prompt"):  # a suggestion once; what the user writes in Settings stays
+            e["prompt"] = props["prompt"]
+        e["family"], e["linked"] = family, str(path)
+        if picture and picture.is_file() and not e.get("picture"):
+            (DIR / family).mkdir(parents=True, exist_ok=True)
+            name = f"{e['id']}_{int(time.time())}{picture.suffix.lower()}"
+            shutil.copyfile(picture, DIR / family / name)
+            e["picture"] = name
+        write_entries(items)
+    return e
+
+
+def unlink_key(key: str) -> None:
+    """The owner dropped its file: the entry goes (the file was never ours)."""
+    e = next((x for x in entries() if x.get("link_key") == key), None)
+    if e:
+        delete({"id": e["id"], "confirm": True})
 
 
 def family_of_model(model_id: str) -> str | None:
@@ -85,10 +123,10 @@ def read_header(path: Path) -> dict:
 
 
 def detect_family(keys) -> str | None:
-    """ltx2 / minimax_h3 from the tensor names, None when they say neither (or both)."""
-    ltx = any(LTX.search(k) for k in keys)
-    h3 = any(H3.search(k) for k in keys)
-    return "ltx2" if ltx and not h3 else "minimax_h3" if h3 and not ltx else None
+    """ltx2 / minimax_h3 / sdxl / qwen_edit from the tensor names, None when they say none or several. An H3-Image LoRA
+    looks like an H3 video one (same block names): the user picks h3_image by hand."""
+    hits = {f for f, rx in (("ltx2", LTX), ("minimax_h3", H3), ("sdxl", SDXL), ("qwen_edit", QWEN)) if any(rx.search(k) for k in keys)}
+    return hits.pop() if len(hits) == 1 else None
 
 
 def upload_file(upload_id: str) -> Path:
@@ -136,6 +174,7 @@ def clean_props(req: dict, old: dict | None = None) -> dict:
     if url and not re.match(r"https?://", url):
         raise ValueError("The URL should start with http:// or https://.")
     return {"name": name, "url": url, "keywords": str(req.get("keywords", old.get("keywords", ""))).strip()[:300],
+            "prompt": str(req.get("prompt", old.get("prompt", ""))).strip()[:4000],
             "info": str(req.get("info", old.get("info", ""))).strip()[:20000],
             "strength_min": round(lo, 2), "strength_max": round(hi, 2)}
 
@@ -221,7 +260,8 @@ def delete(req: dict) -> dict:
         return {"id": lora_id, "used_by": used, "confirm": True}
     with LOCK:
         items = [e for e in entries() if e["id"] != lora_id]
-        file_path(entry).unlink(missing_ok=True)
+        if not entry.get("linked"):
+            file_path(entry).unlink(missing_ok=True)
         if entry.get("picture"):
             (DIR / entry["family"] / entry["picture"]).unlink(missing_ok=True)
         write_entries(items)
