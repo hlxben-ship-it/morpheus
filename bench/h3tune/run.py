@@ -18,7 +18,7 @@ name = var["name"]; sys.argv = sys.argv[:1]  # WanGP parses sys.argv itself
 for k, v in var.get("env", {}).items(): os.environ[k] = str(v)
 sys.path.insert(0, "/mnt/c/dev/morpheus/engine/wsl")
 if not var.get("no_spoof"): import amdspoof  # noqa: F401
-ns = {"var": var}
+ns = {"var": var, "after": []}
 for h in var.get("pre_hooks", []): exec(compile((HERE / h).read_text(), h, "exec"), ns)
 
 MODELS = {"int8": "minimax_h3_ref2va_hyperflow", "q4": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
@@ -75,7 +75,7 @@ for k in ("save_path", "image_save_path", "audio_save_path"): wgp.server_config[
 
 def one_job(i):
     torch.cuda.reset_peak_memory_stats(); t0 = time.time(); marks = []; last = None
-    job = session.submit_task(dict(settings))
+    job = session.submit_task(dict(settings, **({"prompt": var["prompts"][i]} if var.get("prompts") else {})))
     for ev in job.events.iter(timeout=0.25):
         if ev.kind != "progress": continue
         p = ev.data; now = (p.phase, p.current_step)

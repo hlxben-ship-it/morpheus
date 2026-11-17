@@ -34,4 +34,4 @@ def _report():
     for k in ("model", "input_prep", "refiner", "final", "block", "attn", "sol_fwd", "sol_prep", "sol_unstaged", "mlp"):
         if _N[k]: print("## TIMING %-12s %8.1fs  n=%5d  avg %7.1f ms" % (k, _T[k], _N[k], 1e3 * _T[k] / _N[k]))
     print("## TIMING block-attn-mlp %.1fs, attn-sol %.1fs" % (_T["block"] - _T["attn"] - _T["mlp"], _T["attn"] - _T["sol_fwd"] - _T["sol_prep"] - _T["sol_unstaged"]), flush=True)
-after = [_report]
+after.append(_report)

@@ -1,0 +1,14 @@
+{
+ "name": "img_cold1",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ },
+ "hooks": [
+  "hooks/first_calls.py"
+ ],
+ "note": "cold probe 1 ref",
+ "repeat": 1
+}

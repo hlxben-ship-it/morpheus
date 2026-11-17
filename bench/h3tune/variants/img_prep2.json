@@ -1,0 +1,24 @@
+{
+ "note": "2 refs, preload: split of the pre-denoise phase; job 3 = new prompt, same refs",
+ "refs": [
+  "yukomo_p.png",
+  "yukomo_p2.png"
+ ],
+ "hooks": [
+  "hooks/timing.py",
+  "hooks/prep_timing.py"
+ ],
+ "repeat": 3,
+ "prompts": [
+  "Keep everything in <Picture 1> as it is, but she now wears a red knitted scarf and holds a steaming cup of tea.",
+  "Keep everything in <Picture 1> as it is, but she now wears a red knitted scarf and holds a steaming cup of tea.",
+  "Keep everything in <Picture 1> as it is, but she now wears the boots from <Picture 2> and a blue knitted scarf."
+ ],
+ "name": "img_prep2",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ }
+}

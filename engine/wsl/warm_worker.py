@@ -65,6 +65,11 @@ def main():
     import wgp
     from preload import preload_for  # H3-Image keeps part of its transformer in VRAM, everything else as WARM_PRELOAD says
     base_preload = int(wgp.args.preload)
+    try:  # H3-Image: VAE latents of the references kept for the next jobs (same pixels = same latent, ~6.5 s per ref saved)
+        import ref_latents
+        from models.minimax_h3 import pipeline as h3_pipeline
+        ref_latents.install(h3_pipeline.MiniMaxH3Pipeline)
+    except Exception as e: print(f"[Morpheus] ref_latents not loaded: {type(e).__name__}: {e}", file=sys.__stderr__, flush=True)
     import ref_cap  # H3-Image: references scaled down to a short edge per job (settings "_h3_ref_size"), off = WanGP's own size
     ref_cap_now = [0]
     wgp.resize_and_remove_background = ref_cap.wrap(wgp.resize_and_remove_background, lambda: ref_cap_now[0])
