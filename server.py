@@ -29,6 +29,8 @@ import lora_library
 import morpheus
 import playground
 import image_playground
+import studio
+import studio_models
 from engine import jobs as engine_jobs, wsl_runner as engine_wsl
 import yumeko
 import yumeko_auto
@@ -896,6 +898,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(image_playground.load(route.removeprefix("/api/image_playground/")))
             except ValueError as e:
                 return self.send_json({"error": str(e)}, 404)
+        if route == "/api/studio/models":  # Studio editor layout per model (studio_models.json)
+            try:
+                return self.send_json(studio_models.models())
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 500)
         if route == "/api/playground/list":  # the Local tab's gallery
             return self.send_json(playground.list_all())
         if route.startswith("/api/playground/"):
@@ -1030,7 +1037,8 @@ class Handler(BaseHTTPRequestHandler):
                     "/api/playground/stop": self.wake_stop,
                     **{f"/api/playground/{k}": v for k, v in playground.ACTIONS.items()},
                     "/api/image_playground/render": self.image_render, "/api/image_playground/stop": self.wake_stop,
-                    **{f"/api/image_playground/{k}": v for k, v in image_playground.ACTIONS.items()}}
+                    **{f"/api/image_playground/{k}": v for k, v in image_playground.ACTIONS.items()},
+                    **{f"/api/studio/{k}": v for k, v in studio.ACTIONS.items()}}
         if self.path not in handlers:
             return self.send_error(404)
         try:
@@ -1724,10 +1732,13 @@ class Handler(BaseHTTPRequestHandler):
         pressed (snapshot); the finished clip moves into the playground's clips/ with its meta json."""
         play_id = str(req.get("id", ""))
         snap = playground.snapshot(play_id)
+        src = studio.run_source(play_id)  # Studio: which tile was run (None for other playgrounds)
         settings = engine_jobs.render_settings(snap, playground.folder(play_id), seed=snap.get("seed"))
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
                               engine=str(req.get("engine") or "wsl10"))
-        return playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
+        meta = playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
+        studio.rendered(play_id, src, [meta["video"]])
+        return meta
 
     def playground_remaster(self, req):
         """Remaster (seed_2026_11_16_remix_remaster): playground.remaster_run renders the shots one after the other; each
@@ -1745,12 +1756,14 @@ class Handler(BaseHTTPRequestHandler):
         worker (own SDXL / Qwen-Edit loops, H3-Image via WanGP), the pictures land on the playground's shelf with a sidecar."""
         play_id = str(req.get("id", ""))
         snap = image_playground.snapshot(play_id)
+        src = studio.run_source(play_id)  # Studio: which tile was run (None for other playgrounds)
         job = req.get("_job", {})
         job["count"] = snap["count"]
         out = self.engine_job(job, image_playground.worker_job(play_id, snap), snap["total_steps"], engine=str(req.get("engine") or "wsl10"))
         files = out.get("files") or [out["file"]]
-        return {"images": image_playground.add_images(play_id, files, out.get("seeds") or [], snap, seconds=out.get("seconds")),
-                "state": image_playground.load(play_id)}
+        metas = image_playground.add_images(play_id, files, out.get("seeds") or [], snap, seconds=out.get("seconds"))
+        studio.rendered(play_id, src, [m["image"] for m in metas])
+        return {"images": metas, "state": image_playground.load(play_id)}
 
     def playground_upscale(self, req):
         """Upscale a shelf clip (G4/G13): RelayVSR (quick) or SeedVR2 3B (best), x1.5 to x4 in 0.5 steps. The result is

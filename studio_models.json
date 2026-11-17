@@ -1,0 +1,31 @@
+{
+  "_about": "Studio editor layout per model (seed combined_playground, stage 3). Left column: Prompt box, References box; right column: Model box, LoRAs box. A model missing here gets its side's defaults. Steps, sizes and params still come from playground_models.json / image_models.json (the render plumbing validates against them).",
+  "_fields": {
+    "prompt.negative": "the model takes a negative prompt (shows Negative + Default negative)",
+    "prompt.default / default_negative": "prefilled into the Default fields of a new tile; joined in front of the prompt at render. Left out on an image model: its prompt_default / negative_default from image_models.json",
+    "references.label": "box title",
+    "references.main": "a main image slot",
+    "references.slots": "reference slots beside the main image",
+    "references.toggles": "first = the main image can be the first frame or just a reference; last = a reference can be the last frame (LTX: the one slot is the end frame)",
+    "loras.slots": "LoRA slots"
+  },
+  "defaults": {
+    "video": {"prompt": {"negative": false, "default": "", "default_negative": ""},
+              "references": {"label": "References", "main": true, "slots": 4, "toggles": ["first", "last"]},
+              "loras": {"slots": 2}},
+    "image": {"prompt": {"negative": false, "default": "", "default_negative": ""},
+              "references": {"label": "References", "main": true, "slots": 3, "toggles": []},
+              "loras": {"slots": 4}}
+  },
+  "models": {
+    "ltx23": {"references": {"label": "Frames", "main": true, "slots": 1, "toggles": ["last"]}},
+    "h3_minimax": {},
+    "h3_gguf_q4": {},
+    "h3_gguf_q6": {},
+    "janku_v5": {"prompt": {"negative": true},
+                 "references": {"label": "Start image (img2img)", "main": true, "slots": 0}},
+    "qwen_edit_2511": {"prompt": {"negative": true}, "references": {"label": "Pictures (main = the one edited)", "main": true, "slots": 2}},
+    "h3_image": {"references": {"label": "References (<Picture 1>…<Picture 4>)", "main": true, "slots": 3}},
+    "muse_krea2": {"prompt": {"negative": true}, "references": {"label": "References (main = scene, 2 = person)", "main": true, "slots": 1}}
+  }
+}

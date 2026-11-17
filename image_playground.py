@@ -58,8 +58,29 @@ def _read(play_id: str) -> dict:
         st = json.loads((playground.folder(play_id) / "playground.json").read_text(encoding="utf-8-sig"))
     except OSError:
         raise ValueError("This playground does not exist.")
+    if st.get("kind") == "studio":  # Studio (studio.py): the image half lives under "image", the star is the playground's one
+        half = st.get("image") or {k: v for k, v in fresh_state(play_id).items() if k not in ("id", "kind", "created")}
+        return {**half, "id": play_id, "kind": "image", "studio": True, **({"cover": st["cover"]} if st.get("cover") else {})}
     if st.get("kind") != "image":
         raise ValueError("This is a video playground.")
+    return st
+
+
+def _write(st: dict) -> dict:
+    """playground.write, except for a Studio: there the state goes back under "image" and the rest of the file stays."""
+    path = playground.folder(st["id"]) / "playground.json"
+    try:
+        whole = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        whole = {}
+    if whole.get("kind") != "studio":
+        return playground.write(st)
+    whole["image"] = {k: v for k, v in st.items() if k not in ("id", "kind", "cover", "updated", "created", "studio")}
+    if st.get("cover"):
+        whole["cover"] = st["cover"]
+    elif str(whole.get("cover") or "").startswith("images/"):
+        whole.pop("cover", None)
+    playground.write(whole)
     return st
 
 
@@ -126,7 +147,12 @@ def save(req: dict) -> dict:
     elif switched:
         st["params"] = im.defaults(m)
     st["size"] = im.resolve_size(m, req["size"], strict=True) if "size" in req else im.resolve_size(m, st["size"])
-    if switched:  # another model: its default prompts and LoRAs, unless the page sends its own
+    if switched and st.get("studio"):  # Studio: the prompt stays the user's; the model's defaults live in "defaults"
+        if "defaults" not in req:
+            st.pop("defaults", None)
+        if "loras" not in req:
+            st["loras"] = default_loras(m)
+    elif switched:  # another model: its default prompts and LoRAs, unless the page sends its own
         old = im.get(before) or {}
         if st.get("prompt", "") in ("", old.get("prompt_default", "")) and "prompt" not in req:
             st["prompt"] = m.get("prompt_default", "")
@@ -137,6 +163,9 @@ def save(req: dict) -> dict:
     for k, cap in (("prompt", 8000), ("negative", 4000)):
         if k in req:
             st[k] = str(req[k])[:cap]
+    if "defaults" in req:  # Studio: the tile's default prompt / negative (None = the model's, studio_models.json)
+        import studio_models
+        st["defaults"] = studio_models.clean_defaults(req["defaults"])
     if "seed" in req:
         st["seed"] = clean_seed(req["seed"])
     if "count" in req:
@@ -167,7 +196,7 @@ def save(req: dict) -> dict:
         if not isinstance(ins, list) or len(ins) != INPUTS or any(f is not None and f not in st["inputs"] for f in ins):
             raise ValueError("Unknown input pictures.")
         st["inputs"] = ins
-    return load(playground.write(st)["id"])
+    return load(_write(st)["id"])
 
 
 def slot_of(req) -> int:
@@ -182,7 +211,7 @@ def input_picture(req: dict) -> dict:
     s = slot_of(req)
     st = load(str(req.get("id", "")))
     st["inputs"][s] = None if req.get("data") is None else playground.store_picture(st, f"in{s + 1}", req.get("data"))
-    return load(playground.write(st)["id"])
+    return load(_write(st)["id"])
 
 
 def image_path(play_id: str, image: str) -> Path:
@@ -203,7 +232,7 @@ def use_as_input(req: dict) -> dict:
     name = f"in{s + 1}_{time.time_ns() // 1_000_000}.png"
     shutil.copyfile(src, playground.folder(play_id) / name)
     st["inputs"][s] = name
-    return load(playground.write(st)["id"])
+    return load(_write(st)["id"])
 
 
 def lora_entries(st, m) -> list:
@@ -229,13 +258,19 @@ def snapshot(play_id: str) -> dict:
     if len(inputs) < lo:
         raise ValueError(f"{m['label']} needs {lo} picture{'s' if lo > 1 else ''}: add {'it' if lo == 1 else 'them'} under Inputs.")
     inputs = inputs[:hi]
-    if not st["prompt"].strip() and m["family"] != "sdxl":
+    extra, prompt, negative = {}, st["prompt"], st["negative"]
+    if st.get("studio"):  # Studio: the default prompt / negative go in front; the sidecar keeps both parts
+        import studio_models
+        d = studio_models.defaults(m["id"], st.get("defaults"))
+        prompt, negative = studio_models.join(d["prompt"], st["prompt"]), studio_models.join(d["negative"], st["negative"])
+        extra = {"studio_prompt": st["prompt"], "studio_negative": st["negative"], "defaults": st.get("defaults")}
+    if not prompt.strip() and m["family"] != "sdxl":
         raise ValueError("Write a prompt first.")
     seed = st["seed"] if st["seed"] is not None else random.randrange(1, SEED_MAX)
     import hashlib
     hashes = [hashlib.sha256((d / f).read_bytes()).hexdigest()[:16] for f in inputs]
-    return {"model": {"id": m["id"], "label": m["label"], "family": m["family"]}, "params": st["params"], "size": st["size"],
-            "prompt": st["prompt"], "negative": st["negative"] if m.get("negative") else "", "seed": seed, "count": st["count"],
+    return {**extra, "model": {"id": m["id"], "label": m["label"], "family": m["family"]}, "params": st["params"], "size": st["size"],
+            "prompt": prompt, "negative": negative if m.get("negative") else "", "seed": seed, "count": st["count"],
             "inputs": inputs, "input_hashes": hashes, "loras": lora_entries(st, m),
             "total_steps": st["params"].get("steps", 6) * st["count"] * (2 if st["params"].get("hires", 1) > 1 else 1) if m["family"] == "sdxl"
             else st["params"].get("steps", 6) * st["count"]}
@@ -349,6 +384,13 @@ def star_image(req: dict) -> dict:
     else:
         st.pop("cover", None)
     path = playground.folder(play_id) / "playground.json"
+    if json.loads(path.read_text(encoding="utf-8-sig")).get("kind") == "studio":  # the star sits on the Studio's top level
+        whole = json.loads(path.read_text(encoding="utf-8-sig"))
+        if st.get("cover"):
+            whole["cover"] = st["cover"]
+        elif str(whole.get("cover") or "").startswith("images/"):
+            whole.pop("cover", None)
+        st = whole
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(st, indent=1), encoding="utf-8")
     tmp.replace(path)
@@ -375,7 +417,7 @@ def reuse(req: dict) -> dict:
     d = playground.folder(play_id)
     ins = [f if f and (d / f).is_file() else None for f in (meta.get("inputs") or [])][:INPUTS]
     st["inputs"] = ins + [None] * (INPUTS - len(ins))
-    return load(playground.write(st)["id"])
+    return load(_write(st)["id"])
 
 
 ACTIONS = {"new": new, "save": save, "input": input_picture, "use_as_input": use_as_input, "delete_image": delete_image,

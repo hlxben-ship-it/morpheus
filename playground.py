@@ -25,7 +25,23 @@ LISTS = {"durations": [2, 3, 4, 5, 6, 8, 10],
 FRAMES = ("start", "end")
 REFS = 4  # H3 reference slots beside the main image (H3 takes up to 9)
 HEADER_MAX = 64 << 20  # a safetensors header is JSON; far above this is not a LoRA
-REMIX_REF = re.compile(r"clips/[0-9A-Za-z_.-]+\.mp4")  # a remix timeline entry: one of this playground's shelf clips
+# a remix timeline entry: one of this playground's shelf clips, or (Studio) a still picture shown for N seconds
+REMIX_REF = re.compile(r"clips/[0-9A-Za-z_.-]+\.mp4|images/[0-9A-Za-z_.-]+\.(?:png|jpe?g|webp)@(?:[0-9]{1,2})(?:\.[0-9])?")
+STILL_MIN, STILL_MAX = 0.5, 30.0
+
+
+def remix_ok(ref) -> bool:
+    if not isinstance(ref, str) or not REMIX_REF.fullmatch(ref):
+        return False
+    return "@" not in ref or STILL_MIN <= float(ref.rsplit("@", 1)[1]) <= STILL_MAX
+
+
+def remix_still(ref: str):
+    """A still timeline entry -> (relative picture path, seconds); a clip -> (ref, None)."""
+    if "@" not in ref:
+        return ref, None
+    path, sec = ref.rsplit("@", 1)
+    return path, float(sec)
 REMIX_MAX = 200
 
 
@@ -99,6 +115,10 @@ def h3_pictures(state: dict) -> list:
 def write(state: dict) -> dict:
     """Through a temp name, so the file on disk is always a whole one."""
     state.pop("pictures", None)  # derived on load, never stored
+    if state.pop("_clean", False):  # a write that is no settings edit (Studio bookkeeping, Remix timeline)
+        pass
+    elif state.get("kind") == "studio":  # Studio (studio.py): the open tile now differs from its rendered state
+        state["dirty"] = True
     path = folder(state["id"]) / "playground.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     state["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -143,7 +163,7 @@ def load(play_id: str) -> dict:
     state["pictures"] = h3_pictures(state)
     state["loras"] = clean_slots(state.get("loras"), model["id"])
     remix = state.get("remix")
-    state["remix"] = [r for r in (remix if isinstance(remix, list) else []) if isinstance(r, str) and REMIX_REF.fullmatch(r)][:REMIX_MAX]
+    state["remix"] = [r for r in (remix if isinstance(remix, list) else []) if remix_ok(r)][:REMIX_MAX]
     try:  # a playground made before the seed field, or a seed edited by hand: random
         state["seed"] = clean_seed(state.get("seed"))
     except ValueError:
@@ -193,6 +213,11 @@ def save(req: dict) -> dict:
         state["params"] = pm.resolve(model, state["params"])
     if "prompt" in req:
         state["prompt"] = str(req["prompt"])[:8000]
+    if "defaults" in req:  # Studio: the tile's default prompt (None = the model's, studio_models.json)
+        import studio_models
+        state["defaults"] = studio_models.clean_defaults(req["defaults"])
+    elif state.get("kind") == "studio" and state["model"] != before:
+        state.pop("defaults", None)  # another model: its own defaults
     if "loras" in req:
         loras = req["loras"]
         if not isinstance(loras, list) or len(loras) != 2:
@@ -222,10 +247,12 @@ def save(req: dict) -> dict:
         state["seed"] = clean_seed(req["seed"])
     if "remix" in req:  # the Remix timeline: shelf clips in play order, repeats allowed; a deleted clip may stay (export refuses it)
         remix = req["remix"]
-        if not isinstance(remix, list) or len(remix) > REMIX_MAX or not all(isinstance(r, str) and REMIX_REF.fullmatch(r) for r in remix):
+        if not isinstance(remix, list) or len(remix) > REMIX_MAX or not all(remix_ok(r) for r in remix):
             raise ValueError("Unknown remix timeline.")
         state["remix"] = list(remix)
     state.pop("missing", None)
+    if set(req) <= {"id", "remix"}:  # only the Remix timeline changed: no settings edit
+        state["_clean"] = True
     return load(write(state)["id"])
 
 
@@ -380,7 +407,14 @@ def snapshot(play_id: str) -> dict:
     state = load(play_id)
     model = next(m for m in pm.models() if m["id"] == state["model"])
     res = next(r for r in model["resolutions"] if r["id"] == state["resolution"])
-    return {"format": CLIP_FORMAT, "playground": state["id"], "prompt": state["prompt"],
+    extra = {}
+    prompt = state["prompt"]
+    if state.get("kind") == "studio":  # Studio: the default prompt goes in front; the sidecar keeps both parts
+        import studio_models
+        d = studio_models.defaults(state["model"], state.get("defaults"))
+        prompt = studio_models.join(d["prompt"], state["prompt"])
+        extra = {"studio_prompt": state["prompt"], "defaults": state.get("defaults")}
+    return {**extra, "format": CLIP_FORMAT, "playground": state["id"], "prompt": prompt,
             "model": {"id": model["id"], "label": model["label"]},
             "params": dict(state["params"]), "total_steps": pm.total_steps(model, state["params"]),
             "resolution": {k: res[k] for k in ("id", "label", "target", "render") if k in res},
@@ -643,17 +677,30 @@ def export_remix(req: dict) -> dict:
     state = load(play_id)
     if not state["remix"]:
         raise ValueError("The timeline is empty: drag clips from the shelf into it.")
-    files = []
+    files, stills = [], []
     for ref_ in state["remix"]:
-        f = folder(play_id) / ref_
+        rel, sec = remix_still(ref_)
+        f = folder(play_id) / rel
         if not f.is_file():
-            raise ValueError(f"A timeline clip is gone: {Path(ref_).name}. Remove it from the timeline.")
+            raise ValueError(f"A timeline clip is gone: {Path(rel).name}. Remove it from the timeline.")
         files.append(f)
+        stills.append(sec)
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise ValueError("ffmpeg is not on PATH.")
-    infos = [video_info(f) for f in files]
-    first = infos[0]
+    infos = []
+    for f, sec in zip(files, stills):
+        if sec is None:
+            infos.append(video_info(f))
+        else:  # a still: its own size; fps and codec follow the clips
+            from PIL import Image
+            with Image.open(f) as im:
+                infos.append({"w": im.width, "h": im.height, "fps": None, "codec": None, "seconds": sec, "still": True})
+    clips = [i for i in infos if not i.get("still")]
+    first = dict(clips[0] if clips else {**infos[0], "fps": 24.0})  # the frame: first clip's (or the first still's, 24 fps)
+    for i in infos:
+        if i.get("still"):
+            i["fps"] = first["fps"]
     out_dir = folder(play_id) / "remix"
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -663,7 +710,7 @@ def export_remix(req: dict) -> dict:
         n += 1
         out = out_dir / f"remix_{stamp}_{n}.mp4"
     tmp = out.with_name(out.stem + ".tmp.mp4")
-    copy = all((i["w"], i["h"], i["fps"], i["codec"]) == (first["w"], first["h"], first["fps"], first["codec"]) for i in infos)
+    copy = not any(stills) and all((i["w"], i["h"], i["fps"], i["codec"]) == (first["w"], first["h"], first["fps"], first["codec"]) for i in infos)
     if copy:
         listing = out.with_name(out.stem + ".txt")
         quote = lambda f: f.resolve().as_posix().replace("'", "'\\''")  # the concat list's own quoting
@@ -675,7 +722,9 @@ def export_remix(req: dict) -> dict:
         legs = "".join(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,"
                        f"setsar=1,fps={first['fps']},format=yuv420p[v{i}];" for i in range(len(files)))
         graph = legs + "".join(f"[v{i}]" for i in range(len(files))) + f"concat=n={len(files)}:v=1:a=0[v]"
-        cmd = [ffmpeg, "-y", "-loglevel", "error", *[a for f in files for a in ("-i", str(f))], "-filter_complex", graph,
+        inputs = [a for f, sec in zip(files, stills)
+                  for a in (("-i", str(f)) if sec is None else ("-loop", "1", "-framerate", str(first["fps"]), "-t", str(sec), "-i", str(f)))]
+        cmd = [ffmpeg, "-y", "-loglevel", "error", *inputs, "-filter_complex", graph,
                "-map", "[v]", "-an", "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p",
                "-movflags", "+faststart", str(tmp)]
         listing = None
@@ -737,6 +786,8 @@ def remaster_plan(req: dict) -> dict:
     state = load(play_id)
     if not state["remix"]:
         return {"ok": False, "reason": "The timeline is empty.", "shots": [], "swaps": {}, "seconds": 0}
+    if any("@" in r for r in state["remix"]):
+        return {"ok": False, "reason": "The timeline holds still pictures: Remaster renders clips only.", "shots": [], "swaps": {}, "seconds": 0}
     done = {}  # source ref -> its remaster on the shelf
     for j in sorted((folder(play_id) / "clips").glob("*.json")):
         try:
@@ -801,6 +852,7 @@ def swap_remix(play_id: str, old: str, new: str) -> list:
     """Every timeline entry of `old` becomes `new` (playground-relative clip refs); the rest of the cut stays."""
     state = load(play_id)
     state["remix"] = [new if r == old else r for r in state["remix"]]
+    state["_clean"] = True
     write(state)
     return state["remix"]
 
@@ -833,7 +885,16 @@ def list_all() -> list:
             newest = cover.with_suffix(".json")
             if cover.with_name(cover.stem + "_thumb.jpg").is_file():
                 thumb = cover.with_name(cover.stem + "_thumb.jpg")
-        out.append({"id": js.parent.name, "kind": st.get("kind") or "video", "created": st.get("created", ""),
+        if st.get("kind") == "studio":  # Studio (studio.py): clips and pictures count together; a starred picture is the mini
+            imgs = [p for p in (js.parent / "images").glob("*.png") if p.with_suffix(".json").is_file()] if (js.parent / "images").is_dir() else []
+            if st.get("cover") and cover.is_file() and cover.suffix == ".png":
+                thumb, newest = cover, None
+            elif not thumb and imgs:
+                thumb = max(imgs, key=lambda p: p.stat().st_mtime)
+            metas = metas + imgs
+            if st.get("side") == "image":
+                st = {**st, "model": (st.get("image") or {}).get("model", ""), "prompt": (st.get("image") or {}).get("prompt", "")}
+        out.append({"id": js.parent.name, "kind": st.get("kind") or "video", "side": st.get("side"), "created": st.get("created", ""),
                     "updated": st.get("updated") or st.get("created", ""), "model": st.get("model", ""),
                     "prompt": (st.get("prompt") or "").strip()[:120], "clips": len(metas), "starred": bool(st.get("starred")),
                     "thumb": thumb.relative_to(morpheus.OUTPUT).as_posix() if thumb else "",
@@ -929,7 +990,9 @@ def use_clip(req: dict) -> dict:
     loras = [{"id": by_slot[n]["id"], "strength": by_slot[n]["strength"]} if n in by_slot else {"id": "", "strength": 1.0}
              for n in (1, 2)]
     res = meta.get("resolution")
-    upd = {"id": play_id, "model": model["id"], "params": meta.get("params") or {}, "prompt": meta.get("prompt", ""),
+    schema = next((m for m in pm.models() if m["id"] == model["id"]), None)
+    params = pm.resolve(schema, meta.get("params") or {}) if schema else meta.get("params") or {}  # an old clip's stale params are dropped
+    upd = {"id": play_id, "model": model["id"], "params": params, "prompt": meta.get("prompt", ""),
            "loras": loras, "seed": meta.get("seed"), "main_first": meta.get("main_first", True)}
     if isinstance(res, dict) and res.get("id"):
         upd["resolution"] = res["id"]
