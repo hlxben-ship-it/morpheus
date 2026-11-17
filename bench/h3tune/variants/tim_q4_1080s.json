@@ -1,0 +1,17 @@
+{
+ "name": "tim_q4_1080s",
+ "model": "q4",
+ "clip": "1080s",
+ "ref": "base_q4_1080s",
+ "note": "timing split 1080p",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1
+}

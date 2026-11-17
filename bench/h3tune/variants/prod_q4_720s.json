@@ -1,0 +1,17 @@
+{
+ "name": "prod_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "ns_late_q4_720s",
+ "note": "engine/wsl/sol_route.py (must equal ns_late: SSIM 1.0)",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_route.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1
+}

@@ -130,6 +130,12 @@ class H3(unittest.TestCase):
         self.assertEqual(long["video_length"], 124)
         self.assertNotIn("_frames_minimum", long)
 
+    def test_fast_routing_is_a_per_job_flag(self):
+        base = snap(model="h3_minimax")
+        self.assertNotIn("_sol_centroid_route", jobs.render_settings(base, DIR))
+        self.assertNotIn("_sol_centroid_route", jobs.render_settings(dict(base, params={**base["params"], "routing": "exact"}), DIR))
+        self.assertIs(jobs.render_settings(dict(base, params={**base["params"], "routing": "fast"}), DIR)["_sol_centroid_route"], True)
+
     def test_steps(self):
         for ok in (4, 6, 8):
             self.assertEqual(jobs.render_settings(snap(model="h3_minimax", steps=ok), DIR)["num_inference_steps"], ok)

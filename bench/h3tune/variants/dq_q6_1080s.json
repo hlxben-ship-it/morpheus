@@ -1,0 +1,20 @@
+{
+ "name": "dq_q6_1080s",
+ "model": "q6",
+ "clip": "1080s",
+ "ref": "fast_q6_1080s",
+ "note": "final stack + dequant and block timers",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/dequant_time.py",
+  "hooks/timing.py"
+ ],
+ "repeat": 1
+}

@@ -14,7 +14,7 @@ for v in "$@"; do
   export FLASH_ATTENTION_TRITON_AMD_ENABLE=TRUE HSA_ENABLE_DXG_DETECTION=1 MIOPEN_FIND_MODE=FAST HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
   pkill -f warm_worker.py 2>/dev/null; pkill -f h3tune/run.py 2>/dev/null
   sync; echo 3 > /proc/sys/vm/drop_caches
-  ( for i in $(seq 1 30); do sleep 5; sync; echo 1 > /proc/sys/vm/drop_caches; done ) & DROP=$!
+  ( for i in $(seq 1 700); do sleep 5; echo 1 > /proc/sys/vm/drop_caches; done ) & DROP=$!
   mkdir -p $OUT/$v
   timeout ${BENCH_TIMEOUT:-2700} $PY $HERE/run.py $HERE/variants/$v.json > $OUT/$v/log.txt 2>&1
   echo "== $v exit $?"; kill $DROP 2>/dev/null

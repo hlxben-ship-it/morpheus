@@ -1,0 +1,19 @@
+{
+ "name": "dq2_q4_1080s",
+ "model": "q4",
+ "clip": "1080s",
+ "ref": "fast_q4_1080s",
+ "note": "final stack + dequant timer",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/dequant_time.py"
+ ],
+ "repeat": 1
+}

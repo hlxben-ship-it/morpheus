@@ -64,6 +64,12 @@ def main():
     session._ensure_runtime()  # WanGP reads its flags when wgp is imported: importing it before init() dropped them all (until 2026-11-15)
     import wgp
     import gguf_triton  # noqa: F401  one Triton kernel per GGUF linear instead of PyTorch's dequantisation passes (Q4_K, Q6_K)
+    # H3 Sol attention (Glia seed h3_performance_hunt_2). sol_kernel: K/V blocks read from a head-major copy, bit-identical, ~17 % less
+    # kernel time at 1080p. sol_route: conditioning rows exact only in the first half of the steps (MORPHEUS_SOL_ROUTE_FROM).
+    # Optional: a stack where they cannot load (other Triton, other WanGP) renders as before.
+    for mod in ("sol_kernel", "sol_route"):
+        try: __import__(mod)
+        except Exception as e: print(f"[Morpheus] {mod} not loaded: {type(e).__name__}: {e}", file=sys.__stderr__, flush=True)
     jobs = queue.Queue()
     threading.Thread(target=lambda: [jobs.put(l) for l in sys.stdin], daemon=True).start()
     say({"event": "ready", "keep_warm": KEEP_WARM})
@@ -124,6 +130,9 @@ def main():
                 settings = dict(job["settings"])
                 floor = settings.pop("_frames_minimum", None)
                 if floor: wgp.get_model_def(settings["model_type"])["frames_minimum"] = int(floor)
+                fast_route = bool(settings.pop("_sol_centroid_route", False))  # per job; without the key: the env default
+                if "sol_kernel" in sys.modules:
+                    k = sys.modules["sol_kernel"]; k.CENTROID_ROUTE = fast_route or k.CENTROID_ROUTE_DEFAULT
                 handle = session.submit_task(settings)
             elif job["kind"] == "upscale":
                 handle = session.submit_media_postprocessing(job["video"], spatial_upsampling=job["upsampling"])

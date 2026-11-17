@@ -83,7 +83,20 @@
           }
         }
       ],
-      "options": []
+      "options": [
+        {
+          "id": "routing",
+          "label": "Attention routing",
+          "type": "choice",
+          "stage": "main",
+          "choices": [
+            {"id": "exact", "label": "Exact"},
+            {"id": "fast", "label": "Fast"}
+          ],
+          "default": "exact",
+          "note": "Fast: ~8 % quicker, same seed gives another clip."
+        }
+      ]
     },
     {
       "id": "h3_gguf_q4",
@@ -121,7 +134,20 @@
           }
         }
       ],
-      "options": []
+      "options": [
+        {
+          "id": "routing",
+          "label": "Attention routing",
+          "type": "choice",
+          "stage": "main",
+          "choices": [
+            {"id": "exact", "label": "Exact"},
+            {"id": "fast", "label": "Fast"}
+          ],
+          "default": "exact",
+          "note": "Fast: ~8 % quicker, same seed gives another clip."
+        }
+      ]
     },
     {
       "id": "h3_gguf_q6",
@@ -159,7 +185,20 @@
           }
         }
       ],
-      "options": []
+      "options": [
+        {
+          "id": "routing",
+          "label": "Attention routing",
+          "type": "choice",
+          "stage": "main",
+          "choices": [
+            {"id": "exact", "label": "Exact"},
+            {"id": "fast", "label": "Fast"}
+          ],
+          "default": "exact",
+          "note": "Fast: ~8 % quicker, same seed gives another clip."
+        }
+      ]
     }
   ]
 }

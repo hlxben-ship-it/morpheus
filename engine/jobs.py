@@ -137,6 +137,8 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
         s["video_length"] = h3_frames(snap["duration"])
         if s["video_length"] < H3_WANGP_MIN:
             s["_frames_minimum"] = s["video_length"]  # the worker lowers WanGP's floor for this one job
+        if snap["params"].get("routing") == "fast":
+            s["_sol_centroid_route"] = True  # the worker switches engine/wsl/sol_kernel.py to the centroid route score for this job
         s.update({"prompt": h3_prompt(snap["prompt"], start_n, end_n), "num_inference_steps": steps,
                   "sample_solver": "euler", "guidance_scale": 1.0, "guidance_phases": 1,
                   "config": "distilled_4b,lightvae_int8"})  # distilled Qwen3-VL-4B encoder + LightVAE, both int8

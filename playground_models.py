@@ -14,7 +14,8 @@ The data is playground_models.json (edit it, no restart: it is read on every req
                        {"default": 3, "fixed": true}         shown, not editable
             upscale: factor (e.g. 2), to "target" (informational); nothing to set. Leave an upscale that always
                      happens out of the file and say so in the next stage's hint instead.
-    option  id, label, type "choice", choices [{id, label}], default, note (optional)
+    option  id, label, type "choice", choices [{id, label}], default, note (optional), stage (optional: the id of
+            a stage; the page then shows the choice in that stage's row, with the note under the stage label)
 
 The settings a user can change are a flat dict ("params"): "<stage id>.steps" per sample stage and "<option id>"
 per option, e.g. {"main.steps": 8, "refine.steps": 3, "upscale_mode": "default"}. The render seed reads the
@@ -112,6 +113,8 @@ def check(data) -> None:
                 bad(f"{mid}.{oid}: a 'choice' option needs at least two {{id, label}} choices.")
             if o.get("default") not in [c["id"] for c in cs]:
                 bad(f"{mid}.{oid}: the default must be one of the choices.")
+            if "stage" in o and o["stage"] not in [st.get("id") for st in stages if isinstance(st, dict)]:
+                bad(f"{mid}.{oid}: 'stage' must be the id of one of the model's stages.")
 
 
 def specs(model: dict) -> dict:

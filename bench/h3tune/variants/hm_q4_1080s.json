@@ -1,0 +1,17 @@
+{
+ "name": "hm_q4_1080s",
+ "model": "q4",
+ "clip": "1080s",
+ "ref": "b2_q4_1080s",
+ "note": "head-major Sol kernel (must be SSIM 1.0)",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py"
+ ],
+ "repeat": 1
+}

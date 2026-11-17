@@ -1,0 +1,18 @@
+{
+ "name": "fin2_q4_1080s",
+ "model": "q4",
+ "clip": "1080s",
+ "ref": "fast_q4_1080s",
+ "note": "final stack: head-major kernel + centroid routing + sinks routed in the second half",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py"
+ ],
+ "repeat": 2
+}

@@ -3632,15 +3632,17 @@
       const seg = (k, list) => `<span class="seg" data-k="${esc(k)}">${list.map(([v, lab]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${p.params[k] === v}">${esc(lab)}</button>`).join('')}</span>`;
       $('pl-stages').innerHTML = m.stages.map((st, i) => {
         const k = `${st.id}.steps`, x = st.steps;
+        const mine = (m.options || []).filter(op => op.stage === st.id);  // an option of this stage sits in its row
         const what = st.kind === 'upscale'
           ? `<b>${st.factor ? '×' + st.factor + ' ' : ''}${esc(st.label)}</b><small>${st.to === 'target' ? 'to target size' : ''}</small>`
-          : `<b>${esc(st.label)}</b><small>${esc(st.hint || (st.size === 'reduced' ? 'at reduced size' : st.size === 'target' ? 'at target size' : ''))}</small>`;
+          : `<b>${esc(st.label)}</b><small>${esc(st.hint || mine.map(op => op.note).filter(Boolean).join(' ') || (st.size === 'reduced' ? 'at reduced size' : st.size === 'target' ? 'at target size' : ''))}</small>`;
         const ctl = st.kind === 'upscale' ? '' : x.fixed ? `<span class="fixed">${x.default} steps</span>`
           : x.choices ? `${seg(k, x.choices.map(c => [c, String(c)]))}<span class="fixed">steps</span>`
           : `<input type="range" step="1" min="${x.min}" max="${x.max}" value="${p.params[k]}" data-k="${esc(k)}" aria-label="${esc(st.label)} steps"><output>${p.params[k]} steps</output>`;
-        return `<li class="pl-stage"><span class="n">${i + 1}</span><span class="what">${what}</span><span class="ctl">${ctl}</span></li>`;
+        const own = mine.map(op => `<span title="${esc(op.label + (op.note ? ': ' + op.note : ''))}">${seg(op.id, op.choices.map(ch => [ch.id, ch.label]))}</span>`).join('');
+        return `<li class="pl-stage"><span class="n">${i + 1}</span><span class="what">${what}</span><span class="ctl">${own}${ctl}</span></li>`;
       }).join('');
-      $('pl-opts').innerHTML = (m.options || []).map(op => `<div class="pl-opt"><label class="pl-l">${esc(op.label)}</label>${seg(op.id, op.choices.map(c => [c.id, c.label]))}${op.note ? `<p class="pl-hint">${esc(op.note)}</p>` : ''}</div>`).join('');
+      $('pl-opts').innerHTML = (m.options || []).filter(op => !m.stages.some(st => st.id === op.stage)).map(op => `<div class="pl-opt"><label class="pl-l">${esc(op.label)}</label>${seg(op.id, op.choices.map(c => [c.id, c.label]))}${op.note ? `<p class="pl-hint">${esc(op.note)}</p>` : ''}</div>`).join('');
       paintNote();
     };
     paintPipe();

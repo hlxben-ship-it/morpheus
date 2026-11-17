@@ -1,0 +1,17 @@
+{
+ "name": "tim_int8_720s",
+ "model": "int8",
+ "clip": "720s",
+ "ref": "base_int8_720s",
+ "note": "timing split 720p",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1
+}

@@ -1,0 +1,24 @@
+{
+ "name": "ns_last_t20_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "tim_q4_720s",
+ "note": "sinks routed steps 2,3; tau +2.0 in step 3",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_nosink.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1,
+ "nosink_steps": [
+  2,
+  3
+ ],
+ "sol_tau_steps": {
+  "3": 2.0
+ }
+}

@@ -53,3 +53,47 @@ time,name,model,clip,ok,total,load,text,denoise,s_step,decode,warm_total,rss,ava
 11-15 03:40,fin_q4_1080s,q4,1080s,True,326.3,6.8,14.6,279.1,70.5,25.8,310.5,20.8,16.8,0.0,5.0,,584.0,19.75,base_q4_1080s,"final stack, 1080p"
 11-15 03:52,fin_int8_1080s,int8,1080s,True,353.1,7.1,14.5,303.9,76.6,27.5,335.5,22.7,16.9,0.0,6.2,,374.5,19.86,base_int8_1080s,"final stack, 1080p"
 11-15 03:54,fin_fl2va_q4_720s,fl2va_q4,720s,True,107.2,6.6,12.9,74.2,18.4,13.5,,20.0,18.0,0.0,2.7,,1374.1,2.19,base_fl2va_q4_720s,"final stack, bridge start+end"
+11-16 23:21,b2_q4_1080s,q4,1080s,True,333.1,7.3,15.2,283.2,72.7,27.5,311.1,20.8,16.7,0.0,5.0,1.0,1.0,1.0,fin_q4_1080s,round 2 baseline 1080p
+11-16 23:33,b2_int8_1080s,int8,1080s,True,358.1,7.1,17.0,303.9,76.9,30.1,337.0,22.7,16.9,0.0,6.2,1.0,1.0,1.0,fin_int8_1080s,round 2 baseline 1080p
+11-16 23:45,b2_q6_1080s,q6,1080s,True,334.1,7.5,16.8,282.1,72.0,27.6,314.4,22.7,17.1,0.0,5.0,,436.3,19.53,fin_q6_1080s,round 2 baseline 1080p
+11-16 23:47,tim_q4_720s,q4,720s,True,113.6,9.7,11.3,76.7,18.0,15.9,,20.1,17.9,0.0,2.6,0.46,1.09,0.96,base_q4_720s,timing split 720p
+11-16 23:53,tim_q4_1080s,q4,1080s,True,335.1,10.1,15.2,281.5,71.4,28.3,,20.6,16.9,0.0,5.0,,584.0,19.75,base_q4_1080s,timing split 1080p
+11-17 00:00,tim_int8_1080s,int8,1080s,True,369.0,10.3,13.9,316.4,82.6,28.3,,22.7,17.0,0.0,6.2,,374.5,19.86,base_int8_1080s,timing split 1080p
+11-17 00:02,cap_q4_720s,q4,720s,True,112.4,7.3,10.7,80.8,20.8,13.6,,20.7,17.5,0.0,2.6,0.46,1.09,0.96,base_q4_720s,capture sol inputs
+11-17 00:08,cap_q4_1080s,q4,1080s,True,335.8,7.2,14.2,284.8,74.6,29.5,,21.7,15.9,0.0,5.0,,584.0,19.75,base_q4_1080s,capture sol inputs
+11-17 00:15,nosink_q4_720s,q4,720s,True,99.0,6.7,14.4,61.1,14.8,16.8,,20.1,17.9,0.0,2.6,0.304,0.59,1.64,tim_q4_720s,"Sol: sink blocks routed, not forced exact"
+11-17 00:20,nosink_q4_1080s,q4,1080s,True,261.2,6.7,14.1,212.7,52.6,27.6,,20.6,16.8,0.0,5.0,0.296,0.72,1.01,b2_q4_1080s,"Sol: sink blocks routed, not forced exact"
+11-17 00:25,nosink_int8_1080s,int8,1080s,True,288.3,6.8,14.6,238.4,60.3,28.5,,22.7,16.9,0.0,6.2,0.307,1.02,1.11,b2_int8_1080s,"Sol: sink blocks routed, not forced exact"
+11-17 00:28,ns_late_q4_720s,q4,720s,True,102.4,6.9,11.1,71.0,16.5,13.4,,20.1,17.9,0.0,2.6,0.832,0.99,1.0,tim_q4_720s,"sinks routed in steps 2,3"
+11-17 00:31,ns_early_q4_720s,q4,720s,True,104.0,6.9,13.6,70.1,20.1,13.4,,20.1,17.9,0.0,2.6,0.307,0.59,1.63,tim_q4_720s,"sinks routed in steps 0,1"
+11-17 00:33,ns_last_q4_720s,q4,720s,True,107.4,7.0,10.8,73.3,16.5,16.2,,20.1,17.9,0.0,2.6,0.982,1.0,1.0,tim_q4_720s,sinks routed in step 3
+11-17 00:35,ns_layhi_q4_720s,q4,720s,True,105.2,6.9,10.9,71.1,16.5,16.3,,20.1,17.9,0.0,2.6,0.306,0.61,1.63,tim_q4_720s,sinks routed in layers 25+
+11-17 00:37,ns_laylo_q4_720s,q4,720s,True,104.5,10.0,10.8,69.9,18.0,13.9,,20.1,18.0,0.0,2.6,0.384,0.81,1.28,tim_q4_720s,sinks routed in layers 0-24
+11-17 00:40,i8off_int8_720s,int8,720s,True,117.3,6.9,10.7,87.7,22.2,12.0,,22.6,18.1,0.0,3.7,0.585,0.99,0.98,r10p0_int8_720s,int8 kernels disabled (PyTorch path)
+11-17 00:46,pre10_q4_1080s,q4,1080s,True,334.2,7.7,15.5,282.9,70.6,28.2,,20.6,16.9,0.0,13.1,1.0,1.0,1.0,b2_q4_1080s,preload 10000 at 1080p
+11-17 00:48,ns_123_q4_720s,q4,720s,True,103.3,7.3,14.1,67.4,16.7,14.5,,20.1,17.9,0.0,2.6,0.629,1.0,1.05,tim_q4_720s,sinks routed in steps 1-3
+11-17 00:50,ns_late_t5_q4_720s,q4,720s,True,100.8,7.2,10.7,66.9,13.0,16.0,,20.1,17.9,0.0,2.6,0.745,0.99,0.97,tim_q4_720s,"sinks routed + tau +0.5 in steps 2,3"
+11-17 00:53,ns_late_t10_q4_720s,q4,720s,True,95.6,6.7,11.2,63.6,14.0,14.1,,20.1,17.9,0.0,2.6,0.649,0.97,1.01,tim_q4_720s,"sinks routed + tau +1.0 in steps 2,3"
+11-17 00:55,ns_last_t20_q4_720s,q4,720s,True,99.8,7.3,13.9,65.1,14.4,13.5,,20.1,17.9,0.0,2.6,0.74,0.89,1.03,tim_q4_720s,"sinks routed steps 2,3; tau +2.0 in step 3"
+11-17 01:01,late_q4_1080s,q4,1080s,True,303.3,6.9,17.1,254.1,62.1,25.2,,20.6,16.9,0.0,5.0,0.849,1.01,0.99,b2_q4_1080s,"sinks routed in steps 2,3"
+11-17 01:07,late_int8_1080s,int8,1080s,True,331.9,6.6,16.9,273.9,66.5,34.6,,22.7,16.9,0.0,6.2,0.83,1.04,1.02,b2_int8_1080s,"sinks routed in steps 2,3"
+11-17 01:13,late_q6_1080s,q6,1080s,True,303.3,10.2,13.8,249.0,61.3,30.4,,22.7,17.2,0.0,5.0,0.849,0.99,1.0,b2_q6_1080s,"sinks routed in steps 2,3"
+11-17 01:19,tim_q4_1080s,q4,1080s,True,333.0,7.3,17.2,281.3,74.3,27.2,,20.6,16.9,0.0,5.0,,584.0,19.75,base_q4_1080s,timing split 1080p
+11-17 01:21,prod_q4_720s,q4,720s,True,104.8,7.1,11.2,70.0,15.1,16.5,,20.1,17.9,0.0,2.6,1.0,1.0,1.0,ns_late_q4_720s,engine/wsl/sol_route.py (must equal ns_late: SSIM 1.0)
+11-17 01:25,vae1_q4_720s,q4,720s,True,112.2,7.7,14.6,75.6,19.0,14.2,92.8,20.2,17.8,0.0,2.6,1.0,1.0,1.0,tim_q4_720s,"vae-config 1 (1 = no tiling, 2 = 512 tiles)"
+11-17 01:29,vae2_q4_720s,q4,720s,True,110.4,6.8,11.1,79.2,19.4,13.3,92.4,20.2,17.9,0.0,2.6,1.0,1.0,1.0,tim_q4_720s,"vae-config 2 (1 = no tiling, 2 = 512 tiles)"
+11-17 01:50,hm_q4_720s,q4,720s,True,109.3,10.1,11.0,74.8,16.3,13.3,,20.2,17.9,0.0,3.0,1.0,1.0,1.0,tim_q4_720s,head-major Sol kernel (must be SSIM 1.0)
+11-17 01:55,hm_q4_1080s,q4,1080s,True,302.4,7.2,17.0,249.1,63.4,29.1,,20.6,16.8,0.0,5.7,1.0,1.0,1.0,b2_q4_1080s,head-major Sol kernel (must be SSIM 1.0)
+11-17 02:05,fast_q4_1080s,q4,1080s,True,270.8,6.8,13.9,221.6,51.6,28.5,253.8,20.8,16.7,0.0,5.7,1.0,1.0,1.0,late_q4_1080s,head-major kernel + sinks routed in the second half (must equal late_: SSIM 1.0)
+11-17 02:15,fast_int8_1080s,int8,1080s,True,297.5,6.7,17.1,249.7,60.9,24.0,280.0,22.6,16.8,0.0,7.2,1.0,1.0,1.0,late_int8_1080s,head-major kernel + sinks routed in the second half (must equal late_: SSIM 1.0)
+11-17 02:24,fast_q6_1080s,q6,1080s,True,276.6,7.4,17.6,222.0,51.9,29.7,254.8,22.7,17.0,0.0,5.7,1.0,1.0,1.0,late_q6_1080s,head-major kernel + sinks routed in the second half (must equal late_: SSIM 1.0)
+11-17 02:26,out_q4_720s,q4,720s,True,110.6,7.3,11.1,79.6,20.3,12.7,,20.1,17.9,0.0,2.6,1.0,1.0,1.0,tim_q4_720s,what runs between the forwards
+11-17 02:32,cr_q4_720s,q4,720s,True,103.5,6.8,14.4,68.8,17.8,13.4,,20.2,17.9,0.0,3.0,0.527,0.97,1.06,tim_q4_720s,"head-major kernel + centroid routing, sinks as upstream"
+11-17 02:35,out2_q4_720s,q4,720s,True,110.3,7.0,10.7,75.8,17.4,16.7,,20.1,17.9,0.0,2.8,1.0,1.0,1.0,tim_q4_720s,what runs around the forwards
+11-17 02:43,fin2_q4_1080s,q4,1080s,True,249.6,6.7,14.1,201.3,47.3,27.5,228.3,20.8,16.7,0.0,5.7,0.579,1.11,0.84,fast_q4_1080s,final stack: head-major kernel + centroid routing + sinks routed in the second half
+11-17 02:53,fin2_int8_1080s,int8,1080s,True,277.7,7.1,17.6,224.2,56.1,28.8,256.1,22.7,16.9,0.0,7.2,0.563,1.02,1.01,fast_int8_1080s,final stack: head-major kernel + centroid routing + sinks routed in the second half
+11-17 03:01,fin2_q6_1080s,q6,1080s,True,252.9,7.3,14.4,201.7,47.5,29.6,231.7,22.7,17.1,0.0,5.7,0.512,1.0,1.0,fast_q6_1080s,final stack: head-major kernel + centroid routing + sinks routed in the second half
+11-17 03:05,fin2_q4_720s,q4,720s,True,97.9,6.9,14.5,60.3,13.2,16.2,76.6,20.2,17.9,0.0,3.0,0.538,0.97,1.06,ns_late_q4_720s,final stack at 720p
+11-17 04:22,dq_q4_1080s,q4,1080s,True,280.0,6.9,16.9,228.2,53.6,27.9,,20.6,16.9,0.0,5.7,1.0,1.0,1.0,fast_q4_1080s,final stack + dequant and block timers
+11-17 04:28,dq_q6_1080s,q6,1080s,True,281.6,7.3,17.1,229.2,54.0,27.9,,22.7,17.2,0.0,5.7,1.0,1.0,1.0,fast_q6_1080s,final stack + dequant and block timers
+11-17 04:33,dq2_q4_1080s,q4,1080s,True,277.2,7.3,14.2,230.5,56.2,25.2,,20.6,16.9,0.0,5.7,1.0,1.0,1.0,fast_q4_1080s,final stack + dequant timer

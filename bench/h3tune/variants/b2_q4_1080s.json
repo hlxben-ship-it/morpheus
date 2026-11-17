@@ -1,0 +1,16 @@
+{
+ "name": "b2_q4_1080s",
+ "model": "q4",
+ "clip": "1080s",
+ "ref": "fin_q4_1080s",
+ "note": "round 2 baseline 1080p",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 2
+}

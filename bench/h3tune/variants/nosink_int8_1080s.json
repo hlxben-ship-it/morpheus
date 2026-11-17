@@ -1,0 +1,17 @@
+{
+ "name": "nosink_int8_1080s",
+ "model": "int8",
+ "clip": "1080s",
+ "ref": "b2_int8_1080s",
+ "note": "Sol: sink blocks routed, not forced exact",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_nosink.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1
+}

@@ -1,0 +1,17 @@
+{
+ "name": "vae2_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "tim_q4_720s",
+ "note": "vae-config 2 (1 = no tiling, 2 = 512 tiles)",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0,
+  "vae-config": 2
+ },
+ "repeat": 2
+}

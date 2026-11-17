@@ -1,0 +1,21 @@
+{
+ "name": "ns_late_q4_720s",
+ "model": "q4",
+ "clip": "720s",
+ "ref": "tim_q4_720s",
+ "note": "sinks routed in steps 2,3",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_nosink.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "repeat": 1,
+ "nosink_steps": [
+  2,
+  3
+ ]
+}
