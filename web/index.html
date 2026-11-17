@@ -918,6 +918,47 @@
   .pl-zoom .st-prev, .pl-clip .st-prev.on { display: grid; }
   .pl-clip .st-prev.on { opacity: 0; transition: opacity .15s; } .pl-clip:hover .st-prev.on { opacity: 1; }
   .pl-clip .st-prev:hover { outline: 1px solid var(--accent); }
+  /* Studio peek (seed playground_layout_finetune #2): a 2x2 pane on top of the shelf, the hovered tile or else the open one */
+  .st-shelfcol { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+  .st-shelfcol > :is(#pl-strip, #ipl-shelf) { flex: 1 1 auto; min-height: 0; grid-auto-rows: max-content; }  /* rows keep their height: the box scrolls instead of squashing tiles */
+  #sb-siplay .st-shelfcol { grid-column: 1; grid-row: 2; align-self: start; position: sticky; top: 8px; max-height: calc(100vh - 150px); }
+  #sb-siplay .st-shelfcol #ipl-shelf { position: static; max-height: none; }
+  .st-peek { flex: 0 0 auto; position: relative; z-index: 3; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--accent); background: #000; box-shadow: 0 6px 18px rgba(0, 0, 0, .45); cursor: pointer; }
+  .st-peek > :is(img, video) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .st-peek .st-peek-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+  .st-peek small { position: absolute; left: 6px; right: 34px; bottom: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-peek .st-prev { position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; background: rgba(0, 0, 0, .65); color: #fff; font-style: normal; font-size: 13px; }
+  .st-peek .st-prev:hover { outline: 1px solid var(--accent); }
+  .pl-clip .st-batch { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 2; padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, .7); color: #fff; font-style: normal; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .pl-clip .st-batch:hover, .pl-clip .st-batch:focus-visible { outline: 1px solid var(--accent); }
+  .pl-clip .st-heart-on { position: absolute; top: 4px; left: 30px; z-index: 1; color: #F08AA8; font-style: normal; font-size: 14px; text-shadow: 0 0 6px #000; }
+  .st-batch-dlg { margin: auto; inset: 0; position: fixed; width: min(1100px, 94vw); max-height: 90vh; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+  .st-batch-dlg::backdrop { background: rgba(0, 0, 0, .7); }
+  .st-batch-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; } .st-batch-head small { color: var(--muted); } .st-batch-x { margin-left: auto; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); color: var(--text); font-size: 15px; cursor: pointer; } .st-batch-x:hover { border-color: var(--accent); }
+  .st-batch-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .st-batch-grid figure { flex: 0 1 240px; }
+  .st-batch-grid .st-benl { position: absolute; left: 6px; top: 6px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 15px; cursor: pointer; }
+  .st-bdel { position: absolute; right: 6px; bottom: 6px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: rgba(0, 0, 0, .6); color: #fff; cursor: pointer; }
+  .st-bdel svg { width: 15px; height: 15px; } .st-bdel:hover { background: var(--danger); }
+  .st-benl:hover { outline: 1px solid var(--accent); }
+  .st-big { position: relative; display: grid; place-items: center; background: #000; border-radius: 10px; overflow: hidden; }
+  .st-big img { display: block; max-width: 100%; max-height: calc(90vh - 130px); object-fit: contain; }
+  .st-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: 10px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 32px; cursor: pointer; }
+  .st-nav.prev { left: 8px; } .st-nav.next { right: 8px; } .st-nav:hover { background: rgba(0, 0, 0, .8); outline: 1px solid var(--accent); }
+  .st-big-bar { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; }
+  .st-big-bar .st-heart, .st-big-bar .st-bdel { position: static; }
+  .st-bback, .st-bopen { padding: 5px 10px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 8px; background: transparent; color: #fff; cursor: pointer; } .st-bback:hover, .st-bopen:hover { border-color: var(--accent); }
+  .st-batch-grid figure { position: relative; margin: 0; border-radius: 10px; overflow: hidden; background: #000; cursor: pointer; border: 1px solid var(--line); }
+  .st-batch-grid figure:hover { border-color: var(--accent); }
+  .st-batch-grid img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: contain; }
+  .st-batch-grid figcaption { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; }
+  .st-heart { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: 18px; cursor: pointer; }
+  .st-heart.on { color: #F08AA8; } .st-heart:hover { outline: 1px solid var(--accent); }
+  .st-run-tile .pic .st-live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .st-run-tile .pic:has(.st-live) .st-spin { position: absolute; right: 6px; bottom: 6px; width: 16px; height: 16px; }
+  .st-peek.glow { animation: st-peek-glow .9s ease-out; }
+  @keyframes st-peek-glow { 0% { box-shadow: 0 0 0 2px var(--accent), 0 0 30px var(--glow, rgba(177, 77, 255, .7)); } 100% { box-shadow: 0 6px 18px rgba(0, 0, 0, .45); } }
+  @media (prefers-reduced-motion: reduce) { .st-peek.glow { animation: none; } }
   .st-new .pic, .st-run-tile .pic { border-bottom: 1px dashed var(--line); }
   .st-plus { font-size: 34px; color: var(--accent); }
   .st-run-tile { cursor: default; }
@@ -3600,6 +3641,10 @@
           live.dataset.n = job.previews; live.hidden = false;
           live.innerHTML = `<img src="/api/job/${encodeURIComponent(j.id)}/preview?n=${job.previews}" alt="The picture forming">`;
         }
+        if (job.previews && wake.stLive?.n !== job.previews) {  // Studio: the picture forming shows in the "Rendering …" tile (seed playground_layout_finetune #7)
+          wake.stLive = { job: j.id, n: job.previews, src: `/api/job/${encodeURIComponent(j.id)}/preview?n=${job.previews}` };
+        }
+        stLivePaint();  // every poll: the tile may appear after the frame did (a no-op once the frame is in)
         tabTitle(job.total ? `${Math.round(100 * (job.step || 0) / job.total)}% · Morpheus` : '⋯ Morpheus');
         await new Promise(res => setTimeout(res, 1000));
       }
@@ -5226,7 +5271,7 @@
     if ($('pl-engine')) $('pl-engine').onchange = e => { try { localStorage.setItem('morpheus.plEngine', e.target.value); } catch {} };
     $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').title = 'Stopping …'; post('/api/playground/stop', { job: wake.plJob?.id }); };
     paintPlayProgress();
-    await studioDecorate('video', p);
+    if (await studioDecorate('video', p) !== 'away') stRelease();
   }
 
   async function paintSIPlay() {
@@ -5293,7 +5338,6 @@
           <textarea id="ipl-prompt" placeholder="${m.family === 'qwen_edit' ? 'What to change …' : 'What the picture shows …'}">${esc(p.prompt)}</textarea>
           ${m.negative && cfg?.prompt?.negative !== false ? `<label class="pl-l" for="ipl-neg">Negative</label><textarea id="ipl-neg" style="min-height:70px">${esc(p.negative)}</textarea>` : ''}${stDefaults(p, cfg)}${stSeedRow('ipl-seed', p.seed)}</section>
         ${nIn ? `<section class="pl-box"><label class="pl-l st-box-l">${esc(refsCfg.label || m.inputs.label)}</label><div class="ipl-ins">${Array.from({ length: nIn }, (_, i) => inSlot(i)).join('')}</div><input type="file" id="ipl-file" accept="image/png,image/jpeg,image/webp" hidden></section>` : ''}
-        <div class="ipl-live" id="ipl-live" hidden></div>
       </div>
       <div class="pl-right">
         <section class="pl-box"><div class="pl-grid">
@@ -5545,7 +5589,7 @@
     $('pl-engine').onchange = e => { try { localStorage.setItem('morpheus.plEngine', e.target.value); } catch {} };
     $('pl-stop').onclick = () => { $('pl-stop').disabled = true; $('pl-stop').title = 'Stopping …'; post('/api/image_playground/stop', { job: wake.plJob?.id }); };
     paintPlayProgress();
-    await studioDecorate('image', p);
+    if (await studioDecorate('image', p) !== 'away') stRelease();
   }
 
 
@@ -5568,10 +5612,114 @@
   // the other family's models to the one Model list (picking one switches the half) and the other half's renders to the shelf.
   // a tile is a document (seed stage 2): clicking one stores the open tile's edits on the server and fills the editor with
   // the clicked tile's edited state, else its rendered state; the page then repaints the half the tile belongs to
+  // smooth switching (seed playground_layout_finetune #1): a switch repaints the page (and may swap the half), which
+  // shows a blank, then half-built page, then the shelf's other-half tiles pop in. stHold lays a frozen copy of what is
+  // on screen over it; stRelease drops the copy once the new page is complete (end of studioDecorate), restoring the
+  // shelf's scroll. A paint that fails early never releases: the timeout drops the copy anyway.
+  // the batch gallery (seed playground_layout_finetune #5): every picture of one batch; a click opens it as the tile,
+  // ♥ makes it the batch's pick (one per batch, again = none)
+  function stBatchGallery(playId, key, items, refOf, repaint) {
+    let dlg = $('st-batch');
+    if (!dlg) { dlg = Object.assign(document.createElement('dialog'), { id: 'st-batch', className: 'st-batch-dlg' }); document.body.append(dlg); }
+    let big = -1;  // the enlarged picture (index), -1 = the grid
+    const heartBtn = c => `<button type="button" class="st-heart${c.heart ? ' on' : ''}" data-a="heart" aria-pressed="${!!c.heart}" title="${c.heart ? 'Hearted: the pick of this batch' : 'Heart: the pick of this batch'}">${c.heart ? '♥' : '♡'}</button>`;
+    const delBtn = `<button type="button" class="st-bdel" data-a="del" title="Delete this picture" aria-label="Delete this picture">${ACT_ICON.trash}</button>`;
+    const paint = () => {
+      const head = `<div class="st-batch-head"><b>Batch of ${items.length}</b><small>${esc(items[0].model || '')}</small><button type="button" class="st-batch-x" data-a="close" title="Close" aria-label="Close">✕</button></div>`;
+      if (big >= 0) {
+        const c = items[big];
+        dlg.innerHTML = head + `<div class="st-big" data-i="${big}"><img src="${esc(url(c.image))}" alt="" draggable="false">
+          <button type="button" class="st-nav prev" data-a="prev" title="Previous (←)" aria-label="Previous">‹</button><button type="button" class="st-nav next" data-a="next" title="Next (→)" aria-label="Next">›</button>
+          <div class="st-big-bar"><button type="button" class="st-bback" data-a="grid" title="Back to all (Esc)">▦ All</button><span>${big + 1} / ${items.length} · seed ${esc(String(c.seed ?? ''))}</span><button type="button" class="st-bopen" data-a="open">Open</button>${heartBtn(c)}${delBtn}</div></div>`;
+        return;
+      }
+      dlg.innerHTML = head + `<div class="st-batch-grid">${items.map((c, i) => `<figure data-i="${i}"><img src="${esc(url(c.image))}" alt="" draggable="false">${heartBtn(c)}<button type="button" class="st-benl" data-a="big" title="Enlarge" aria-label="Enlarge">⛶</button>${delBtn}<figcaption>seed ${esc(String(c.seed ?? ''))}</figcaption></figure>`).join('')}</div>`;
+    };
+    const step = d => { big = (big + d + items.length) % items.length; paint(); };
+    paint();
+    document.removeEventListener('keydown', wake.stBatchKeys || (() => {}));
+    wake.stBatchKeys = e => {  // on the document: a repaint drops the focused button, the key then starts at <body>
+      if (!dlg.open || big < 0) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    };
+    document.addEventListener('keydown', wake.stBatchKeys);
+    dlg.oncancel = e => { if (big >= 0) { e.preventDefault(); big = -1; paint(); } };  // Esc: enlarged → grid → closed
+    dlg.onclick = async e => {
+      if (e.target === dlg || e.target.closest('[data-a="close"]')) return dlg.close();
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      if (a === 'prev') return step(-1);
+      if (a === 'next') return step(1);
+      if (a === 'grid') { big = -1; return paint(); }
+      const f = e.target.closest('[data-i]');
+      if (!f) return;
+      const i = +f.dataset.i, c = items[i];
+      if (a === 'big') { big = i; return paint(); }
+      if (a === 'heart') {
+        const on = !c.heart;
+        try { await post('/api/image_playground/heart_image', { id: playId, batch: key, image: c.image, heart: on }); } catch (err) { return toast(err.message, true); }
+        items.forEach(x => x.heart = false); c.heart = on;
+        paint(); return repaint();
+      }
+      if (a === 'del') {  // one picture out of the batch; one left = an ordinary single tile again
+        if (!await ask({ title: 'Delete picture?', text: 'The picture and its settings are removed from disk and cannot be restored.', ok: 'Delete', danger: true, thumb: url(c.image) })) return;
+        try { await post('/api/image_playground/delete_image', { id: playId, image: c.image }); } catch (err) { return toast(err.message, true); }
+        items.splice(i, 1);
+        if (items.length < 2) dlg.close();
+        else { if (big >= items.length) big = items.length - 1; paint(); }
+        return repaint();
+      }
+      dlg.close();
+      studioOpenTile(c.image.slice(`playground/${playId}/`.length));
+    };
+    if (!dlg.open) dlg.showModal();
+  }
+  // the step preview of the running render inside the Studio's "Rendering …" tile; it survives repaints of the shelf
+  function stLivePaint() {
+    const l = wake.stLive, pic = document.querySelector(':is(#sb-splay, #sb-siplay):not([inert]) .st-run-tile .pic');
+    if (!pic || !l || l.job !== wake.plJob?.id || pic.dataset.n === String(l.n)) return;
+    const img = new Image();
+    img.onload = () => { if (!pic.isConnected) return; pic.dataset.n = l.n; img.className = 'st-live'; pic.querySelector('.st-live')?.remove(); pic.prepend(img); };  // swapped in once loaded: no blank frame
+    img.alt = 'The picture forming'; img.src = l.src;
+  }
+  function stHold() {
+    const box = [$('sb-splay'), $('sb-siplay')].find(b => b && !b.hidden);
+    if (!box || wake.stGhost) return;
+    // the copy keeps its ids so the page's #sb-splay / #pl-strip rules still lay it out; it sits after both real boxes,
+    // so $() (first in document order) keeps finding the real elements once the new page is written
+    const r = box.getBoundingClientRect(), copy = box.cloneNode(true), from = [box, ...box.querySelectorAll('*')];
+    const all = [copy, ...copy.querySelectorAll('*')];
+    all.forEach((n, i) => {  // a cloned video starts black: show the original's current frame instead
+      if (n.tagName !== 'VIDEO') return;
+      const v = from[i];
+      if (v === wake.stPeekMedia) return n.replaceWith(v);  // the peek's clip itself moves over: it never leaves the page, so it never pauses
+      const c = document.createElement('canvas');
+      c.className = n.className; c.style.cssText = n.style.cssText + `;width:${v.offsetWidth}px;height:${v.offsetHeight}px`;
+      c.width = v.videoWidth || 1; c.height = v.videoHeight || 1;
+      try { if (v.readyState >= 2) c.getContext('2d').drawImage(v, 0, 0); } catch {}
+      n.replaceWith(c);
+    });
+    copy.style.cssText += `;position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;z-index:50;pointer-events:none;overflow:hidden;background:var(--bg);margin:0`;
+    copy.setAttribute('aria-hidden', 'true'); copy.inert = true;
+    $('sb-siplay').after(copy);
+    all.forEach((n, i) => { if (from[i].scrollTop) n.scrollTop = from[i].scrollTop; });
+    const strip = box.querySelector('#pl-strip, #ipl-shelf');
+    wake.stGhost = { el: copy, shelfTop: strip?.scrollTop || 0, timer: setTimeout(stRelease, 4000) };
+  }
+  function stRelease() {
+    const g = wake.stGhost;
+    if (!g) return;
+    wake.stGhost = null; clearTimeout(g.timer);
+    const strip = [$('pl-strip'), $('ipl-shelf')].find(s => s?.offsetParent);
+    if (strip) strip.scrollTop = g.shelfTop;
+    requestAnimationFrame(() => g.el.remove());  // one frame: the new page is laid out before the copy goes
+  }
   async function studioOpenTile(ref) {
+    wake.stPeekGlow = Date.now();
+    stHold();
     await wake.stFlush?.();
     let info;
-    try { info = await post('/api/studio/open', { id: wake.playId, tile: ref }); } catch (err) { return toast(err.message, true); }
+    try { info = await post('/api/studio/open', { id: wake.playId, tile: ref }); } catch (err) { stRelease(); return toast(err.message, true); }
     wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
     if (wake.view === (info.side === 'image' ? 'siplay' : 'splay')) return info.side === 'image' ? paintSIPlay() : paintSPlay();
     showWake(info.side === 'image' ? 'siplay' : 'splay', false);
@@ -5581,7 +5729,7 @@
     showWake(side === 'image' ? 'siplay' : 'splay', push);
   }
   async function studioDecorate(side, p) {
-    if (side === 'video' && p.side === 'image') return showWake('siplay', false);
+    if (side === 'video' && p.side === 'image') { showWake('siplay', false); return 'away'; }  // the copy stays until that paint
     const sel = $(side === 'video' ? 'pl-model' : 'ipl-model'), strip = $(side === 'video' ? 'pl-strip' : 'ipl-shelf');
     if (!sel || !strip) return;
     try {
@@ -5599,7 +5747,8 @@
       const o = sel.selectedOptions[0];
       if (!o?.dataset.side) return;
       e.stopImmediatePropagation();
-      try { await post('/api/studio/side', { id: p.id, side: o.dataset.side, model: o.value }); } catch (err) { sel.value = p.model; return toast(err.message, true); }
+      stHold();
+      try { await post('/api/studio/side', { id: p.id, side: o.dataset.side, model: o.value }); } catch (err) { stRelease(); sel.value = p.model; return toast(err.message, true); }
       wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
       showWake(o.dataset.side === 'image' ? 'siplay' : 'splay', false);
     }, true);
@@ -5613,8 +5762,8 @@
     const mine = side === 'video' ? wake.playClips || [] : wake.iplayImgs || [];
     if (extra.length) strip.querySelector('.empty')?.remove();
     const tile = (c, i) => side === 'video'
-      ? `<button type="button" class="pl-clip st-x" data-si="${i}" aria-label="Picture"><span class="pic"><img src="${esc(url(c.image))}" alt="" loading="lazy" draggable="false">${c.cover ? '<i class="pl-star on">★</i>' : ''}<em class="res">IMG</em><i class="st-prev on" data-a="preview" role="button" title="Preview: picture, Start / End frame" aria-label="Preview">⛶</i></span><small>${esc(c.model || 'Picture')}</small></button>`
-      : `<button type="button" class="pl-clip st-x" data-si="${i}" aria-label="${esc(c.label)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b>${c.cover ? '<i class="pl-star on">★</i>' : ''}${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}<i class="st-prev on" data-a="preview" role="button" title="Preview: play the clip" aria-label="Preview">⛶</i></span><small>${esc(c.label)}</small></button>`;
+      ? `<button type="button" class="pl-clip st-x" data-si="${i}" aria-label="Picture"><span class="pic"><img src="${esc(url(c.image))}" alt="" loading="lazy" draggable="false"><i class="pl-star${c.cover ? ' on' : ''}" data-a="star" role="button" tabindex="0" aria-label="${c.cover ? 'Unstar' : 'Star'}" title="${c.cover ? 'Starred: the gallery shows this picture' : 'Star: show this picture in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size.replace('x', '×'))}</em>` : ''}<i class="pl-del" data-a="del" role="button" tabindex="0" aria-label="Delete picture" title="Delete picture">${ACT_ICON.trash}</i><i class="st-prev on" data-a="preview" role="button" title="Preview: picture, Start / End frame" aria-label="Preview">⛶</i></span><small>${esc(c.model || 'Picture')}</small></button>`
+      : `<button type="button" class="pl-clip st-x" data-si="${i}" aria-label="${esc(c.label)}"><span class="pic">${c.thumb ? `<img src="${esc(url(c.thumb))}" alt="" loading="lazy" draggable="false">` : '▦'}<b>▶</b><i class="pl-star${c.cover ? ' on' : ''}" data-a="star" role="button" tabindex="0" aria-label="${c.cover ? 'Unstar' : 'Star'}" title="${c.cover ? 'Starred: the gallery shows this clip' : 'Star: show this clip in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size)}</em>` : ''}<i class="pl-del" data-a="del" role="button" tabindex="0" aria-label="Delete clip" title="Delete clip">${ACT_ICON.trash}</i><i class="st-prev on" data-a="preview" role="button" title="Preview: play the clip" aria-label="Preview">⛶</i></span><small>${esc(c.label)}</small></button>`;
     strip.insertAdjacentHTML('beforeend', extra.map(tile).join(''));
     const item = t => t.dataset.si != null ? extra[+t.dataset.si] : mine[+t.dataset.i];
     [...strip.querySelectorAll(':scope > .pl-clip')].sort((a, b) => {
@@ -5659,8 +5808,20 @@
       t.draggable = true;
       t.ondragstart = e => { e.dataTransfer.setData('text/x-st-image', extra[+t.dataset.si].image); e.dataTransfer.effectAllowed = 'copy'; };
     });
-    strip.querySelectorAll('.st-x').forEach(t => t.onclick = e => {
-      const c = extra[+t.dataset.si];
+    const xRepaint = () => { wake.playClips = null; wake.iplayImgs = null; return side === 'video' ? paintSPlay() : paintSIPlay(); };
+    strip.querySelectorAll('.st-x').forEach(t => t.onclick = async e => {
+      const c = extra[+t.dataset.si], act = e.target.closest('[data-a="star"], [data-a="del"]')?.dataset.a;
+      if (act) {  // the same star / delete as this half's own tiles, sent to the other half's API
+        e.stopPropagation();
+        try {
+          if (act === 'star') await post(c.image ? '/api/image_playground/star_image' : '/api/playground/star_clip', c.image ? { id: p.id, image: c.image, starred: !c.cover } : { id: p.id, video: c.video, starred: !c.cover });
+          else {
+            if (!await ask({ title: c.image ? 'Delete picture?' : 'Delete clip?', text: c.image ? 'The picture and its settings are removed from disk and cannot be restored.' : 'The video, its settings and its thumbnail are removed from disk and cannot be restored.', ok: 'Delete', danger: true, thumb: url(c.image || c.thumb) })) return;
+            await post(c.image ? '/api/image_playground/delete_image' : '/api/playground/delete_clip', c.image ? { id: p.id, image: c.image } : { id: p.id, video: c.video });
+          }
+        } catch (err) { return toast(err.message, true); }
+        return xRepaint();
+      }
       if (!e.target.closest('[data-a="preview"]')) return studioOpenTile((c.image || c.video).slice(`playground/${p.id}/`.length));
       const h3 = side === 'video' && String(p.model).startsWith('h3');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(side === 'video' ? c.model || 'Picture' : c.label)}</h2><p class="pl-facts">${esc(c.prompt || '')}</p></div>
@@ -5674,8 +5835,8 @@
         const a = e.target.closest('[data-a]')?.dataset.a;
         if (a === 'close') return dlg.close();
         if (a === 'side') {
-          dlg.close();
-          try { await post('/api/studio/side', { id: p.id, side: otherSide }); } catch (err) { return toast(err.message, true); }
+          dlg.close(); stHold();
+          try { await post('/api/studio/side', { id: p.id, side: otherSide }); } catch (err) { stRelease(); return toast(err.message, true); }
           wake.play = null; wake.iplay = null; return showWake(otherSide === 'image' ? 'siplay' : 'splay', false);
         }
         if (a === 'start' || a === 'end') {
@@ -5700,6 +5861,7 @@
     const running = wake.plJob && ['Render', 'Image'].includes(wake.plJob.what) && wake.plJob.play === p.id;
     strip.insertAdjacentHTML('afterbegin', `<button type="button" class="pl-clip st-new${info.open === 'new' ? ' st-open' : ''}" aria-label="New draft"><span class="pic"><span class="st-plus">+</span></span><small>New${info.open === 'new' ? ' · open' : ''}</small></button>`
       + (running ? `<div class="pl-clip st-run-tile" aria-label="Rendering"><span class="pic"><span class="st-spin"></span></span><small>Rendering …</small></div>` : ''));
+    stLivePaint();
     strip.querySelector('.st-new').onclick = () => studioOpenTile('new');
     const jl = $('st-joblink');
     if (jl) jl.onclick = () => {  // the playground the running job belongs to, on the page it was started from
@@ -5713,6 +5875,70 @@
     const tools = strip.closest('.pl').querySelector('.st-tools');
     tools.querySelector('.st-doc')?.remove();
     const openItem = [...mine, ...extra].find(c => (c.video || c.image || '').slice(dirOf.length) === info.open);
+    // batches (seed playground_layout_finetune #5): the pictures of one render (batch_of > 1, same model + render time)
+    // are one tile: the open one, else the hearted one, else the newest, with "▦ N" that opens the batch gallery,
+    // where one picture can be hearted (the batch's pick, kept in playground.json "hearts")
+    const groups = new Map();
+    strip.querySelectorAll(':scope > .pl-clip').forEach(t => {
+      const c = item(t);
+      if (!c?.image || !(c.batch_of > 1)) return;
+      const k = `${c.model}|${c.render_seconds}|${c.batch_of}`;
+      groups.set(k, [...(groups.get(k) || []), t]);
+    });
+    const fileOf = c => c.image.split('/').pop();
+    groups.forEach(ts => {
+      if (ts.length < 2) return;
+      const key = ts.map(t => fileOf(item(t))).sort()[0];
+      const lead = ts.find(t => t.classList.contains('st-open')) || ts.find(t => item(t).heart) || ts[0];
+      ts.forEach(t => { if (t !== lead) t.style.display = 'none'; });
+      if (ts.some(t => item(t).heart)) lead.querySelector('.pic').insertAdjacentHTML('beforeend', '<i class="st-heart-on" title="Hearted pick of this batch">♥</i>');
+      lead.querySelector('.pic').insertAdjacentHTML('beforeend', `<i class="st-batch" data-a="batch" role="button" tabindex="0" title="Batch of ${ts.length}: show all, heart one" aria-label="Batch of ${ts.length}">▦ ${ts.length}</i>`);
+      const btn = lead.querySelector('.st-batch');
+      btn.onclick = btn.onkeydown = e => {
+        if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault(); e.stopPropagation();
+        stBatchGallery(p.id, key, ts.map(item), refOf, () => { wake.playClips = null; wake.iplayImgs = null; return side === 'video' ? paintSPlay() : paintSIPlay(); });
+      };
+    });
+    // peek (seed playground_layout_finetune #2): replaces the floating hover enlargement. A 2x2 pane on top of the
+    // shelf shows the hovered tile (a clip plays muted), else the open one; a click on it = a click on that tile,
+    // its ⛶ = that tile's preview
+    wake.stXClose?.();
+    const openTile = () => strip.querySelector(':scope > .pl-clip.st-open:not(.st-new)');
+    const peek = document.createElement('div');
+    peek.className = 'st-peek';
+    // the pane sits above the shelf, not in it: the tiles scroll in their own box and never slide under the pane
+    const col = document.createElement('div');
+    col.className = 'st-shelfcol';
+    strip.before(col); col.append(peek, strip);
+    let shown, peekWait;
+    const show = t => {
+      if (t === shown && peek.childElementCount) return;
+      shown = t; const c = t && item(t);
+      const src = c ? c.video || c.image : null;
+      if (!src) { peek.innerHTML = `<span class="st-peek-empty">${info.open === 'new' ? 'New draft' : 'Nothing rendered yet'}</span>`; return; }
+      const key = c.video || c.image, old = wake.stPeekMedia;  // the same clip as before a repaint: keep its element, it plays on
+      const media = old?.dataset.key === key ? old : c.video && !matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? Object.assign(document.createElement('video'), { src: url(c.video), poster: c.thumb ? url(c.thumb) : '', muted: true, loop: true, autoplay: true, playsInline: true })
+        : Object.assign(document.createElement('img'), { src: url(c.image || c.thumb), alt: '' });
+      media.draggable = false; media.dataset.key = key; wake.stPeekMedia = media;
+      peek.replaceChildren(media);
+      if (media.tagName === 'VIDEO') media.play().catch(() => {});
+      peek.insertAdjacentHTML('beforeend', `<small>${esc(t.querySelector('small')?.textContent || '')}</small><i class="st-prev" data-a="preview" role="button" title="Preview" aria-label="Preview">⛶</i>`);
+    };
+    strip.querySelectorAll(':scope > .pl-clip').forEach(t => {
+      if (item(t) && !t.querySelector('[data-a="preview"]')) t.querySelector('.pic')?.insertAdjacentHTML('beforeend', '<i class="st-prev on" data-a="preview" role="button" tabindex="0" title="Preview" aria-label="Preview">⛶</i>');
+      t.onpointerenter = e => { if (e.pointerType !== 'mouse') return; clearTimeout(peekWait); peekWait = setTimeout(() => show(item(t) ? t : openTile()), 60); };
+      t.onpointerleave = () => clearTimeout(peekWait);
+    });
+    strip.addEventListener('pointerleave', () => { clearTimeout(peekWait); peekWait = setTimeout(() => show(openTile()), 150); });
+    peek.onclick = e => {
+      if (!shown?.isConnected) return;
+      if (e.target.closest('[data-a="preview"]')) return shown.querySelector('[data-a="preview"]')?.click();
+      shown.click();
+    };
+    show(openTile());
+    if (Date.now() - (wake.stPeekGlow || 0) < 5000) { wake.stPeekGlow = 0; peek.classList.add('glow'); }  // a tile was just opened
     const names = info.names || {};
     strip.querySelectorAll(':scope > .pl-clip').forEach(t => { const n = names[t.classList.contains('st-new') ? 'new' : refOf(t)]; if (n) t.querySelector('small').textContent = n; });
     const name = names[info.open] ? names[info.open] : info.open === 'new' ? 'New draft' : openItem ? (openItem.label || openItem.model || 'Render') + (openItem.seed != null ? ` · seed ${openItem.seed}` : '') : info.open;

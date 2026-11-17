@@ -342,9 +342,10 @@ def images(play_id: str) -> list:
     """The shelf, newest first, the starred picture leading."""
     d = playground.folder(play_id)
     try:
-        cover = json.loads((d / "playground.json").read_text(encoding="utf-8-sig")).get("cover")
+        top = json.loads((d / "playground.json").read_text(encoding="utf-8-sig"))
+        cover, hearts = top.get("cover"), set((top.get("hearts") or {}).values())
     except (OSError, ValueError):
-        cover = None
+        cover, hearts = None, set()
     out = []
     for js in (d / "images").glob("*.json"):
         png = js.with_suffix(".png")
@@ -364,7 +365,8 @@ def images(play_id: str) -> list:
             size = meta.get("size", "")
         out.append({"image": rel, "created": meta.get("created", ""), "prompt": meta.get("prompt", ""), "seed": meta.get("seed"),
                     "model": m.get("label", ""), "size": size, "render_seconds": meta.get("render_seconds"),
-                    "cover": cover == f"images/{png.name}"})
+                    "cover": cover == f"images/{png.name}", "batch_of": meta.get("batch_of") or 1,
+                    "heart": f"images/{png.name}" in hearts})
     out.sort(key=lambda c: c["created"], reverse=True)
     out.sort(key=lambda c: not c["cover"])
     return out
@@ -422,5 +424,26 @@ def reuse(req: dict) -> dict:
     return load(_write(st)["id"])
 
 
+def heart_image(req: dict) -> dict:
+    """The picked picture of one batch (Studio shelf shows a batch as one tile): {batch key: "images/<name>.png"} on
+    the playground's top level. The key is the batch's first picture name (the page groups and names the batch);
+    heart false clears it."""
+    play_id, key = str(req.get("id", "")), str(req.get("batch", ""))[:200]
+    if not key:
+        raise ValueError("No batch.")
+    path = playground.folder(play_id) / "playground.json"
+    whole = json.loads(path.read_text(encoding="utf-8-sig"))
+    hearts = whole.get("hearts") or {}
+    if req.get("heart"):
+        hearts[key] = "images/" + image_path(play_id, str(req.get("image", ""))).name
+    else:
+        hearts.pop(key, None)
+    whole["hearts"] = hearts
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(whole, indent=1), encoding="utf-8")
+    tmp.replace(path)
+    return {"ok": True, "hearts": hearts}
+
+
 ACTIONS = {"new": new, "save": save, "input": input_picture, "use_as_input": use_as_input, "delete_image": delete_image,
-           "star_image": star_image, "reuse": reuse}
+           "star_image": star_image, "heart_image": heart_image, "reuse": reuse}
