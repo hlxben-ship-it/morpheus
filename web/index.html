@@ -752,6 +752,18 @@
   .pl-up .seg button { padding: 7px 14px; font-size: 13px; }
   .pl-up .go { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; } .pl-up .go .hint { margin: 0; }
   .pl-up .pl-up-go { width: auto; padding: 11px 22px; font-size: 14px; }
+  .pl-cut { display: grid; gap: 10px; margin: 0 0 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+  .pl-cut[hidden] { display: none; }
+  .pl-cut .rng { position: relative; height: 28px; }
+  .pl-cut .rng::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 4px; border-radius: 2px; background: var(--line); }
+  .pl-cut .rng .sel { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+  .pl-cut .rng input { position: absolute; left: 0; width: 100%; top: 0; height: 28px; margin: 0; padding: 0; border: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+  .pl-cut .rng input::-webkit-slider-runnable-track { background: none; height: 28px; }
+  .pl-cut .rng input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; cursor: ew-resize; width: 14px; height: 28px; border-radius: 5px; background: var(--accent); border: 2px solid var(--panel); }
+  .pl-cut .rng input::-moz-range-track { background: none; }
+  .pl-cut .rng input::-moz-range-thumb { pointer-events: auto; cursor: ew-resize; width: 10px; height: 24px; border-radius: 5px; background: var(--accent); border: 2px solid var(--panel); }
+  .pl-cut .go { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; } .pl-cut .go .hint { margin: 0; }
+  .pl-cut .pl-cut-go { width: auto; padding: 11px 22px; font-size: 14px; }
   .pl-modal .pl-act[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   .pl-prog { --pl-fill: linear-gradient(90deg, #4A78B0, #8A6CD8 55%, #F08AA8); position: relative; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--panel) 88%, var(--accent)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); overflow: hidden; display: grid; place-items: center; }
   .pl-prog i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--pl-fill); opacity: .92; box-shadow: 0 0 22px -4px #F08AA8; transition: width .6s ease; }
@@ -3927,11 +3939,15 @@
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(c.label)}</h2>${clipFacts(c)}</div>
           <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete clip" aria-label="Delete clip">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span>
-          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="remix" title="Add this clip to the end of the Remix timeline">✂ Add to Remix</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
+          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="remix" title="Add this clip to the end of the Remix timeline">✂ Add to Remix</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="cut" aria-pressed="false" aria-controls="pl-cut" title="Keep only a section of this clip, as a new clip">✂ Cut</button><button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
         <div class="pl-up" id="pl-up" hidden>
           <div class="row"><span class="pl-l">Method</span><span class="seg" data-k="method"><button type="button" data-v="relayvsr" aria-pressed="true">RelayVSR · quick</button><button type="button" data-v="seedvr2" aria-pressed="false">SeedVR2 · real detail</button></span>
             <span class="pl-l">Factor</span><span class="seg" data-k="factor">${[1.5, 2, 3, 4].map(f => `<button type="button" data-v="${f}" aria-pressed="${f === 1.5}">×${f}</button>`).join('')}</span></div>
           <div class="go"><span class="hint" id="pl-up-info"></span><button type="button" class="pl-render pl-up-go" data-a="up-go"></button></div>
+        </div>
+        <div class="pl-cut" id="pl-cut" hidden>
+          <div class="rng"><span class="sel"></span><input type="range" data-k="start" min="0" max="1" step="0.01" value="0" aria-label="Cut start"><input type="range" data-k="end" min="0" max="1" step="0.01" value="1" aria-label="Cut end"></div>
+          <div class="go"><span class="hint" id="pl-cut-info"></span><button type="button" class="pl-render pl-cut-go" data-a="cut-go">Save cut</button></div>
         </div>
         <video src="${esc(url(c.video))}" controls autoplay loop muted playsinline></video>${c.prompt ? `<div class="pl-cprompt"><p class="hint">${esc(c.prompt)}</p><button type="button" class="wake-open pl-ico" data-a="copy" title="Copy prompt" aria-label="Copy prompt">${ACT_ICON.copy}</button></div>` : ''}`;
       const v = dlg.querySelector('video');
@@ -3960,6 +3976,18 @@
         if (a === 'up') { const box = dlg.querySelector('.pl-up'), b = dlg.querySelector('[data-a="up"]'); box.hidden = !box.hidden; b.setAttribute('aria-pressed', String(!box.hidden)); upInfo(); }
         const seg = e.target.closest('.pl-up .seg button');
         if (seg) { up[seg.parentElement.dataset.k] = seg.parentElement.dataset.k === 'factor' ? +seg.dataset.v : seg.dataset.v; upInfo(); }
+        if (a === 'cut') {
+          const box = dlg.querySelector('.pl-cut'), b = dlg.querySelector('[data-a="cut"]');
+          box.hidden = !box.hidden; b.setAttribute('aria-pressed', String(!box.hidden));
+          if (box.hidden) { v.play(); return; }
+          v.pause(); cutReset();
+        }
+        if (a === 'cut-go') {
+          const b = e.target.closest('[data-a]'); b.disabled = true; b.textContent = 'Cutting …';
+          try { await post('/api/playground/cut', { id: c.playground, video: c.video, start: cut.start, end: cut.end }); }
+          catch (err) { b.disabled = false; b.textContent = 'Save cut'; return alert(err.message); }
+          dlg.close(); wake.playClips = null; paintPlay(); toast('Cut saved as a new clip');
+        }
         if (a === 'up-go') { dlg.close(); plStart('/api/playground/upscale', { id: c.playground, video: c.video, method: up.method, factor: up.factor, engine: plEngine() }, 'Upscale'); }
         if (a === 'del') deleteClip(c, () => dlg.close());
       };
@@ -3974,6 +4002,28 @@
         dlg.querySelector('.pl-up-go').textContent = `Upscale ×${up.factor}`;
       }
       v.addEventListener('loadedmetadata', upInfo);
+      // cut panel: two handles over the clip's length, the picture follows the handle being dragged; the server cuts on frames
+      const cut = { start: 0, end: 0 };
+      const cutIns = [...dlg.querySelectorAll('.pl-cut input')];
+      function cutPaint() {
+        const len = v.duration || 1, sel = dlg.querySelector('.pl-cut .sel');
+        sel.style.left = `${cut.start / len * 100}%`; sel.style.right = `${100 - cut.end / len * 100}%`;
+        const whole = cut.start <= 0 && cut.end >= len - 0.005;
+        dlg.querySelector('.pl-cut-go').disabled = whole;
+        $('pl-cut-info').textContent = `${cut.start.toFixed(2)} s → ${cut.end.toFixed(2)} s · keeps ${(cut.end - cut.start).toFixed(2)} s of ${len.toFixed(2)} s · new clip next to this one`;
+      }
+      function cutReset() {
+        const len = v.duration || 1;
+        cutIns.forEach(i => { i.max = len; });
+        cut.start = 0; cut.end = len; cutIns[0].value = 0; cutIns[1].value = len; cutPaint();
+      }
+      cutIns.forEach(i => i.addEventListener('input', () => {
+        const k = i.dataset.k, gap = 0.04, len = v.duration || 1;
+        cut[k] = +i.value;
+        if (k === 'start' && cut.start > cut.end - gap) cut.start = Math.max(0, cut.end - gap);
+        if (k === 'end' && cut.end < cut.start + gap) cut.end = Math.min(len, cut.start + gap);
+        i.value = cut[k]; v.currentTime = cut[k]; cutPaint();
+      }));
       dlg.showModal();
       dlg.querySelector('[data-a="close"]').focus();  // not the first action: its focus ring read as "selected"
     };

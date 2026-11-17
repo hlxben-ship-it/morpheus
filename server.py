@@ -770,13 +770,30 @@ class Handler(BaseHTTPRequestHandler):
         if base.resolve() not in path.parents or not path.is_file():
             return self.send_error(404)
         data = path.read_bytes()
-        self.send_response(200)
+        status, first, last = 200, 0, len(data) - 1
+        # a browser can only seek in a <video> (the Cut handles, the player's own bar) when the server answers Range requests
+        m = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
+        if m and (m[1] or m[2]) and data:
+            if m[1]:
+                first, last = int(m[1]), min(int(m[2] or last), last)
+            else:  # "bytes=-N": the last N bytes
+                first = max(0, len(data) - int(m[2]))
+            if first > last:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(data)}")
+                self.send_header("Content-Length", "0")
+                return self.end_headers()
+            status = 206
+        self.send_response(status)
         # Windows' registry can map .js to text/plain, and a browser refuses a module served so
         kind = {".js": "text/javascript", ".json": "application/json"}.get(path.suffix) or mimetypes.guess_type(path.name)[0]
         self.send_header("Content-Type", kind or "application/octet-stream")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {first}-{last}/{len(data)}")
+        self.send_header("Content-Length", str(last - first + 1 if data else 0))
         self.end_headers()
-        self.wfile.write(data)
+        self.wfile.write(data[first:last + 1])
 
     def do_GET(self):
         route = self.path.split("?")[0]

@@ -567,6 +567,39 @@ def loop_clip(req: dict) -> dict:
     return add_clip(play_id, tmp, snap, seed=meta.get("seed"), seconds=meta.get("render_seconds"))
 
 
+def cut_clip(req: dict) -> dict:
+    """"Cut": the section start..end (seconds) of a shelf clip becomes a new clip; the source stays. Cut on frames, not
+    keyframes (re-encode, same quality as Loop it), so the new clip is exactly end_frame - start_frame frames long."""
+    play_id, video = str(req.get("id", "")), str(req.get("video", ""))
+    mp4, meta = clip_meta(play_id, video)
+    try:
+        start, end = float(req.get("start")), float(req.get("end"))
+    except (TypeError, ValueError):
+        raise ValueError("Cut needs a start and an end in seconds.")
+    info = video_info(mp4)
+    fps, total = info["fps"], round(info["seconds"] * info["fps"])
+    first, last = round(start * fps), round(end * fps)
+    if not (0 <= first < last <= total):
+        raise ValueError(f"The cut has to lie inside the clip (0 to {total} frames) and hold at least one frame.")
+    if first == 0 and last == total:
+        raise ValueError("That is the whole clip: move a handle first.")
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise ValueError("ffmpeg is not on PATH.")
+    tmp = mp4.with_name(f"{mp4.stem}_cut.tmp.mp4")
+    run = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(mp4), "-vf",
+                          f"trim=start_frame={first}:end_frame={last},setpts=PTS-STARTPTS", "-an",
+                          "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", str(tmp)],
+                         capture_output=True, text=True)
+    if run.returncode or not tmp.is_file():
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"ffmpeg failed: {run.stderr.strip()[-300:]}")
+    snap = {k: v for k, v in meta.items() if k not in ("video", "created", "render_seconds", "loop")}  # a cut is no ping-pong loop
+    snap["duration"] = round((last - first) / fps, 1)
+    snap["cut"] = {"source": video, "start_frame": first, "end_frame": last}
+    return add_clip(play_id, tmp, snap, seed=meta.get("seed"), seconds=meta.get("render_seconds"))
+
+
 def last_frame(req: dict) -> dict:
     """"Last frame as start": the clip's last picture becomes this playground's start frame. Read with ffmpeg on the
     server, not in the browser: a phone browser often never seeks a video it is not playing (2026-11-15)."""
@@ -916,4 +949,4 @@ def use_clip(req: dict) -> dict:
     return load(write(state)["id"])
 
 
-ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip, "remix_export": export_remix, "remaster_plan": remaster_plan}
+ACTIONS = {"star_clip": star_clip, "star": star, "delete": delete, "last_frame": last_frame, "loop": loop_clip, "cut": cut_clip, "new": new, "save": save, "frame": frame, "ref": ref, "inspect": inspect, "delete_clip": delete_clip, "use_clip": use_clip, "remix_export": export_remix, "remaster_plan": remaster_plan}
