@@ -63,6 +63,11 @@ def main():
                              "--perc-reserved-mem-max", os.environ.get("WARM_PINNED", "0.05")])
     session._ensure_runtime()  # WanGP reads its flags when wgp is imported: importing it before init() dropped them all (until 2026-11-15)
     import wgp
+    from preload import preload_for  # H3-Image keeps part of its transformer in VRAM, everything else as WARM_PRELOAD says
+    base_preload = int(wgp.args.preload)
+    import ref_cap  # H3-Image: references scaled down to a short edge per job (settings "_h3_ref_size"), off = WanGP's own size
+    ref_cap_now = [0]
+    wgp.resize_and_remove_background = ref_cap.wrap(wgp.resize_and_remove_background, lambda: ref_cap_now[0])
     import gguf_triton  # noqa: F401  one Triton kernel per GGUF linear instead of PyTorch's dequantisation passes (Q4_K, Q6_K)
     # H3 Sol attention (Glia seed h3_performance_hunt_2). sol_kernel: K/V blocks read from a head-major copy, bit-identical, ~17 % less
     # kernel time at 1080p. sol_route: conditioning rows exact only in the first half of the steps (MORPHEUS_SOL_ROUTE_FROM).
@@ -130,9 +135,11 @@ def main():
                 settings = dict(job["settings"])
                 floor = settings.pop("_frames_minimum", None)
                 if floor: wgp.get_model_def(settings["model_type"])["frames_minimum"] = int(floor)
+                ref_cap_now[0] = ref_cap.CHOICES[settings.pop("_h3_ref_size", "full")]  # per job; "full" = references as WanGP sizes them
                 fast_route = bool(settings.pop("_sol_centroid_route", False))  # per job; without the key: the env default
                 if "sol_kernel" in sys.modules:
                     k = sys.modules["sol_kernel"]; k.CENTROID_ROUTE = fast_route or k.CENTROID_ROUTE_DEFAULT
+                wgp.args.preload = preload_for(job, base_preload)  # read when the model loads; same model = no reload, no change
                 handle = session.submit_task(settings)
             elif job["kind"] == "upscale":
                 handle = session.submit_media_postprocessing(job["video"], spatial_upsampling=job["upsampling"])

@@ -1,0 +1,18 @@
+{
+ "note": "H3-Image t2i 1664x2496 (no refs) floor",
+ "refs": [],
+ "settings": {
+  "video_prompt_type": "",
+  "prompt": "The image is a portrait photograph of a young woman with long dark hair in a red knitted scarf holding a steaming cup of tea, soft window light from the left."
+ },
+ "name": "img_t2i",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

@@ -1,0 +1,15 @@
+{
+ "note": "1 ref, VRAM preload 14000 MB",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ },
+ "ref": "img_base1",
+ "repeat": 2,
+ "name": "img_pre1",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ]
+}

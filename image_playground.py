@@ -290,6 +290,8 @@ def worker_job(play_id: str, snap: dict) -> dict:
              "image_mode": 1, "config": "distilled_4b"}
         if pics:
             s.update(image_refs=pics, video_prompt_type=p.get("edit_mode", "KI"))
+            if p.get("ref_size", "full") != "full":  # the worker maps it to a short edge (engine/wsl/ref_cap.py, seed h3_image_edit_speed)
+                s["_h3_ref_size"] = p["ref_size"]
         if loras:
             s["activated_loras"] = [l["path"] for l in loras]
             s["loras_multipliers"] = " ".join(f"{l['strength']:g}" for l in loras)

@@ -1,0 +1,22 @@
+{
+ "note": "2 refs, preload, Sol tau 1.3 + head-major kernel",
+ "refs": [
+  "yukomo_p.png",
+  "yukomo_p2.png"
+ ],
+ "sol": true,
+ "hooks": [
+  "hooks/h3img_sol.py",
+  "hooks/sol_kernel.py",
+  "hooks/timing.py"
+ ],
+ "ref": "img_pre2",
+ "repeat": 2,
+ "name": "img_sol2",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ }
+}

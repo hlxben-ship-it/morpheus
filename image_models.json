@@ -59,7 +59,8 @@
       "sizes": ["2048x2048", "2368x1760", "1760x2368", "2496x1664", "1664x2496", "2720x1536", "1536x2720"],
       "params": {
         "steps": {"label": "Steps", "default": 6, "fixed": true},
-        "edit_mode": {"label": "With pictures", "choices": ["KI", "I"], "labels": {"KI": "Keep picture 1's proportions", "I": "Use the chosen size"}, "default": "KI", "needs_input": true}
+        "edit_mode": {"label": "With pictures", "choices": ["KI", "I"], "labels": {"KI": "Keep picture 1's proportions", "I": "Use the chosen size"}, "default": "KI", "needs_input": true},
+        "ref_size": {"label": "Reference size", "choices": ["full", "1280", "1024"], "labels": {"full": "Full", "1280": "1280 px", "1024": "1024 px"}, "note": "Smaller references render faster (2 pictures: ~130 s → ~80 s at 1024 px). The look of the pictures stays; fine details may vary a little.", "default": "full", "needs_input": true}
       }
     },
     {

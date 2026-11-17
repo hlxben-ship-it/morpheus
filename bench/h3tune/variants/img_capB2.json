@@ -1,0 +1,22 @@
+{
+ "note": "2 refs, preload, ref cap 1024 except picture 1",
+ "refs": [
+  "yukomo_p.png",
+  "yukomo_p2.png"
+ ],
+ "hooks": [
+  "hooks/ref_cap.py",
+  "hooks/timing.py"
+ ],
+ "ref_cap": 1024,
+ "ref_cap_skip_first": true,
+ "ref": "img_pre2",
+ "repeat": 2,
+ "name": "img_capB2",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ }
+}

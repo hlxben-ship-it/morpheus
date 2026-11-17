@@ -1,0 +1,14 @@
+{
+ "note": "H3-Image edit 1 ref 1664x2496 baseline",
+ "repeat": 2,
+ "name": "img_base1",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "note": "2 refs, preload 14000",
+ "refs": [
+  "yukomo_p.png",
+  "yukomo_p2.png"
+ ],
+ "ref": "img_base2",
+ "repeat": 2,
+ "name": "img_pre2",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ }
+}

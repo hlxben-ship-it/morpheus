@@ -1,0 +1,18 @@
+{
+ "note": "H3-Image edit 2 refs baseline",
+ "refs": [
+  "yukomo_p.png",
+  "yukomo_p2.png"
+ ],
+ "repeat": 2,
+ "name": "img_base2",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

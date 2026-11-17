@@ -1,0 +1,17 @@
+{
+ "note": "1 ref, preload, ref cap 1280",
+ "hooks": [
+  "hooks/ref_cap.py",
+  "hooks/timing.py"
+ ],
+ "ref_cap": 1280,
+ "ref": "img_pre1",
+ "repeat": 2,
+ "name": "img_c1280_1",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ }
+}

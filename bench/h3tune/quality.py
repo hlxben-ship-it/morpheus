@@ -33,3 +33,15 @@ def check(mp4, strip, ref=None):
         q.update(ssim=round(float(np.mean([structural_similarity(a[0], b[0]) for a, b in zip(g, rg)])), 3),
                  sharp_ratio=round(sharp / rsharp, 2), motion_ratio=round(motion / max(rmotion, 1e-6), 2))
     return q
+
+
+def check_png(png, ref=None):
+    """H3-Image (seed h3_image_edit_speed): sharpness and, with a reference picture, SSIM + mean abs diff on the grey image."""
+    a = cv2.imread(str(png), cv2.IMREAD_GRAYSCALE)
+    q = {"sharp": round(float(cv2.Laplacian(a, cv2.CV_64F).var()), 1)}
+    if ref is not None:
+        b = cv2.imread(str(ref), cv2.IMREAD_GRAYSCALE)
+        if b.shape != a.shape: b = cv2.resize(b, a.shape[::-1])
+        q.update(ssim=round(float(structural_similarity(a, b)), 3), mad=round(float(np.mean(np.abs(a.astype(float) - b))), 2),
+                 sharp_ratio=round(q["sharp"] / max(1e-6, float(cv2.Laplacian(b, cv2.CV_64F).var())), 3))
+    return q

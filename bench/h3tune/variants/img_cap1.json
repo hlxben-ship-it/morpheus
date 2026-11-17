@@ -1,0 +1,18 @@
+{
+ "note": "1 ref pre-resized to short edge 1024",
+ "refs": [
+  "yukomo_p_1024.png"
+ ],
+ "ref": "img_base1",
+ "repeat": 2,
+ "name": "img_cap1",
+ "model": "h3img",
+ "python": "/root/venv10/bin/python",
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ }
+}

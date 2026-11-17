@@ -22,7 +22,7 @@ ns = {"var": var}
 for h in var.get("pre_hooks", []): exec(compile((HERE / h).read_text(), h, "exec"), ns)
 
 MODELS = {"int8": "minimax_h3_ref2va_hyperflow", "q4": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
-          "q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k", "fl2va_q4": "minimax_h3_fl2va_hyperflow_gguf_q4_k_m", "ltx": "ltx2_22B_dev_q6"}
+          "h3img": "minimax_h3_image_pruned", "q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k", "fl2va_q4": "minimax_h3_fl2va_hyperflow_gguf_q4_k_m", "ltx": "ltx2_22B_dev_q6"}
 clips = json.loads((HERE / "clips.json").read_text(encoding="utf-8"))
 clip, model = var.get("clip", "480s"), var.get("model", "int8")
 pic = str(HERE / "in" / "yukomo.jpg")
@@ -36,7 +36,13 @@ if model == "ltx":  # LTX 2.3 dev Q6 + distill LoRA, what morpheus.video_clip() 
                 "guidance_phases": 2, "force_fps": 24, "multi_prompts_gen_type": "FG", **clips[clip]}
     if var.get("end"): settings.update(image_prompt_type="SE", image_end=pic)
     var["sol"] = False
-if var.get("sol", True): settings.update({"overrides": "attention_mode='sol'", "attention_sparsity": 1.3})
+if model != "h3img" and var.get("sol", True): settings.update({"overrides": "attention_mode='sol'", "attention_sparsity": 1.3})
+if model == "h3img":  # H3-Image (seed h3_image_edit_speed): what image_playground.worker_job sends, refs from the variant
+    settings = {"model_type": "minimax_h3_image_pruned", "prompt": var.get("prompt", "Keep everything in <Picture 1> as it is, but she now wears a red knitted scarf and holds a steaming cup of tea."),
+                "resolution": "1664x2496", "num_inference_steps": 6, "guidance_scale": 1.0, "guidance_phases": 1, "sample_solver": "euler",
+                "batch_size": 1, "seed": 20261117, "image_mode": 1, "config": "distilled_4b", "video_prompt_type": "I",
+                "image_refs": [str(HERE / "in" / f) for f in var.get("refs", ["yukomo_p.png"])]}
+    if var.get("sol"): settings.update({"overrides": "attention_mode='sol'", "attention_sparsity": 1.3})
 settings.update(var.get("settings", {}))
 settings = {k: v for k, v in settings.items() if v is not None}
 cli = {"attention": "sdpa", "profile": 4, "preload": 14000, **var.get("cli", {})}
@@ -63,7 +69,7 @@ import torch, wgp
 t_init = time.time() - T0
 ns.update(session=session, wgp=wgp, torch=torch)
 for h in var.get("hooks", []): exec(compile((HERE / h).read_text(), h, "exec"), ns)
-if model != "ltx" and settings["video_length"] < 107: wgp.get_model_def(settings["model_type"])["frames_minimum"] = settings["video_length"]
+if model not in ("ltx", "h3img") and settings["video_length"] < 107: wgp.get_model_def(settings["model_type"])["frames_minimum"] = settings["video_length"]
 for k in ("save_path", "image_save_path", "audio_save_path"): wgp.server_config[k] = str(ROOT / "outputs")
 
 
@@ -106,11 +112,11 @@ ok = bool(jobs) and all(j["success"] for j in jobs) and not err
 q = {}
 if ok:
     import shutil
-    mp4 = out_dir / f"{name}.mp4"; shutil.copy(jobs[-1]["file"], mp4)
+    mp4 = out_dir / (f"{name}.png" if model == "h3img" else f"{name}.mp4"); shutil.copy(jobs[-1]["file"], mp4)
     try:
         sys.path.insert(0, str(HERE)); import quality
-        ref = OUTROOT / var["ref"] / f"{var['ref']}.mp4" if var.get("ref") else None
-        q = quality.check(mp4, out_dir / "strip.png", ref if ref and ref.exists() else None)
+        ref = OUTROOT / var["ref"] / f"{var['ref']}{mp4.suffix}" if var.get("ref") else None
+        q = quality.check_png(mp4, ref if ref and ref.exists() else None) if model == "h3img" else quality.check(mp4, out_dir / "strip.png", ref if ref and ref.exists() else None)
     except Exception as e:  # noqa: BLE001
         q = {"quality_error": str(e)}
 out["quality"] = q

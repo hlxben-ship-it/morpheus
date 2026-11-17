@@ -5258,7 +5258,7 @@
       const v = p.params[k], lab = `<span class="lab">${esc(s.label || k)}</span>`;
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
       if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
-      if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span></div>`;
+      if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
       return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
     };
     const ps = Object.entries(m.params || {});
@@ -5781,7 +5781,7 @@
       const v = p.params[k], lab = `<span class="lab">${esc(s.label || k)}</span>`;
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
       if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
-      if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span></div>`;
+      if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
       return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
     };
     const ps = Object.entries(m.params || {});
