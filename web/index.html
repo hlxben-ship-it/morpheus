@@ -803,7 +803,7 @@
   .pl-tl-clip.ins { overflow: visible; } .pl-tl-clip.ins img { border-radius: 7px; }
   .pl-tl-clip.dragging { opacity: .35; }
   .pl-rx-stage { position: relative; aspect-ratio: var(--ar, 16 / 9); max-height: 66vh; margin: 0 auto; background: #000; border-radius: 10px; overflow: hidden; cursor: pointer; }
-  .pl-rx-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; max-height: none; border-radius: 0; }
+  .pl-modal .pl-rx-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; max-height: none; border-radius: 0; }
   .pl-rx-stage video.on { opacity: 1; }
   .pl-rx-stage:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; max-height: none; margin: 0; border-radius: 0; }  /* else the page's 66vh cap leaves a band below */
   .pl-rx-bar { display: flex; gap: 3px; margin-top: 10px; }
@@ -922,6 +922,7 @@
   .pl-pe .pe-marks::-webkit-scrollbar, .pl-pe .pe-ta::-webkit-scrollbar { display: none; }
   .pl-pe .pe-marks { color: var(--text); pointer-events: none; overflow: hidden; }
   .pl-pe .pe-ta { color: transparent; caret-color: var(--text); background: transparent; resize: none; outline: 0; }
+  .pl-pe.pe-plain .pe-ta { color: var(--text); }  .pl-pe.pe-plain .pe-ta::selection { color: inherit; }  /* image playground: no marks mirror, so the text shows */
   .pl-pe .pe-ta::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
   .pe-marks .pe-sec { font-weight: 700; color: var(--accent); }
   .pe-marks .pe-lab { color: var(--accent); }
@@ -1579,6 +1580,18 @@
   $('menu').onclick = () => document.body.classList.toggle('side-open');
 
   // ---------- Thread ----------
+  // shelf viewers (video clips, image playground): ‹ › in the head + ←/→ step through the shelf in its strip order
+  function shelfNav(dlg, list, c, open) {
+    const i = list.indexOf(c), icons = dlg.querySelector('.pl-icons');
+    if (i < 0 || list.length < 2 || !icons) { dlg.onkeydown = null; return; }
+    icons.insertAdjacentHTML('afterbegin', `<button type="button" class="wake-open pl-ico" data-nav="-1" title="Previous (←)" aria-label="Previous" ${i === 0 ? 'disabled' : ''}>‹</button><button type="button" class="wake-open pl-ico" data-nav="1" title="Next (→)" aria-label="Next" ${i === list.length - 1 ? 'disabled' : ''}>›</button>`);
+    const go = d => { const n = list[i + d]; if (n) { dlg.close(); open(n); } };
+    icons.querySelectorAll('[data-nav]').forEach(b => { b.onclick = e => { e.stopPropagation(); go(+b.dataset.nav); }; });
+    dlg.onkeydown = e => {
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); go(e.key === 'ArrowLeft' ? -1 : 1); }
+    };
+  }
   const KIND = { manual: 'Manual', edit: 'Edit', swap: 'Guise' };
   // ---------- The composer belongs to a session ----------
   // Every session keeps its own draft: typed text and mode (saved with the sessions), and an attached picture
@@ -3929,12 +3942,14 @@
       return facts.length ? `<p class="pl-facts">${facts.join(' · ')}</p>` : '';
     };
     // delete a shelf clip (tile trash or the big player): the house dialog, then the shelf is read again
-    const deleteClip = async (c, before) => {
+    const deleteClip = async (c, before, after) => {
       if (!await ask({ title: 'Delete clip?', text: 'The video, its settings and its thumbnail are removed from disk and cannot be restored.', ok: 'Delete', danger: true, thumb: c.thumb ? url(c.thumb) : null })) return;
       try { await post('/api/playground/delete_clip', { id: c.playground, video: c.video }); }
       catch (err) { return alert(err.message); }
-      before?.(); wake.playClips = null; paintPlay();
+      before?.(); wake.playClips = null; await paintPlay(); after?.();
     };
+    // the clip next to c on the shelf (else the one before), reopened from the repainted shelf after a delete in the viewer
+    const reopenNear = (list, c, key, open) => { const i = list.indexOf(c), n = list[i + 1] || list[i - 1]; return n ? () => { const f = open.list()?.find(x => x[key] === n[key]); if (f) open.fn(f); } : null; };
     const openClip = c => {
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(c.label)}</h2>${clipFacts(c)}</div>
@@ -3951,6 +3966,7 @@
         </div>
         <video src="${esc(url(c.video))}" controls autoplay loop muted playsinline></video>${c.prompt ? `<div class="pl-cprompt"><p class="hint">${esc(c.prompt)}</p><button type="button" class="wake-open pl-ico" data-a="copy" title="Copy prompt" aria-label="Copy prompt">${ACT_ICON.copy}</button></div>` : ''}`;
       const v = dlg.querySelector('video');
+      shelfNav(dlg, shelf || [], c, openClip);
       dlg.onclose = () => v.pause();
       dlg.onclick = async e => {
         if (e.target === dlg) return dlg.close();
@@ -3989,7 +4005,7 @@
           dlg.close(); wake.playClips = null; paintPlay(); toast('Cut saved as a new clip');
         }
         if (a === 'up-go') { dlg.close(); plStart('/api/playground/upscale', { id: c.playground, video: c.video, method: up.method, factor: up.factor, engine: plEngine() }, 'Upscale'); }
-        if (a === 'del') deleteClip(c, () => dlg.close());
+        if (a === 'del') deleteClip(c, () => dlg.close(), reopenNear(shelf || [], c, 'video', { list: () => wake.playClips, fn: x => wake.plOpenClip?.(x) }));
       };
       // upscale panel: the size it makes and a rough time (spike, 720p→1080p 3 s: RelayVSR ≈ 2 min, SeedVR2 ≈ 15 min; grows with pixels)
       const up = { method: 'relayvsr', factor: 1.5 };
@@ -4034,6 +4050,7 @@
     const closeZoom = () => { clearTimeout(zoomWait); zoom?.remove(); zoom = null; };
     wake.plCloseZoom?.(); wake.plCloseZoom = closeZoom;
     $('pl-strip').onscroll = closeZoom;
+    wake.plOpenClip = openClip;  // the current paint's opener (reopenNear after a delete)
     const wireClip = (b, c) => {
       b.onclick = async e => {
         if (e.target.closest('.pl-del')) { e.stopPropagation(); closeZoom(); return deleteClip(c); }
@@ -4147,13 +4164,13 @@
       };
     }
     paintTl();
-    // play the timeline as one film: two <video>s, the next one preloaded and swapped in on "ended" (hard cuts)
+    // play the timeline as one film: two <video>s, the next one preloaded and swapped in on "ended" (joined: the follow-on clip skips its duplicate first frame)
     function playRemix(startAt) {
       const list = remixItems().filter(x => !x.missing);
       if (!list.length) return;
       const total = list.reduce((t, x) => t + (x.seconds || 0), 0);
       const dlg = $('pl-modal');
-      dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remix</h2><p class="pl-facts">${list.length} clips · ${fmtS(total)} · hard cuts</p></div>
+      dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remix</h2><p class="pl-facts">${list.length} clips · ${fmtS(total)} · joined</p></div>
           <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="restart" title="From the start" aria-label="From the start">↺</button><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span></div>
         <div class="pl-rx-stage" id="pl-rx-stage" title="Click: pause / play"><video muted playsinline preload="auto"></video><video muted playsinline preload="auto"></video></div>
         <div class="pl-rx-bar" role="group" aria-label="Remix clips">${list.map((x, i) => `<button type="button" data-i="${i}" style="flex-grow:${x.seconds || 1}" title="Clip ${i + 1}" aria-label="Jump to clip ${i + 1}"><b></b></button>`).join('')}</div>`;
@@ -4161,12 +4178,18 @@
       let k = 0, cur = 0;
       const load = (v, i) => { v.dataset.i = i; v.src = url(list[i].video); v.load(); };
       const mark = () => segs.forEach((b, i) => { b.classList.toggle('done', i < cur); if (i !== cur) b.firstChild.style.width = ''; });
-      const jump = i => {
+      // seamless join: clip N's last frame is usually clip N+1's first, so the follow-on clip starts one frame in
+      // (≈24 fps) and is pre-seeked there while the current one plays — no doubled frame, no black flash on the swap
+      const JOIN = 1 / 24;
+      const jump = (i, joined) => {
         cur = i;
         if (vs[k].dataset.i !== String(i)) load(vs[k], i);
         vs.forEach((v, j) => v.classList.toggle('on', j === k));
-        vs[k].currentTime = 0; vs[k].play().catch(() => {}); mark();
-        if (i + 1 < list.length && vs[1 - k].dataset.i !== String(i + 1)) load(vs[1 - k], i + 1);
+        const t = joined ? JOIN : 0;
+        if (Math.abs(vs[k].currentTime - t) > 0.001) vs[k].currentTime = t;
+        vs[k].play().catch(() => {}); mark();
+        const nx = vs[1 - k];
+        if (i + 1 < list.length && nx.dataset.i !== String(i + 1)) { load(nx, i + 1); nx.addEventListener('loadeddata', () => { nx.currentTime = JOIN; }, { once: true }); }
       };
       vs.forEach((v, j) => {
         v.onloadedmetadata = () => { if (j === k && v.videoWidth) stage.style.setProperty('--ar', `${v.videoWidth} / ${v.videoHeight}`); };
@@ -4174,7 +4197,7 @@
         v.onended = () => {
           if (j !== k) return;
           if (cur + 1 >= list.length) { segs[cur].classList.add('done'); return; }  // the end: ↺, a click or a segment plays again
-          k = 1 - k; jump(cur + 1);
+          k = 1 - k; jump(cur + 1, true);
         };
       });
       dlg.onclose = () => vs.forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
@@ -4303,7 +4326,7 @@
     const label = c => [c.model.replace(/\s*\(.*\)$/, ''), c.seed != null && `seed ${c.seed}`].filter(Boolean).join(' · ');
     const tile = (c, i) => `<button type="button" class="pl-clip" draggable="true" data-i="${i}" aria-label="${esc(label(c))}"><span class="pic"><img src="${esc(url(c.image))}" alt="" loading="lazy" draggable="false"><i class="pl-star${c.cover ? ' on' : ''}" role="button" tabindex="0" data-a="star" aria-label="${c.cover ? 'Unstar' : 'Star: cover of this playground'}" title="${c.cover ? 'Starred: the gallery shows this picture' : 'Star: show this picture in the gallery and first here'}">${c.cover ? '★' : '☆'}</i>${c.size ? `<em class="res">${esc(c.size.replace('x', '×'))}</em>` : ''}<i class="pl-del" role="button" tabindex="0" data-a="del" aria-label="Delete picture" title="Delete picture">${ACT_ICON.trash}</i></span><small>${esc(label(c))}</small></button>`;
     box.innerHTML = `<div class="pl-left">
-        <section class="pl-box"><div class="pl-prompt-head"><span class="pl-ph-left"><button type="button" class="sb-quiet pl-back" id="ipl-back" title="Back to the playgrounds" aria-label="Back to the playgrounds">←</button><label class="pl-l" for="ipl-prompt" style="margin:0">Prompt</label></span><span class="pl-ph-acts"><span class="sb-saved" id="ipl-saved" aria-live="polite"></span>${(m.prompt_default || '').trim() ? `<button type="button" class="sb-quiet pl-writer" id="ipl-defp" title="Put the model's default in front: ${esc(m.prompt_default.trim())}">+ Default</button>` : ''}</span></div>
+        <section class="pl-box"><div class="pl-prompt-head"><span class="pl-ph-left"><button type="button" class="sb-quiet pl-back" id="ipl-back" title="Back to the playgrounds" aria-label="Back to the playgrounds">←</button><label class="pl-l" for="ipl-prompt" style="margin:0">Prompt</label></span><span class="pl-ph-acts"><span class="sb-saved" id="ipl-saved" aria-live="polite"></span><button type="button" class="sb-quiet pl-writer" id="ipl-edit" title="Edit the prompt large">✎ Edit</button>${(m.prompt_default || '').trim() ? `<button type="button" class="sb-quiet pl-writer" id="ipl-defp" title="Put the model's default in front: ${esc(m.prompt_default.trim())}">+ Default</button>` : ''}</span></div>
           <textarea id="ipl-prompt" placeholder="${m.family === 'qwen_edit' ? 'What to change …' : 'What the picture shows …'}">${esc(p.prompt)}</textarea>
           ${m.negative ? `<label class="pl-l" for="ipl-neg">Negative</label><textarea id="ipl-neg" style="min-height:70px">${esc(p.negative)}</textarea>` : ''}</section>
         ${nIn ? `<section class="pl-box"><label class="pl-l">${esc(m.inputs.label)}</label><div class="ipl-ins">${Array.from({ length: nIn }, (_, i) => inSlot(i)).join('')}</div><input type="file" id="ipl-file" accept="image/png,image/jpeg,image/webp" hidden></section>` : ''}
@@ -4327,6 +4350,7 @@
       <div class="pl-prog ipl-wide" id="pl-prog"><i id="pl-bar"></i><span id="pl-prog-text">Ready.</span></div>
       <div class="pl-strip ipl-wide" id="ipl-shelf">${shelf.length ? shelf.map(tile).join('') : '<span class="empty">Your renders land here. Drag one onto an input slot to edit it further.</span>'}</div>
       <dialog class="wake-dialog pl-modal" id="ipl-view"></dialog>
+      <dialog class="wake-dialog pl-modal pl-pe pe-plain" id="ipl-pe"></dialog>
       <dialog class="wake-dialog pl-modal" id="pl-lpick"></dialog>`;
     const saved = t => $('ipl-saved').textContent = t;
     const body = () => ({ id: p.id, model: p.model, params: p.params, size: p.size, prompt: p.prompt, negative: p.negative, seed: p.seed ?? null, count: p.count, loras: p.loras.map(l => ({ id: l.id || '', strength: l.strength })) });
@@ -4335,6 +4359,20 @@
     const swap = async req => { try { wake.iplay = await post('/api/image_playground/save', { id: p.id, ...req }); paintIPlay(); } catch (e) { saved(e.message); } };
     $('ipl-back').onclick = () => showWake('local');
     $('ipl-prompt').oninput = e => { p.prompt = e.target.value; persist(); };
+    // big prompt editor, like the video Playground's ✎ Edit — plain text for now (no marks); typing here is typing in the prompt
+    $('ipl-edit').onclick = () => {
+      const dlg = $('ipl-pe');
+      dlg.innerHTML = `<div class="gal-head"><div class="pl-mtitle"><h2 class="h">Prompt</h2><p class="pl-facts">${esc(m.label || p.model || '')}</p></div>
+          <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="close" title="Close (Esc)" aria-label="Close">${ACT_ICON.close}</button></span></div>
+        <div class="pe-wrap"><textarea class="pe-ta" spellcheck="false" aria-label="Prompt" placeholder="${esc($('ipl-prompt').placeholder)}"></textarea></div>`;
+      const ta = dlg.querySelector('.pe-ta');
+      ta.value = p.prompt || '';
+      ta.oninput = () => { p.prompt = ta.value; $('ipl-prompt').value = ta.value; persist(); };
+      dlg.onclick = e => { if (e.target === dlg || e.target.closest('[data-a="close"]')) dlg.close(); };
+      dlg.onclose = () => { $('ipl-prompt').value = p.prompt || ''; };
+      dlg.showModal();
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.scrollTop = 0;
+    };
     if ($('ipl-defp')) $('ipl-defp').onclick = () => {  // the model's default prompt in front, once (not when it already starts with it)
       const d = m.prompt_default.trim().replace(/,\s*$/, ''), ta = $('ipl-prompt'), cur = ta.value.trim();
       if (cur.startsWith(d)) return toast('The prompt already starts with the default.');
@@ -4452,11 +4490,12 @@
     });
     if ($('ipl-file')) $('ipl-file').onchange = e => send(e.target.files[0]);
     // shelf: the video shelf's cards; a click opens the big view (the video player's layout), drag one onto an input slot
-    const deletePic = async (c, before) => {
+    const deletePic = async (c, before, after) => {
       if (!await ask({ title: 'Delete picture?', text: 'The picture and its settings are removed from disk and cannot be restored.', ok: 'Delete', danger: true, thumb: url(c.image) })) return;
       try { await post('/api/image_playground/delete_image', { id: p.id, image: c.image }); } catch (err) { return alert(err.message); }
-      before?.(); wake.iplayImgs = null; paintIPlay();
+      before?.(); wake.iplayImgs = null; await paintIPlay(); after?.();
     };
+    const reopenNear = (list, c, key, open) => { const i = list.indexOf(c), n = list[i + 1] || list[i - 1]; return n ? () => { const f = open.list()?.find(x => x[key] === n[key]); if (f) open.fn(f); } : null; };
     const view = c => {
       const dlg = $('ipl-view'), free = p.inputs.findIndex(x => !x);
       const facts = [fmtRun(c.render_seconds) && `Rendered in ${fmtRun(c.render_seconds)}`, c.seed != null && `Seed ${c.seed}`, c.size && c.size.replace('x', '×')].filter(Boolean);
@@ -4471,7 +4510,7 @@
           if (a === 'close') dlg.close();
           if (a === 'full') dlg.querySelector('.ipl-big').requestFullscreen?.();
           if (a === 'copy') { try { await navigator.clipboard.writeText(c.prompt); toast('Prompt copied'); } catch { toast('Could not copy', true); } }
-          if (a === 'del') deletePic(c, () => dlg.close());
+          if (a === 'del') deletePic(c, () => dlg.close(), reopenNear(shelf, c, 'image', { list: () => Array.isArray(wake.iplayImgs) ? wake.iplayImgs : [], fn: x => wake.iplView?.(x) }));
           if (a === 'star') { await post('/api/image_playground/star_image', { id: p.id, image: c.image, starred: !c.cover }); dlg.close(); wake.iplayImgs = null; paintIPlay(); }
           if (a === 'input') { const st = await post('/api/image_playground/use_as_input', { id: p.id, slot: free, image: c.image }); dlg.close(); took(st, free); }
           if (a === 'reuse') {
@@ -4481,8 +4520,10 @@
           }
         } catch (err) { toast(err.message, true); }
       };
+      shelfNav(dlg, shelf, c, view);
       dlg.showModal();
     };
+    wake.iplView = view;  // the current paint's opener (reopenNear after a delete)
     // hover: the card grows over the shelf like the video shelf's (fixed, ×2.4 upwards, same handlers); it closes when the
     // pointer leaves it, on a shelf scroll and on every repaint
     let zoom, zoomWait;
