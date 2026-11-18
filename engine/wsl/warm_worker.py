@@ -63,6 +63,8 @@ def main():
                              "--perc-reserved-mem-max", os.environ.get("WARM_PINNED", "0.05")])
     session._ensure_runtime()  # WanGP reads its flags when wgp is imported: importing it before init() dropped them all (until 2026-11-15)
     import wgp
+    from int8_choice import int8_kernels  # Triton instead of WanGP's auto (Comfy Kitchen HIP): -7 % H3-Image, -8 % int8 video
+    wgp.apply_int8_kernel_setting(int8_kernels(os.environ))
     from preload import preload_for  # H3-Image keeps part of its transformer in VRAM, everything else as WARM_PRELOAD says
     base_preload = int(wgp.args.preload)
     try:  # H3-Image: VAE latents of the references kept for the next jobs (same pixels = same latent, ~6.5 s per ref saved)

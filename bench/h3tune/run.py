@@ -26,6 +26,11 @@ MODELS = {"int8": "minimax_h3_ref2va_hyperflow", "q4": "minimax_h3_ref2va_hyperf
 clips = json.loads((HERE / "clips.json").read_text(encoding="utf-8"))
 clip, model = var.get("clip", "480s"), var.get("model", "int8")
 pic = str(HERE / "in" / "yukomo.jpg")
+REFSET = var.get("refset") == "ref"  # overnight master: the new reference shot (bench/reference/start_frame.png + reference_prompt.json)
+if REFSET:
+    pic = str(HERE / "in" / "ref_p1.png")
+    _vref = json.loads((HERE.parent.parent / "reference_prompt.json").read_text(encoding="utf-8"))["video"]["models"]
+    clips["_prompt"] = _vref[{"q4": "h3_gguf_q4", "q6": "h3_gguf_q6"}.get(model, "h3_minimax")]["prompt"]
 settings = {"model_type": MODELS[model], "prompt": clips["_prompt"], "image_prompt_type": "S", "image_start": pic,
             "image_refs": [pic], "video_prompt_type": "I", "seed": 20261112, "num_inference_steps": 4,
             "sample_solver": "euler", "guidance_scale": 1.0, "guidance_phases": 1, "force_fps": 24,

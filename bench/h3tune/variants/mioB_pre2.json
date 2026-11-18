@@ -1,0 +1,24 @@
+{
+ "name": "mioB_pre2",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "h3img",
+ "refs": [
+  "ref_p1.png",
+  "ref_p2.png"
+ ],
+ "prompt": "Keep everything in <Picture 1> as it is, but she now wears a cream knitted wool cardigan loosely over the romper.",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ },
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "repeat": 2,
+ "ref": "ri_pre2",
+ "env": {
+  "MIOPEN_FIND_MODE": "NORMAL"
+ },
+ "note": "Q2 MIOpen tuned user db"
+}

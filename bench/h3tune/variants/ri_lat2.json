@@ -1,0 +1,26 @@
+{
+ "name": "ri_lat2",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "h3img",
+ "refs": [
+  "ref_p1.png",
+  "ref_p2.png"
+ ],
+ "prompts": [
+  "Keep everything in <Picture 1> as it is, but she now wears a cream knitted wool cardigan loosely over the romper.",
+  "Keep everything in <Picture 1> as it is, but she now wears a cream knitted wool cardigan loosely over the romper.",
+  "Keep everything in <Picture 1> as it is, but she now wears the necklaces from <Picture 2> and holds a clear umbrella."
+ ],
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ },
+ "hooks": [
+  "hooks/ref_latents.py",
+  "hooks/prep_timing.py"
+ ],
+ "repeat": 3,
+ "ref": "ri_pre2",
+ "note": "night 1 reference: 2 refs, ref latent cache; job 3 new prompt"
+}

@@ -1,0 +1,20 @@
+{
+ "name": "fa_q4",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q4",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0,
+  "attention": "flash"
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py"
+ ],
+ "repeat": 2,
+ "note": "Q3 flash_attn for the exact (non-Sol) attention",
+ "ref": "rv_q4"
+}

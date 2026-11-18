@@ -1,0 +1,19 @@
+{
+ "name": "ri_pre1",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "h3img",
+ "refs": [
+  "ref_p1.png"
+ ],
+ "prompt": "Keep everything in <Picture 1> as it is, but she now wears a cream knitted wool cardigan loosely over the romper.",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 14000
+ },
+ "hooks": [
+  "hooks/timing.py"
+ ],
+ "repeat": 2,
+ "note": "night 1 reference: 1 ref (start_frame), preload"
+}

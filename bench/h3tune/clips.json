@@ -1,8 +1,27 @@
 {
  "_prompt": "For the target video, at 0.00 seconds into the target video, Picture 1 (from Shot 1) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] High-angle shot, anime manga style. A woman with long silver-white hair with a red streak and a long braid, gold and black fantasy armor with red gems, in a sunlit forest, dances with a slow sensual twist of her hips and shoulders, turning her body side to side, hair swinging. She looks up at the camera with a seductive half-lidded gaze and parted lips, then raises one hand and touches her fingertips to her lower lip. Her outfit, face and hair stay exactly the same.\n\noverall_soundscape: Soft forest ambience, rustling leaves, faint clink of armor, a soft breathy sigh.\n\nnon_diegetic_music: N/A",
- "ltx2s": {"resolution": "512x896",   "video_length": 49},
- "480s":  {"resolution": "896x512",   "video_length": 73},
- "720s":  {"resolution": "1280x704",  "video_length": 73},
- "720l":  {"resolution": "1280x704",  "video_length": 124},
- "1080s": {"resolution": "1920x1088", "video_length": 73}
+ "ltx2s": {
+  "resolution": "512x896",
+  "video_length": 49
+ },
+ "480s": {
+  "resolution": "896x512",
+  "video_length": 73
+ },
+ "720s": {
+  "resolution": "1280x704",
+  "video_length": 73
+ },
+ "720l": {
+  "resolution": "1280x704",
+  "video_length": 124
+ },
+ "1080s": {
+  "resolution": "1920x1088",
+  "video_length": 73
+ },
+ "ref720": {
+  "resolution": "960x1280",
+  "video_length": 121
+ }
 }

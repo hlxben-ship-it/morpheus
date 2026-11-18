@@ -1,0 +1,21 @@
+{
+ "name": "i8tri_q4",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q4",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "Q5 int8 backend = triton on q4 (VAE + text encoder are int8)",
+ "ref": "rv_q4",
+ "int8_kernels": "triton"
+}

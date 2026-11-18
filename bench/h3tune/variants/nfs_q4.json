@@ -1,0 +1,22 @@
+{
+ "name": "nfs_q4",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q4",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py"
+ ],
+ "repeat": 1,
+ "ref": "rv_q4",
+ "settings": {
+  "seed": 20261113
+ },
+ "note": "Q7 scale: other render seed vs rv_q4 (what 'different' looks like)"
+}

@@ -1,0 +1,19 @@
+{
+ "name": "nf_q4",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q4",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py"
+ ],
+ "repeat": 1,
+ "ref": "rv_q4",
+ "note": "Q7 noise floor: identical rerun of rv_q4 (fresh process)"
+}

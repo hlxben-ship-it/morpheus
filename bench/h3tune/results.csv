@@ -114,3 +114,36 @@ time,name,model,clip,ok,total,load,text,denoise,s_step,decode,warm_total,rss,ava
 11-17 19:06,img_prep2,h3img,480s,True,167.7,5.4,21.5,130.7,18.8,10.0,140.2,22.7,18.6,0.0,15.2,,458.9,,,"2 refs, preload: split of the pre-denoise phase; job 3 = new prompt, same refs"
 11-17 19:34,img_lat2,h3img,480s,True,151.0,4.8,22.9,118.7,16.8,4.6,121.4,22.7,18.6,0.0,15.2,1.0,1.0,,img_prep2,"2 refs, preload, ref latent cache; job 3 new prompt"
 11-17 19:37,img_cold1,h3img,480s,True,98.4,5.3,17.6,72.2,9.8,3.2,,22.7,19.1,0.0,14.6,,457.8,,,cold probe 1 ref
+11-18 00:50,rv_q4,q4,ref720,True,237.9,7.3,12.9,190.5,47.8,27.2,219.7,20.5,17.3,0.0,5.4,,760.4,7.36,,"night 1 reference: new shot (start_frame + reference_prompt), fast stack"
+11-18 00:59,rv_int8,int8,ref720,True,271.2,7.3,13.1,219.9,54.3,30.9,249.9,22.7,17.5,0.0,7.0,,533.0,11.04,,"night 1 reference: new shot (start_frame + reference_prompt), fast stack"
+11-18 01:07,rv_q6,q6,ref720,True,241.5,8.1,11.9,192.2,48.1,29.2,223.6,22.6,17.6,0.0,5.3,,690.1,6.57,,"night 1 reference: new shot (start_frame + reference_prompt), fast stack"
+11-18 01:11,ri_pre1,h3img,480s,True,94.5,5.5,15.2,71.5,10.1,2.3,76.4,22.7,18.9,0.0,14.6,,634.2,,,"night 1 reference: 1 ref (start_frame), preload"
+11-18 01:16,ri_pre2,h3img,480s,True,146.9,6.5,20.8,117.1,18.2,2.4,127.5,22.6,18.7,0.0,15.0,,708.8,,,"night 1 reference: 2 refs, preload"
+11-18 01:22,ri_lat2,h3img,480s,True,140.3,6.3,20.8,110.6,17.3,2.7,114.4,22.8,18.7,0.0,15.0,0.297,1.49,,ri_pre2,"night 1 reference: 2 refs, ref latent cache; job 3 new prompt"
+11-18 01:27,nf_q4,q4,ref720,True,240.1,7.9,14.1,191.3,48.5,26.8,,20.4,17.4,0.0,5.4,1.0,1.0,1.0,rv_q4,Q7 noise floor: identical rerun of rv_q4 (fresh process)
+11-18 01:31,nfs_q4,q4,ref720,True,242.1,8.5,12.1,193.4,48.8,28.2,,20.4,17.5,0.0,5.4,0.273,0.51,0.42,rv_q4,Q7 scale: other render seed vs rv_q4 (what 'different' looks like)
+11-18 01:34,nf_pre2,h3img,480s,True,145.2,5.7,21.1,116.2,18.2,2.3,,22.7,19.1,0.0,15.0,1.0,1.0,,ri_pre2,Q7 noise floor image: identical rerun of ri_pre2
+11-18 02:41,tunA_q4,q4,ref720,True,1690.1,7.8,12.9,1635.6,47.3,33.8,,21.3,16.6,0.0,6.3,0.693,0.98,1.06,rv_q4,"Q1 TunableOp+hipBLASLt (tuning) - capped: 5 iters, 1 warmup, 20 ms (uncapped: >30 min on step 1)"
+11-18 02:49,tunB_q4,q4,ref720,True,240.9,8.3,12.6,191.9,47.3,28.1,218.4,20.6,17.3,0.0,5.4,0.693,0.98,1.06,rv_q4,Q1 TunableOp+hipBLASLt (tuned csv)
+11-18 02:56,tunA_pre2,h3img,480s,True,392.8,6.6,45.7,324.7,17.8,15.8,,22.7,18.6,0.0,14.8,0.785,0.967,,ri_pre2,"Q1 TunableOp+hipBLASLt (tuning) - capped: 5 iters, 1 warmup, 20 ms (uncapped: >30 min on step 1)"
+11-18 03:01,tunB_pre2,h3img,480s,True,147.3,6.0,22.1,116.3,17.8,2.9,127.4,22.6,18.6,0.0,15.0,0.785,0.967,,ri_pre2,Q1 TunableOp+hipBLASLt (tuned csv)
+11-18 03:10,mioA_q4,q4,ref720,True,270.1,8.0,14.1,191.7,48.9,56.4,221.2,20.9,17.4,0.0,5.4,1.0,1.0,1.0,rv_q4,Q2 MIOpen search+db update
+11-18 03:18,mioB_q4,q4,ref720,True,247.9,7.3,13.1,191.8,47.8,35.7,221.7,20.5,17.3,0.0,5.4,1.0,1.0,1.0,rv_q4,Q2 MIOpen tuned user db
+11-18 03:23,mioA_pre2,h3img,480s,True,149.2,5.8,25.6,115.4,17.1,2.4,127.4,22.7,18.7,0.0,15.0,1.0,1.0,,ri_pre2,Q2 MIOpen search+db update
+11-18 03:28,mioB_pre2,h3img,480s,True,147.1,5.8,22.1,116.9,17.2,2.3,127.6,22.6,18.7,0.0,15.0,1.0,1.0,,ri_pre2,Q2 MIOpen tuned user db
+11-18 03:35,fa_pre2,h3img,480s,True,200.7,6.2,24.8,165.2,25.9,4.5,175.4,22.7,18.8,0.0,15.0,0.763,0.968,,ri_pre2,Q3 flash_attn 2.8.4 (Triton AMD) instead of SDPA
+11-18 03:39,fa_pre1,h3img,480s,True,118.2,6.3,17.1,90.1,12.9,4.8,95.4,22.7,18.9,0.0,14.6,0.948,1.013,,ri_pre1,Q3 flash_attn 2.8.4 (Triton AMD) instead of SDPA
+11-18 03:47,fa_q4,q4,ref720,True,241.0,7.9,14.1,191.1,48.8,27.9,220.9,20.5,17.4,0.0,5.4,1.0,1.0,1.0,rv_q4,Q3 flash_attn for the exact (non-Sol) attention
+11-18 07:54,fs_pre2,h3img,480s,False,21.6,5.1,-5.1,21.6,,0.0,13.9,5.7,19.2,0.0,1.3,,,,ri_pre2,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V ERR ""The generation has encountered an error (TypeError in aiter_sage.py:19 _sage_sdpa): 'fav3_sage_wrapper_func() got an unexpected keyword argument 'v_dtype''. The full traceback is in the WanGP console"
+11-18 07:54,fs_pre1,h3img,480s,False,17.2,6.3,-6.3,17.2,,0.0,6.9,5.6,19.3,0.0,1.3,,,,ri_pre1,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V ERR ""The generation has encountered an error (TypeError in aiter_sage.py:19 _sage_sdpa): 'fav3_sage_wrapper_func() got an unexpected keyword argument 'v_dtype''. The full traceback is in the WanGP console"
+11-18 08:01,fs_pre2,h3img,480s,True,155.4,5.2,22.2,120.8,16.9,7.2,129.6,22.7,18.6,0.0,15.4,0.803,0.964,,ri_pre2,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V"
+11-18 08:04,fs_pre1,h3img,480s,True,98.4,5.8,14.6,75.4,10.0,2.6,76.5,22.6,18.8,0.0,14.7,0.913,0.961,,ri_pre1,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V"
+11-18 08:06,fs_dbg1,h3img,480s,True,92.8,5.4,13.8,70.5,9.9,3.0,,22.5,19.1,0.0,14.7,0.913,0.961,,ri_pre1,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V"
+11-18 08:09,fs_dbg1,h3img,480s,True,93.4,6.0,13.8,69.9,10.0,3.6,,22.7,19.0,0.0,14.7,0.913,0.961,,ri_pre1,"Q6 aiter fav3_sage upstream ca7cfa1, gfx1100 table, FP16 V"
+11-18 08:18,fs_q4,q4,ref720,True,250.9,8.6,13.4,197.7,48.2,31.2,225.7,20.6,17.3,0.0,6.8,0.682,0.98,0.99,rv_q4,Q6 aiter fav3_sage for the exact (non-Sol) attention blocks
+11-18 09:12,i8tri_pre2,h3img,480s,True,137.7,5.2,20.9,109.0,15.0,2.5,119.1,22.7,18.7,0.0,15.7,0.746,0.981,,ri_pre2,Q5 int8 backend = triton (auto = Comfy Kitchen HIP)
+11-18 09:17,i8pt_pre2,h3img,480s,True,144.8,5.6,19.3,117.1,18.6,2.8,127.4,22.6,18.7,0.0,15.4,0.746,0.968,,ri_pre2,Q5 int8 backend = disabled (auto = Comfy Kitchen HIP)
+11-18 09:22,i8wgp_pre2,h3img,480s,True,143.8,5.0,21.4,114.9,18.5,2.4,127.6,22.6,18.7,0.0,15.0,1.0,1.0,,ri_pre2,Q5 int8 backend = wgpkernels (auto = Comfy Kitchen HIP)
+11-18 09:31,i8tri_int8,int8,ref720,True,247.4,7.2,13.6,203.4,51.8,23.2,228.9,22.7,17.4,0.0,6.0,0.76,1.01,1.03,rv_int8,Q5 int8 backend = triton (auto = Comfy Kitchen HIP)
+11-18 09:39,i8pt_int8,int8,ref720,True,245.6,7.7,14.1,199.3,48.9,24.5,228.1,22.7,17.5,0.0,6.2,0.757,1.01,1.01,rv_int8,Q5 int8 backend = disabled (auto = Comfy Kitchen HIP)
+11-18 09:48,i8tri_q4,q4,ref720,True,238.0,6.8,14.0,193.1,48.2,24.2,220.8,20.5,17.3,0.0,5.4,0.729,1.01,1.02,rv_q4,Q5 int8 backend = triton on q4 (VAE + text encoder are int8)

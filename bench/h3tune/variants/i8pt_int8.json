@@ -1,0 +1,21 @@
+{
+ "name": "i8pt_int8",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "int8",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "Q5 int8 backend = disabled (auto = Comfy Kitchen HIP)",
+ "ref": "rv_int8",
+ "int8_kernels": "disabled"
+}

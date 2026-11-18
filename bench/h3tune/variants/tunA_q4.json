@@ -1,0 +1,28 @@
+{
+ "name": "tunA_q4",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q4",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py"
+ ],
+ "repeat": 1,
+ "ref": "rv_q4",
+ "env": {
+  "PYTORCH_TUNABLEOP_ENABLED": "1",
+  "TORCH_BLAS_PREFER_HIPBLASLT": "1",
+  "PYTORCH_TUNABLEOP_FILENAME": "/root/tunableop/q4_%d.csv",
+  "PYTORCH_TUNABLEOP_TUNING": "1",
+  "PYTORCH_TUNABLEOP_MAX_TUNING_ITERATIONS": "5",
+  "PYTORCH_TUNABLEOP_MAX_WARMUP_ITERATIONS": "1",
+  "PYTORCH_TUNABLEOP_MAX_TUNING_DURATION_MS": "20"
+ },
+ "note": "Q1 TunableOp+hipBLASLt (tuning) - capped: 5 iters, 1 warmup, 20 ms (uncapped: >30 min on step 1)"
+}
