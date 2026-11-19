@@ -1371,6 +1371,28 @@
   .model-cat summary { cursor: pointer; font-weight: 600; padding: 6px 2px; }
   .model-cat .model { margin-bottom: 6px; }
   .model-family { margin: 8px 2px 4px; font-size: .8em; opacity: .65; }
+  /* Phone (seed studio_iphone): only ≤640px — the desktop layout never sees these rules */
+  @media (max-width: 640px) {
+    .top { min-width: 0; }
+    .brand .word, .brand small { display: none; }
+    .forge { flex: 1 1 auto; min-width: 0; margin-left: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+    .forge::-webkit-scrollbar { display: none; }
+    .forge button { flex: 0 0 auto; padding: 5px 9px; }
+    .top-actions { flex: 0 0 auto; margin-left: 0; }
+    #wake.st-on { padding-left: 8px; padding-right: 8px; }
+    .st-bar { flex-wrap: wrap; gap: 6px; }
+    .st-tools { flex: 1 1 100%; flex-wrap: wrap; }
+    .st-run { flex: 1 1 100%; }
+    .st-doc b { max-width: 46vw; }
+    .st-name-in { width: 60vw; }
+    #wake :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea), .st-name-in { font-size: 16px !important; }  /* iOS zooms into fields under 16px */
+  }
+  @media (max-width: 999px) {  /* below the desktop grid the shelf is a sideways strip: the column must not grow to its full length */
+    .st-shelfcol { min-width: 0; max-width: 100%; }
+    .st-shelfcol > #pl-strip { overflow-x: auto; overscroll-behavior-x: contain; }
+    .st-peek { aspect-ratio: auto; height: min(100vw, 55vh); }
+  }
+  @media (hover: none) { .pl-clip .st-prev.on { opacity: 1; } }  /* no hover on touch: ⛶ always visible */
 </style>
 </head>
 <body>
@@ -2995,6 +3017,8 @@
     if (f !== 'settings' && (wake.play || wake.iplay)) wake.loraLib = null;  // the Playground re-reads the library on its next paint
     $('wake').hidden = !sbF;
     document.querySelectorAll('.forge button').forEach(b => b.setAttribute('aria-selected', b.dataset.f === f));
+    { const fb = document.querySelector('.forge'), sb = fb.querySelector('[aria-selected="true"]');  // phone: the nav scrolls — keep the current one in view
+      if (sb && fb.scrollWidth > fb.clientWidth) fb.scrollLeft += sb.getBoundingClientRect().left - fb.getBoundingClientRect().left - (fb.clientWidth - sb.offsetWidth) / 2; }
     if (f === 'soul') { state.view = 'thread'; document.querySelector('.composer').hidden = false; loadAgents(); }
     else $('input').placeholder = 'Describe what you want to see …';
     renderThread();
