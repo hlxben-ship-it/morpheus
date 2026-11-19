@@ -1,5 +1,5 @@
 {
-  "_doc": "Image Playground models (Glia seed image_playground). Read on every request, checked by image_models.py. A param is a range {min,max,step?,default}, a choice {choices:[...],default}, a checkbox {toggle:true,default:true|false,note?} or fixed {default,fixed:true}. 'advanced': true puts it in the collapsed Advanced block. Sizes are WxH strings; the first is the default.",
+  "_doc": "Image Playground models (Glia seed image_playground). Read on every request, checked by image_models.py. A param is a range {min,max,step?,default}, a choice {choices:[...],default}, a checkbox {toggle:true,default:true|false,note?} or fixed {default,fixed:true}. 'advanced': true puts it in the collapsed Advanced block. Sizes are WxH strings; the first is the default. 'helper' (e.g. \"resharpen\") puts a model in the Studio's Helpers group; its size follows the input picture.",
   "models": [
     {
       "id": "janku_v5",
@@ -81,6 +81,28 @@
         "sampler": {"label": "Sampler", "choices": ["er_sde", "euler"], "default": "er_sde"},
         "scheduler": {"label": "Scheduler", "choices": ["beta", "simple"], "default": "beta"},
         "ref_scale": {"label": "Reference size (smaller = faster, may cost detail)", "choices": [1, 0.75, 0.5], "labels": {"1": "100 %", "0.75": "75 %", "0.5": "50 %"}, "default": 0.75, "needs_input": true, "advanced": true}
+      }
+    },
+    {
+      "id": "muse_resharpen",
+      "label": "Resharpen",
+      "helper": "resharpen",
+      "note": "Helper: makes an unsharp picture (e.g. a video's last frame) sharp again. Max = H3-Image edit (~3-4 min, sharpest, keeps the frame). Cheap = Muse V4 img2img (~2 min; Strength + Size apply only here). Swap only = no redraw, seconds. A persona picture in slot 2 swaps its face back in at the end (HyperSwap premium).",
+      "family": "krea2",
+      "checkpoint": "muse_v4_q4_0.gguf",
+      "inputs": {"min": 1, "max": 2, "label": "1 = picture to resharpen, 2 = persona (optional)"},
+      "negative": false,
+      "max_count": 4,
+      "prompt_default": "sharp, detailed photo",
+      "negative_default": "",
+      "sizes": ["1024x1024"],
+      "params": {
+        "mode": {"label": "Mode", "choices": ["max", "cheap", "swap"], "labels": {"max": "Max (H3 edit)", "cheap": "Cheap (Muse)", "swap": "Swap only"}, "default": "max"},
+        "steps": {"label": "Steps (Cheap)", "min": 4, "max": 30, "default": 12, "note": "Denoising passes, all of them run: they are spread over the last Strength-share of the noise schedule (like ComfyUI's KSampler denoise). More steps = finer, cleaner redraw; time grows linearly. Below ~8 the detail gets mushy; above ~20 barely changes anything."},
+        "strength": {"label": "Strength (Cheap; low = keep the picture)", "min": 0.05, "max": 0.6, "step": 0.05, "default": 0.3, "note": "How much noise goes onto the picture before the redraw. 0.1–0.2 = only sharpens edges, the picture stays as it is; 0.3 = new skin/hair detail; 0.45+ = faces, hands and clothes start to change."},
+        "scale": {"label": "Size (Cheap)", "choices": [1, 2], "labels": {"1": "1x", "2": "2x"}, "default": 1, "note": "2x enlarges the picture first and redraws at double size: much more fine detail, about 4x the time and VRAM."},
+        "sampler": {"label": "Sampler", "choices": ["er_sde", "euler"], "default": "er_sde", "advanced": true, "note": "er_sde = a bit of fresh noise per step, crisper texture. euler = deterministic, smoother, softer."},
+        "scheduler": {"label": "Scheduler", "choices": ["beta", "simple"], "default": "beta", "advanced": true, "note": "How the noise is spread over the steps. beta spends more steps on the fine detail at the end; simple is evenly spread."}
       }
     }
   ]

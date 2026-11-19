@@ -524,6 +524,19 @@ SWAPS: dict[str, dict] = {}
 UPLOADS = Path(tempfile.gettempdir()) / "morpheus-uploads"
 
 
+def swap_picture(persona: Path, picture: Path) -> None:
+    """HyperSwap premium of the persona's face onto one still, in place (faceswap.py --image; Resharpen helper)."""
+    if not FACESWAP_PY.is_file():
+        raise ValueError("Face swap is not installed (.venv-faceswap is missing, see README).")
+    with gpu:
+        p = subprocess.run([str(FACESWAP_PY), "-I", str(morpheus.ROOT / "faceswap.py"), str(persona), str(picture), str(picture),
+                            "--image", "--quality", "premium"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if p.returncode != 0:
+        msg = next((l.removeprefix("error: ") for l in p.stderr.splitlines() if l.startswith("error: ")), None)
+        raise RuntimeError(msg or "The face swap stopped: " + (p.stderr.strip().splitlines() or ["?"])[-1][:300])
+
+
 def faceswap_job(job: dict, photo: bytes, video: Path, quality: str, enhance: bool, hair: bool, ghost: bool,
                  span: tuple[float, float] | None = None, upscale: int = 1) -> None:
     t0 = time.time()
@@ -1759,9 +1772,20 @@ class Handler(BaseHTTPRequestHandler):
         src = studio.run_source(play_id)  # Studio: which tile was run (None for other playgrounds)
         job = req.get("_job", {})
         job["count"] = snap["count"]
-        out = self.engine_job(job, image_playground.worker_job(play_id, snap), snap["total_steps"], engine=str(req.get("engine") or "wsl10"))
+        work, t0 = image_playground.worker_job(play_id, snap), time.time()
+        if work is None:  # Resharpen "Swap only": no redraw, the picture itself gets the persona's face
+            tmp = Path(tempfile.mkdtemp(prefix="morpheus-swap-")) / "picture.png"
+            shutil.copyfile(playground.folder(play_id) / snap["inputs"][0], tmp)
+            out = {"files": [str(tmp)], "seeds": [snap["seed"]]}
+        else:
+            out = self.engine_job(job, work, snap["total_steps"], engine=str(req.get("engine") or "wsl10"))
         files = out.get("files") or [out["file"]]
-        metas = image_playground.add_images(play_id, files, out.get("seeds") or [], snap, seconds=out.get("seconds"))
+        if snap.get("persona"):  # Resharpen with a persona: her face goes back onto every result (seed muse_resharpen stage 2)
+            persona = playground.folder(play_id) / snap["persona"]
+            for f in files:
+                swap_picture(persona, Path(f))
+        metas = image_playground.add_images(play_id, files, out.get("seeds") or [], snap,
+                                             seconds=out.get("seconds") if work is not None and not snap.get("persona") else round(time.time() - t0))
         studio.rendered(play_id, src, [m["image"] for m in metas])
         return {"images": metas, "state": image_playground.load(play_id)}
 

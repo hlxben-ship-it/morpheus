@@ -31,7 +31,8 @@ VISION = "<|vision_start|><|image_pad|><|vision_end|>"
 IM_START, USER, NEWLINE = 151644, 872, 198
 GROUNDING_PX = 768
 SHIFT = 1.15
-MAX_REFS = 2   # the edit LoRAs are trained on scene (picture 1) + person (picture 2)
+MAX_REFS = 2
+RESHARPEN_MAX_PX = 2048 * 2048  # Muse Resharpen (Glia seed muse_resharpen): the output cap; a bigger 2x is scaled down to fit   # the edit LoRAs are trained on scene (picture 1) + person (picture 2)
 DIT_GPU_GB = 10
 CROP_TOL = 0.08
 KEEP_TE = True   # keep the encoder in RAM between prompts (a new prompt cost ~80 s of disk read otherwise)
@@ -379,6 +380,15 @@ class Loras:
 
 # ---------------------------------------------------------------- references (krea2edit "fit" pixel path)
 
+def resharpen_size(iw, ih, scale):
+    """Output size of a resharpen: the picture x scale, at most RESHARPEN_MAX_PX, multiples of 16 (Glia seed muse_resharpen)."""
+    w, h = iw * scale, ih * scale
+    if w * h > RESHARPEN_MAX_PX:
+        f = (RESHARPEN_MAX_PX / (w * h)) ** 0.5
+        w, h = w * f, h * f
+    return max(16, int(w) // 16 * 16), max(16, int(h) // 16 * 16)
+
+
 def fit_pixels(iw, ih, px_w, px_h):
     """krea2edit _fit_encode_image(fit): the crop box (x0, y0, cw, ch) of the source and the size (nw, nh) it is resampled to."""
     sc = min(px_h / ih, px_w / iw)
@@ -559,11 +569,21 @@ class Krea2:
 
     @torch.no_grad()
     def generate(self, p, emit, stopped):
-        """p: prompt, negative, width, height, seed, steps, cfg, sampler, scheduler, images [paths] (0-2), loras."""
+        """p: prompt, negative, width, height, seed, steps, cfg, sampler, scheduler, images [paths] (0-2), loras;
+        init (path) + strength + scale: Muse Resharpen redraws that picture instead (size follows it)."""
         import os
         self.set_loras(p.get("loras") or [])
         w, h = int(p["width"]) // 16 * 16, int(p["height"]) // 16 * 16
         paths = list(p.get("images") or [])[:MAX_REFS]
+        init = None
+        if p.get("init"):  # Muse Resharpen: redraw this picture (bicubic x scale, VAE-encoded, cut schedule); no references
+            import numpy as np
+            from PIL import Image
+            img = Image.open(p["init"]).convert("RGB")
+            w, h = resharpen_size(img.width, img.height, float(p.get("scale") or 1))
+            t = torch.from_numpy(np.asarray(img, dtype=np.float32) / 255.0).permute(2, 0, 1)[None]
+            t = F.interpolate(t, size=(h, w), mode="bicubic", antialias=True).clamp(0, 1)
+            init, paths = self.vae_encode(t), []
         cfg = float(p.get("cfg") or 1.0)
         key = (p["prompt"], p.get("negative") or "", cfg != 1.0, tuple((x, os.path.getmtime(x)) for x in paths))
         ground = [self.grounding(x) for x in paths]
@@ -596,9 +616,10 @@ class Krea2:
                 v = _cfg(v, velocity(xp, sigma, uncond), cfg)
             return unpack(xp - v * sigma.view(-1, 1, 1), lh, lw)
 
-        sig = sampling.sigmas_for(self.ms, p.get("scheduler") or "simple", int(p["steps"])).to(common.DEVICE)
+        strength = float(p.get("strength") or 1.0) if init is not None else 1.0
+        sig = sampling.sigmas_for(self.ms, p.get("scheduler") or "simple", int(p["steps"]), strength).to(common.DEVICE)
         noise = sampling.initial_noise([1, 16, lh, lw], int(p["seed"])).to(common.DEVICE)
-        x = sampling.noise_scaling("flow", sig[0], noise, torch.zeros_like(noise), True)
+        x = sampling.noise_scaling("flow", sig[0], noise, init if init is not None else torch.zeros_like(noise), True)
         x = sampling.sample(p.get("sampler") or "euler", denoise, x, sig, "flow", int(p["seed"]), stopped=stopped, ms=self.ms,
                             eta=float(p.get("eta", 1.0)), callback=lambda i, n, x0: emit(i, n, x0[0] * self.std[0, :, 0] + self.mean[0, :, 0]))
         lat = (x.unsqueeze(2) * self.std + self.mean).to(torch.bfloat16)

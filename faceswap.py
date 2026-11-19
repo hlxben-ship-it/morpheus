@@ -408,8 +408,29 @@ def main(photo, video, out, quality="fast", enhance=True, hair=False, start=0.0,
     print(f"done {i} {missed} {time.time() - t0:.1f}", flush=True)
 
 
+def swap_image(photo, target, out, quality="premium"):
+    """One still (seed muse_resharpen stage 2): HyperSwap + GPEN onto the largest face, no video round trip, no smoothing."""
+    app = FaceAnalysis(name="buffalo_l", root=MODELS, providers=PROVIDERS, allowed_modules=["detection", "recognition"])
+    app.prepare(ctx_id=0, det_size=(640, 640))
+    src, img = cv2.imread(photo), cv2.imread(target)
+    if src is None or img is None:
+        sys.exit("error: a picture can't be read.")
+    faces, targets = app.get(src), app.get(img)
+    if not faces:
+        sys.exit("error: no face found in the persona picture.")
+    if not targets:
+        sys.exit("error: no face found in the picture to resharpen.")
+    high = HighQuality(max(faces, key=area), True, 1024 if quality == "premium" else 512)
+    cv2.imwrite(out, high(img, max(targets, key=area).kps))
+    print("done 1 0 0", flush=True)
+
+
 if __name__ == "__main__":
     opt = lambda name, default: sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default
+    if "--image" in sys.argv:  # python faceswap.py <photo> <picture> <out.png> --image [--quality high|premium]
+        a = [x for x in sys.argv[1:] if not x.startswith("--") and x != opt("--quality", None)]
+        swap_image(*a[:3], quality=opt("--quality", "premium"))
+        sys.exit(0)
     values = {opt(n, None) for n in ("--quality", "--start", "--end", "--upscale")}
     args = [a for a in sys.argv[1:] if not a.startswith("--") and a not in values]
     end = opt("--end", None)

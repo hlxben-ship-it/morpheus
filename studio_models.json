@@ -26,6 +26,7 @@
                  "references": {"label": "Start image (img2img)", "main": true, "slots": 0}},
     "qwen_edit_2511": {"prompt": {"negative": true}, "references": {"label": "Pictures (main = the one edited)", "main": true, "slots": 2}},
     "h3_image": {"references": {"label": "References (<Picture 1>…<Picture 4>)", "main": true, "slots": 3}},
-    "muse_krea2": {"prompt": {"negative": true}, "references": {"label": "References (main = scene, 2 = person)", "main": true, "slots": 1}}
+    "muse_krea2": {"prompt": {"negative": true}, "references": {"label": "References (main = scene, 2 = person)", "main": true, "slots": 1}},
+    "muse_resharpen": {"prompt": {"default": ""}, "references": {"label": "Picture to resharpen + persona (optional)", "main": true, "slots": 1}, "loras": {"slots": 0}}
   }
 }

@@ -268,4 +268,26 @@ def rename(req: dict) -> dict:
     return info({"id": play_id})
 
 
-ACTIONS = {"new": new, "side": side, "picture_frame": picture_frame, "open": open_tile, "back": back, "info": info, "rename": rename}
+def resharpen_last(req: dict) -> dict:
+    """Clip viewer "Resharpen last frame" (seed muse_resharpen stage 2): the clip's last frame goes into slot 1 of the image
+    half's Resharpen helper, the clip's start frame (if it had one) into slot 2 as the persona, and the page switches to the
+    image half. The prompt stays empty: a video prompt is no picture description (the helper falls back to its neutral one)."""
+    play_id, clip_play, video = str(req.get("id", "")), str(req.get("clip_playground") or req.get("id", "")), str(req.get("video", ""))
+    data = playground.last_frame({"id": play_id, "clip_playground": clip_play, "video": video, "data_only": True})["data"]
+    _, meta = playground.clip_meta(clip_play, video)
+    side({"id": play_id, "side": "image", "model": RESHARPEN})
+    image_playground.save({"id": play_id, "prompt": "", "params": {**image_playground.load(play_id)["params"], "mode": "max"}})
+    image_playground.input_picture({"id": play_id, "slot": 0, "data": data})
+    start = meta.get("start_frame")
+    persona = playground.folder(clip_play) / start if start else None
+    if persona is not None and persona.is_file() and persona.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
+        mime = {".jpg": "jpeg", ".jpeg": "jpeg"}.get(persona.suffix.lower(), persona.suffix.lower()[1:])
+        image_playground.input_picture({"id": play_id, "slot": 1, "data": f"data:image/{mime};base64," + base64.b64encode(persona.read_bytes()).decode()})
+    else:
+        image_playground.input_picture({"id": play_id, "slot": 1, "data": None})
+    return playground.load(play_id)
+
+
+RESHARPEN = "muse_resharpen"
+
+ACTIONS = {"new": new, "side": side, "resharpen_last": resharpen_last, "picture_frame": picture_frame, "open": open_tile, "back": back, "info": info, "rename": rename}

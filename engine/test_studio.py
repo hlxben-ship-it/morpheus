@@ -312,5 +312,49 @@ class Studio(unittest.TestCase):
         self.assertNotIn("image", st)
 
 
+class ResharpenLast(unittest.TestCase):
+    """Glia seed muse_resharpen stage 2: clip viewer "Resharpen last frame" fills the image half's Resharpen helper."""
+    setUp, tearDown, raw = Studio.setUp, Studio.tearDown, Studio.raw
+    def _clip(self, start=True):
+        import base64
+        d = self.tmp / self.id
+        (d / "clips").mkdir(parents=True, exist_ok=True)
+        meta = {"prompt": "<Subject 1> dances"}
+        if start:
+            (d / "start_1.png").write_bytes(base64.b64decode(PNG.split(",")[1]))
+            meta["start_frame"] = "start_1.png"
+        (d / "clips" / "c.mp4").write_bytes(b"x")
+        (d / "clips" / "c.json").write_text(json.dumps(meta), encoding="utf-8")
+        return f"{self.tmp.name}/{self.id}/clips/c.mp4"
+
+    def _run(self, video):
+        with mock.patch.object(playground, "last_frame", lambda req: {"data": PNG}):
+            return studio.resharpen_last({"id": self.id, "video": video})
+
+    def test_last_frame_and_persona_in_resharpen_on_the_image_side(self):
+        st = self._run(self._clip())
+        raw = self.raw()
+        self.assertEqual(raw["side"], "image")
+        img = ip.load(self.id)
+        self.assertEqual(img["model"], "muse_resharpen")
+        self.assertEqual(img["params"]["mode"], "max")
+        self.assertEqual(img["prompt"], "")  # the video prompt is not taken over
+        self.assertTrue(img["inputs"][0] and img["inputs"][1])
+        snap = ip.snapshot(self.id)
+        self.assertEqual(snap["persona"], img["inputs"][1])
+
+    def test_clip_without_start_frame_has_no_persona(self):
+        self._run(self._clip(start=False))
+        img = ip.load(self.id)
+        self.assertTrue(img["inputs"][0])
+        self.assertIsNone(img["inputs"][1])
+
+    def test_keeps_the_users_cheap_settings_but_picks_max(self):
+        ip.save({"id": self.id, "model": "muse_resharpen", "params": {"mode": "cheap", "strength": 0.45}})
+        self._run(self._clip())
+        prm = ip.load(self.id)["params"]
+        self.assertEqual((prm["mode"], prm["strength"]), ("max", 0.45))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -105,5 +105,62 @@ class RenderPath(unittest.TestCase):
             self.handler.playground_upscale({"id": self.play, "video": "x.mp4", "method": "relayvsr", "factor": 1.534})
 
 
+
+
+class ResharpenRender(unittest.TestCase):
+    """Glia seed muse_resharpen stage 2: server.image_render skips the engine for "Swap only" and swaps the persona's face
+    onto every result; without a persona nothing is swapped. Engine and face swap are fakes."""
+    PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+    def setUp(self):
+        import image_playground as ip
+        self.ip, self.tmp = ip, Path(tempfile.mkdtemp())
+        self.patches = [mock.patch.object(playground, "ROOT", self.tmp / "playground"), mock.patch.object(ip, "ROOT", self.tmp / "playground"),
+                        mock.patch.object(playground.morpheus, "OUTPUT", self.tmp)]
+        for p in self.patches:
+            p.start()
+        self.play = ip.new({})["id"]
+        self.handler = server.Handler.__new__(server.Handler)
+        self.swaps, self.engine = [], []
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _render(self, mode, persona):
+        self.ip.input_picture({"id": self.play, "slot": 0, "data": self.PNG})
+        if persona:
+            self.ip.input_picture({"id": self.play, "slot": 1, "data": self.PNG})
+        self.ip.save({"id": self.play, "model": "muse_resharpen", "prompt": "", "params": {"mode": mode}})
+
+        def engine_job(job, work, steps, engine=None):
+            self.engine.append(work)
+            out = self.tmp / "h3.png"
+            shutil.copyfile(self.ip.playground.folder(self.play) / self.ip.load(self.play)["inputs"][0], out)
+            return {"files": [str(out)], "seeds": [7], "seconds": 3}
+        with mock.patch.object(self.handler, "engine_job", engine_job, create=True),                 mock.patch.object(server, "swap_picture", lambda per, pic: self.swaps.append((per.name, pic.exists()))):
+            return self.handler.image_render({"id": self.play, "_job": {}})
+
+    def test_swap_only_skips_the_engine_and_swaps(self):
+        out = self._render("swap", persona=True)
+        self.assertEqual(self.engine, [])
+        self.assertEqual(len(self.swaps), 1)
+        self.assertTrue(self.swaps[0][1])
+        self.assertEqual(len(out["images"]), 1)
+        meta = out["images"][0]
+        self.assertEqual((meta["helper"], meta["persona"]), ("resharpen", self.ip.load(self.play)["inputs"][1]))
+
+    def test_max_renders_then_swaps(self):
+        self._render("max", persona=True)
+        self.assertEqual(self.engine[0]["family"], "h3_image")
+        self.assertEqual(len(self.swaps), 1)
+
+    def test_no_persona_no_swap(self):
+        self._render("max", persona=False)
+        self.assertEqual(len(self.engine), 1)
+        self.assertEqual(self.swaps, [])
+
+
 if __name__ == "__main__":
     unittest.main()

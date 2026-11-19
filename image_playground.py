@@ -232,6 +232,12 @@ def use_as_input(req: dict) -> dict:
     name = f"in{s + 1}_{time.time_ns() // 1_000_000}.png"
     shutil.copyfile(src, playground.folder(play_id) / name)
     st["inputs"][s] = name
+    if (im.get(st["model"]) or {}).get("helper"):  # Muse Resharpen: the picture's own prompt, editable (grooming G3)
+        try:
+            meta = json.loads(src.with_suffix(".json").read_text(encoding="utf-8-sig"))
+            st["prompt"] = str(meta.get("studio_prompt") if meta.get("studio_prompt") is not None else meta.get("prompt", ""))[:8000]
+        except (OSError, ValueError):
+            pass
     return load(_write(st)["id"])
 
 
@@ -261,9 +267,13 @@ def snapshot(play_id: str) -> dict:
     extra, prompt, negative = {}, st["prompt"], st["negative"]
     if st.get("studio"):  # Studio: the default prompt / negative go in front; the sidecar keeps both parts
         import studio_models
-        d = studio_models.defaults(m["id"], st.get("defaults"))
-        prompt, negative = studio_models.join(d["prompt"], st["prompt"]), studio_models.join(d["negative"], st["negative"])
+        dflt = studio_models.defaults(m["id"], st.get("defaults"))  # not `d`: that is the folder the inputs are hashed from
+        prompt, negative = studio_models.join(dflt["prompt"], st["prompt"]), studio_models.join(dflt["negative"], st["negative"])
         extra = {"studio_prompt": st["prompt"], "studio_negative": st["negative"], "defaults": st.get("defaults")}
+    if m.get("helper") and not prompt.strip():  # Muse Resharpen without a prompt: the neutral default (grill #8)
+        prompt = m.get("prompt_default", "")
+    if m.get("helper"):  # the sidecar names the helper, its source picture and the persona whose face is swapped back in
+        extra = {**extra, "helper": m["helper"], "source": inputs[0], "persona": inputs[1] if len(inputs) > 1 else None}
     if not prompt.strip() and m["family"] != "sdxl":
         raise ValueError("Write a prompt first.")
     seed = st["seed"] if st["seed"] is not None else random.randrange(1, SEED_MAX)
@@ -273,16 +283,42 @@ def snapshot(play_id: str) -> dict:
             "prompt": prompt, "negative": negative if m.get("negative") else "", "seed": seed, "count": st["count"],
             "inputs": inputs, "input_hashes": hashes, "loras": lora_entries(st, m),
             "total_steps": st["params"].get("steps", 6) * st["count"] * (2 if st["params"].get("hires", 1) > 1 else 1) if m["family"] == "sdxl"
+            else RESHARPEN_STEPS[st["params"].get("mode", "cheap")] * st["count"] if m.get("helper") == "resharpen" and st["params"].get("mode") != "cheap"
             else st["params"].get("steps", 6) * st["count"]}
 
 
-def worker_job(play_id: str, snap: dict) -> dict:
-    """The warm worker job for a snapshot (engine/wsl/warm_worker.py, kind "image")."""
+# Resharpen stage 2 (seed muse_resharpen): Max = H3-Image edit of picture 1 (+ persona as <Picture 2>), Cheap = Muse img2img,
+# Swap only = no worker job. The face swap with the persona runs afterwards in server.image_render (faceswap.py --image).
+RESHARPEN_STEPS = {"max": 6, "swap": 1}
+RESHARPEN_H3_SIZE = "2048x2048"  # H3 renders 4 MP anyway; with "KI" picture 1's proportions are kept
+RESHARPEN_H3_PROMPT = ("<Picture 1> as a sharp, detailed photo. Keep <Picture 1>'s pose, expression, framing, hair, clothes, "
+                       "lighting and background exactly the same.")
+
+
+def resharpen_mode(snap: dict) -> str | None:
+    """"max" / "cheap" / "swap" for a Resharpen snapshot, None for every other model."""
+    return snap["params"].get("mode", "cheap") if snap.get("helper") == "resharpen" else None
+
+
+def worker_job(play_id: str, snap: dict) -> dict | None:
+    """The warm worker job for a snapshot (engine/wsl/warm_worker.py, kind "image"); None = no render (Resharpen "Swap only")."""
     m = im.get(snap["model"]["id"])
     d = playground.folder(play_id)
     w, h = im.wh(snap["size"])
     p = snap["params"]
     pics = [str((d / f).resolve()) for f in snap["inputs"]]
+    mode = resharpen_mode(snap)
+    if mode == "swap":
+        return None
+    if mode == "max":
+        rw, rh = im.wh(RESHARPEN_H3_SIZE)
+        prompt = RESHARPEN_H3_PROMPT  # picture 1 only: a whole start frame as <Picture 2> made H3 copy its scene (2026-11-19)
+        if snap["prompt"].strip() and snap["prompt"] != m.get("prompt_default"):  # the source's own prompt describes the scene
+            prompt += " Scene: " + snap["prompt"].strip()
+        return {"kind": "image", "family": "h3_image", "settings": {
+            "model_type": "minimax_h3_image_pruned", "prompt": prompt, "resolution": f"{rw}x{rh}", "num_inference_steps": 6,
+            "guidance_scale": 1.0, "guidance_phases": 1, "sample_solver": "euler", "batch_size": snap["count"], "seed": snap["seed"],
+            "image_mode": 1, "config": "distilled_4b", "image_refs": pics[:1], "video_prompt_type": "KI"}}
     loras = [{"path": l["path"], "strength": l["strength"]} for l in snap["loras"]]
     if m["family"] == "h3_image":
         s = {"model_type": "minimax_h3_image_pruned", "prompt": snap["prompt"], "resolution": f"{w}x{h}", "num_inference_steps": 6,
@@ -307,6 +343,9 @@ def worker_job(play_id: str, snap: dict) -> dict:
         params["images"] = pics
         if m.get("checkpoint"):  # Krea 2: which finetune (GGUF file in /root/models/image/krea2)
             params["checkpoint"] = m["checkpoint"]
+        if mode == "cheap":  # img2img from picture 1, no references (engine/wsl/image/krea2.py); the persona is only swapped
+            params["init"], params["images"] = pics[0], []
+            params.pop("mode", None)
     return {"kind": "image", "family": m["family"], "count": snap["count"], "params": params}
 
 

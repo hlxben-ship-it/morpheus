@@ -650,6 +650,8 @@ def last_frame(req: dict) -> dict:
     if run.returncode or sig not in run.stdout:
         raise ValueError(f"Could not read the last frame: {run.stderr.decode(errors='replace').strip()[-300:]}")
     data = "data:image/png;base64," + base64.b64encode(run.stdout[run.stdout.rindex(sig):]).decode()
+    if req.get("data_only"):  # Studio "Resharpen last frame" puts it into the image half instead
+        return {"data": data}
     if req.get("slot") is not None:  # dragged onto an H3 reference slot
         return ref({"id": req.get("id"), "slot": req.get("slot"), "data": data})
     return frame({"id": req.get("id"), "kind": "start", "data": data})

@@ -117,5 +117,141 @@ class State(unittest.TestCase):
             ip.load("../etc")
 
 
+class Resharpen(unittest.TestCase):
+    """Glia seed muse_resharpen: the helper model's schema, prompt fill, worker job and sidecar."""
+    setUp, tearDown = State.setUp, State.tearDown
+
+    def _shelf_picture(self, meta):
+        d = self.tmp / self.id / "images"
+        d.mkdir(parents=True, exist_ok=True)
+        png = d / "20261117_000000_1.png"
+        import base64
+        png.write_bytes(base64.b64decode(PNG.split(",", 1)[1]))
+        if meta is not None:
+            png.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
+        return png
+
+    def _use(self, png):
+        with mock.patch.object(ip, "image_path", return_value=png):
+            return ip.use_as_input({"id": self.id, "slot": 0, "image": "x"})
+
+    def test_schema_strength_range_and_scale(self):
+        m = im.get("muse_resharpen")
+        self.assertEqual(m["helper"], "resharpen")
+        self.assertEqual(im.defaults(m)["strength"], 0.3)
+        self.assertEqual(im.defaults(m)["scale"], 1)
+        self.assertEqual(im.resolve(m, {"strength": 0.6, "scale": 2}, strict=True)["scale"], 2)
+        for bad in ({"strength": 0.7}, {"strength": 0.01}, {"scale": 3}):
+            with self.assertRaises(ValueError):
+                im.resolve(m, bad, strict=True)
+
+    def test_slot_fills_the_prompt_from_the_pictures_sidecar(self):
+        ip.save({"id": self.id, "model": "muse_resharpen"})
+        st = self._use(self._shelf_picture({"prompt": "a red fox in snow"}))
+        self.assertEqual(st["prompt"], "a red fox in snow")
+        st = self._use(self._shelf_picture({"prompt": "DEFAULT, a cat", "studio_prompt": "a cat"}))
+        self.assertEqual(st["prompt"], "a cat")  # Studio: the user's own part, not the joined default
+
+    def test_other_models_keep_their_prompt(self):
+        ip.save({"id": self.id, "model": "muse_krea2", "prompt": "mine"})
+        self.assertEqual(self._use(self._shelf_picture({"prompt": "theirs"}))["prompt"], "mine")
+
+    def test_picture_without_sidecar_keeps_the_prompt(self):
+        ip.save({"id": self.id, "model": "muse_resharpen", "prompt": "kept"})
+        self.assertEqual(self._use(self._shelf_picture(None))["prompt"], "kept")
+
+    def test_snapshot_needs_the_picture_and_falls_back_to_the_neutral_prompt(self):
+        ip.save({"id": self.id, "model": "muse_resharpen", "prompt": ""})
+        with self.assertRaises(ValueError):
+            ip.snapshot(self.id)
+        st = ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        ip.save({"id": self.id, "prompt": ""})
+        snap = ip.snapshot(self.id)
+        self.assertEqual(snap["prompt"], "sharp, detailed photo")
+        self.assertEqual((snap["helper"], snap["source"]), ("resharpen", st["inputs"][0]))
+
+    def test_worker_job_is_img2img_without_references(self):
+        st = ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        ip.save({"id": self.id, "model": "muse_resharpen", "prompt": "x", "params": {"mode": "cheap", "strength": 0.4, "scale": 2}})
+        job = ip.worker_job(self.id, ip.snapshot(self.id))
+        self.assertEqual(job["family"], "krea2")
+        self.assertNotIn("mode", job["params"])
+        self.assertTrue(job["params"]["init"].endswith(st["inputs"][0]))
+        self.assertEqual(job["params"]["images"], [])
+        self.assertEqual((job["params"]["strength"], job["params"]["scale"]), (0.4, 2))
+
+    def test_studio_snapshot_with_a_picture(self):
+        """Regression: in a Studio the default-prompt dict once shadowed the folder -> "dict / str" on hashing the inputs."""
+        import studio
+        with mock.patch.object(studio, "ROOT", self.tmp, create=True):
+            sid = studio.new({})["id"]
+        st = ip.input_picture({"id": sid, "slot": 0, "data": PNG})
+        ip.save({"id": sid, "model": "muse_resharpen", "prompt": "a fox"})
+        snap = ip.snapshot(sid)
+        self.assertEqual(len(snap["input_hashes"]), 1)
+        self.assertEqual(snap["source"], st["inputs"][0])
+        self.assertIn("a fox", snap["prompt"])
+
+    # --- stage 2: modes Max / Cheap / Swap only + optional persona -----------------------------------------------------------
+    def _two(self, mode, persona=True, prompt="sharp, detailed photo"):
+        st = ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        if persona:
+            st = ip.input_picture({"id": self.id, "slot": 1, "data": PNG})
+        ip.save({"id": self.id, "model": "muse_resharpen", "prompt": prompt, "params": {"mode": mode}})
+        return st, ip.snapshot(self.id)
+
+    def test_mode_default_is_max_and_unknown_mode_is_refused(self):
+        m = im.get("muse_resharpen")
+        self.assertEqual(im.defaults(m)["mode"], "max")
+        with self.assertRaises(ValueError):
+            im.resolve(m, {"mode": "turbo"}, strict=True)
+
+    def test_max_is_an_h3_edit_of_picture_1_only(self):
+        """The persona never goes to H3: a whole start frame as <Picture 2> made it copy that scene (2026-11-19 render)."""
+        st, snap = self._two("max")
+        job = ip.worker_job(self.id, snap)
+        s = job["settings"]
+        self.assertEqual((job["family"], s["video_prompt_type"], s["resolution"]), ("h3_image", "KI", "2048x2048"))
+        self.assertEqual([Path(x).name for x in s["image_refs"]], st["inputs"][:1])
+        self.assertNotIn("<Picture 2>", s["prompt"])
+        self.assertNotIn("Scene:", s["prompt"])  # the neutral default adds nothing
+        self.assertEqual(snap["total_steps"], 6)
+        self.assertEqual(snap["persona"], st["inputs"][1])
+
+    def test_max_without_persona_keeps_the_face_and_appends_the_scene(self):
+        st, snap = self._two("max", persona=False, prompt="a fox in rain")
+        s = ip.worker_job(self.id, snap)["settings"]
+        self.assertEqual(len(s["image_refs"]), 1)
+        self.assertNotIn("<Picture 2>", s["prompt"])
+        self.assertTrue(s["prompt"].endswith("Scene: a fox in rain"))
+        self.assertIsNone(snap["persona"])
+
+    def test_cheap_never_sends_the_persona_to_muse(self):
+        st, snap = self._two("cheap")
+        job = ip.worker_job(self.id, snap)
+        self.assertTrue(job["params"]["init"].endswith(st["inputs"][0]))
+        self.assertEqual(job["params"]["images"], [])
+        self.assertEqual(snap["total_steps"], 12)
+
+    def test_swap_only_has_no_worker_job(self):
+        _, snap = self._two("swap")
+        self.assertIsNone(ip.worker_job(self.id, snap))
+        self.assertEqual(snap["total_steps"], 1)
+
+    def test_other_models_are_not_resharpen(self):
+        ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        ip.save({"id": self.id, "model": "h3_image", "prompt": "x"})
+        snap = ip.snapshot(self.id)
+        self.assertIsNone(ip.resharpen_mode(snap))
+        self.assertNotIn("persona", snap)
+
+    def test_plain_muse_job_has_no_init(self):
+        ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        ip.save({"id": self.id, "model": "muse_krea2", "prompt": "x"})
+        job = ip.worker_job(self.id, ip.snapshot(self.id))
+        self.assertNotIn("init", job["params"])
+        self.assertEqual(len(job["params"]["images"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

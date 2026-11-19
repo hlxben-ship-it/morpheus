@@ -170,3 +170,33 @@ class Sampling(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Resharpen(unittest.TestCase):
+    """Glia seed muse_resharpen: output size and the schedule cut by strength."""
+
+    def test_size_follows_the_picture_times_scale_in_multiples_of_16(self):
+        self.assertEqual(k2.resharpen_size(1024, 1536, 1), (1024, 1536))
+        self.assertEqual(k2.resharpen_size(1000, 750, 2), (2000, 1488))
+        self.assertEqual(k2.resharpen_size(1001, 999, 1), (992, 992))
+
+    def test_a_too_big_2x_is_capped(self):
+        w, h = k2.resharpen_size(1536, 1536, 2)
+        self.assertLessEqual(w * h, k2.RESHARPEN_MAX_PX)
+        self.assertEqual((w, h), (2048, 2048))
+        w, h = k2.resharpen_size(1536, 1024, 2)
+        self.assertLessEqual(w * h, k2.RESHARPEN_MAX_PX)
+        self.assertAlmostEqual(w / h, 1.5, delta=0.02)
+
+    def test_strength_cuts_the_schedule_low_end_stays_near_the_input(self):
+        ms = sampling.FluxShift(k2.SHIFT)
+        full = sampling.sigmas_for(ms, "beta", 12, 1.0)
+        low = sampling.sigmas_for(ms, "beta", 12, 0.05)
+        mid = sampling.sigmas_for(ms, "beta", 12, 0.3)
+        self.assertEqual(len(low), 13); self.assertEqual(len(mid), 13)
+        self.assertTrue(torch.equal(full, sampling.sigmas_for(ms, "beta", 12, 1.0)))
+        self.assertGreater(float(full[0]), 0.99)
+        self.assertLess(float(low[0]), 0.15)  # 0.05: start mostly = the picture
+        self.assertLess(float(low[0]), float(mid[0])); self.assertLess(float(mid[0]), float(full[0]))
+        x = sampling.noise_scaling("flow", low[0], torch.zeros(1), torch.ones(1), True)
+        self.assertGreater(float(x), 0.85)

@@ -2002,6 +2002,7 @@
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const ACT_ICON = {
+    sharpen: svg('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/>'),
     variant: svg('<path d="M4 6h10M4 12h7M4 18h10"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
     copy: svg('<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>'),
     open: svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
@@ -4931,7 +4932,7 @@
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">${esc(c.label)}</h2>${clipFacts(c)}</div>
           <span class="pl-icons"><button type="button" class="wake-open pl-ico" data-a="full" title="Fullscreen" aria-label="Fullscreen">${ACT_ICON.full}</button><button type="button" class="wake-open pl-ico danger" data-a="del" title="Delete clip" aria-label="Delete clip">${ACT_ICON.trash}</button><button type="button" class="wake-open pl-ico" data-a="close" title="Close" aria-label="Close">${ACT_ICON.close}</button></span>
-          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="remix" title="Add this clip to the end of the Remix timeline">✂ Add to Remix</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="cut" aria-pressed="false" aria-controls="pl-cut" title="Keep only a section of this clip, as a new clip">✂ Cut</button><button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
+          <div class="pl-mrow"><div class="pl-mbar" role="toolbar" aria-label="Clip actions"><button type="button" class="wake-open pl-act" data-a="resharpen" title="The last frame into Resharpen (Max), with the clip's start frame as the persona">${ACT_ICON.sharpen}Resharpen last frame</button><button type="button" class="wake-open pl-act" data-a="use">${ACT_ICON.lastframe}Last frame as start</button><button type="button" class="wake-open pl-act" data-a="remix" title="Add this clip to the end of the Remix timeline">✂ Add to Remix</button>${c.settings ? `<button type="button" class="wake-open pl-act" data-a="settings" title="Prompt, model, pipeline, frames, LoRAs and seed of this clip into the Playground">${ACT_ICON.variant}Use these settings</button>` : ''}${c.looped ? '' : `<button type="button" class="wake-open pl-act" data-a="loop" title="New clip: forward, then in reverse" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.loop}Loop it</button>`}<button type="button" class="wake-open pl-act" data-a="cut" aria-pressed="false" aria-controls="pl-cut" title="Keep only a section of this clip, as a new clip">✂ Cut</button><button type="button" class="wake-open pl-act" data-a="up" aria-pressed="false" aria-controls="pl-up" ${wake.plJob ? 'disabled title="Something is rendering"' : ''}>${ACT_ICON.upscale}Upscale</button></div></div></div>
         <div class="pl-up" id="pl-up" hidden>
           <div class="row"><span class="pl-l">Method</span><span class="seg" data-k="method"><button type="button" data-v="relayvsr" aria-pressed="true">RelayVSR · quick</button><button type="button" data-v="seedvr2" aria-pressed="false">SeedVR2 · real detail</button></span>
             <span class="pl-l">Factor</span><span class="seg" data-k="factor">${[1.5, 2, 3, 4].map(f => `<button type="button" data-v="${f}" aria-pressed="${f === 1.5}">×${f}</button>`).join('')}</span></div>
@@ -4951,6 +4952,14 @@
         if (a === 'close') dlg.close();
         if (a === 'full') v.requestFullscreen?.();
         if (a === 'use') { dlg.close(); useLast(c); }
+        if (a === 'resharpen') {  // Glia seed muse_resharpen stage 2: last frame + start frame into the image half's Resharpen
+          dlg.close(); saved('Taking the last frame …');
+          stHold(); await wake.stFlush?.();
+          try { await post('/api/studio/resharpen_last', { id: p.id, clip_playground: c.playground, video: c.video }); }
+          catch (err) { stRelease(); return saved(err.message); }
+          wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
+          showWake('siplay', false); return;
+        }
         if (a === 'remix') { dlg.close(); remixSet([...p.remix, remixRef(c)], true); toast('Added to the Remix timeline'); }
         if (a === 'copy') { try { await navigator.clipboard.writeText(c.prompt); toast('Prompt copied'); } catch { toast('Could not copy', true); } }
         if (a === 'settings') {
@@ -5328,7 +5337,7 @@
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
       if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
       if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
-      return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
+      return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
     };
     const ps = Object.entries(m.params || {});
     const basic = ps.filter(([, s]) => !s.advanced).map(([k, s]) => param(k, s)).join('');
@@ -5367,7 +5376,7 @@
         <section class="pl-box"><div class="pl-grid">
           <div><label class="pl-l" for="ipl-model">Model</label><select id="ipl-model">${opt(o.models, p.model)}</select></div>
           <div><label class="pl-l" for="ipl-count">Pictures</label><select id="ipl-count">${opt(Array.from({ length: m.max_count || 1 }, (_, i) => i + 1), p.count)}</select></div>
-          <div class="pl-asp"><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect" title="${esc(p.size.replace('x', '×'))} px">${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span></button>
+          <div class="pl-asp"${m.helper ? ' hidden' : ''}><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect" title="${esc(p.size.replace('x', '×'))} px">${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span></button>
             <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${[...m.sizes].sort((x, y) => Object.keys(PL_ASPECT).indexOf(ratioOf(x)) - Object.keys(PL_ASPECT).indexOf(ratioOf(y))).map(z => `<button type="button" class="ratio" data-v="${esc(z)}" aria-pressed="${z === p.size}" title="${esc(z.replace('x', '×'))} px">${plAspectIcon(ratioOf(z))}<span>${esc(ratioOf(z))}</span></button>`).join('')}</div></div></div>
           <p class="pl-hint">${esc(m.note || '')}</p>
           <div class="ipl-params">${basic}</div>
@@ -5766,6 +5775,10 @@
     other.label = otherSide === 'video' ? 'Video' : 'Image';
     other.innerHTML = otherModels.map(m => `<option value="${esc(m.id)}" data-side="${otherSide}">${esc(m.label)}</option>`).join('');
     sel.replaceChildren(...(side === 'video' ? [own, other] : [other, own]));
+    const helperIds = new Set((wake.iplayOpts?.models || []).filter(m => m.helper).map(m => m.id));  // Glia seed muse_resharpen
+    const helpers = document.createElement('optgroup'); helpers.label = 'Helpers';
+    helpers.append(...[...sel.querySelectorAll('option')].filter(o => helperIds.has(o.value)));
+    if (helpers.children.length) sel.append(helpers);
     sel.value = p.model;
     sel.addEventListener('change', async e => {  // capture, before the page's own handler: a model of the other family switches the half
       const o = sel.selectedOptions[0];
@@ -6032,7 +6045,7 @@
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
       if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
       if (s.choices) return `<div class="ipl-p">${lab}<span class="seg" data-k="${esc(k)}">${s.choices.map(c => `<button type="button" data-v="${esc(String(c))}" aria-pressed="${c === v}">${esc(s.labels?.[c] ?? String(c))}</button>`).join('')}</span>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
-      return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output></div>`;
+      return `<div class="ipl-p">${lab}<input type="range" data-k="${esc(k)}" min="${s.min}" max="${s.max}" step="${s.step ?? 1}" value="${v}" aria-label="${esc(s.label || k)}"><output>${v}</output>${s.note ? `<p class="hint">${esc(s.note)}</p>` : ''}</div>`;
     };
     const ps = Object.entries(m.params || {});
     const basic = ps.filter(([, s]) => !s.advanced).map(([k, s]) => param(k, s)).join('');
@@ -6070,7 +6083,7 @@
       <div class="pl-right">
         <section class="pl-box"><div class="pl-grid">
           <div><label class="pl-l" for="ipl-model">Model</label><select id="ipl-model">${opt(o.models, p.model)}</select></div>
-          <div class="pl-asp"><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect" title="${esc(p.size.replace('x', '×'))} px">${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span></button>
+          <div class="pl-asp"${m.helper ? ' hidden' : ''}><label class="pl-l" for="pl-asp-btn">Aspect</label><button type="button" class="pl-asp-btn" id="pl-asp-btn" aria-haspopup="true" aria-expanded="false" aria-controls="pl-aspect" title="${esc(p.size.replace('x', '×'))} px">${plAspectIcon(ratioOf(p.size))}<span>${esc(ratioOf(p.size))}</span></button>
             <div class="pl-asp-pop" id="pl-aspect" role="group" aria-label="Aspect" hidden>${[...m.sizes].sort((x, y) => Object.keys(PL_ASPECT).indexOf(ratioOf(x)) - Object.keys(PL_ASPECT).indexOf(ratioOf(y))).map(z => `<button type="button" class="ratio" data-v="${esc(z)}" aria-pressed="${z === p.size}" title="${esc(z.replace('x', '×'))} px">${plAspectIcon(ratioOf(z))}<span>${esc(ratioOf(z))}</span></button>`).join('')}</div></div></div>
           <p class="pl-hint">${esc(m.note || '')}</p>
           <div class="ipl-params">${basic}</div>
