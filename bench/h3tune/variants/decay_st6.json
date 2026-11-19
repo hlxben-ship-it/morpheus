@@ -1,0 +1,11 @@
+{
+ "name": "decay_st6",
+ "model": "q4",
+ "clip": "720s",
+ "settings": {
+  "resolution": "1280x704",
+  "video_length": 209,
+  "num_inference_steps": 6
+ },
+ "note": "seed h3_quality_decay: 6 steps"
+}

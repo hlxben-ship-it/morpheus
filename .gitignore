@@ -26,3 +26,7 @@ engine/wangp/ffmpeg_bins/
 
 # the tuning bench (bench/h3tune): the reference picture stays local
 bench/h3tune/in/
+
+# bench picture outputs (large)
+bench/image_parity/out/
+bench/h3decay/out/*.log

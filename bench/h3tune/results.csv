@@ -147,3 +147,12 @@ time,name,model,clip,ok,total,load,text,denoise,s_step,decode,warm_total,rss,ava
 11-18 09:31,i8tri_int8,int8,ref720,True,247.4,7.2,13.6,203.4,51.8,23.2,228.9,22.7,17.4,0.0,6.0,0.76,1.01,1.03,rv_int8,Q5 int8 backend = triton (auto = Comfy Kitchen HIP)
 11-18 09:39,i8pt_int8,int8,ref720,True,245.6,7.7,14.1,199.3,48.9,24.5,228.1,22.7,17.5,0.0,6.2,0.757,1.01,1.01,rv_int8,Q5 int8 backend = disabled (auto = Comfy Kitchen HIP)
 11-18 09:48,i8tri_q4,q4,ref720,True,238.0,6.8,14.0,193.1,48.2,24.2,220.8,20.5,17.3,0.0,5.4,0.729,1.01,1.02,rv_q4,Q5 int8 backend = triton on q4 (VAE + text encoder are int8)
+11-19 15:46,decay_base,q4,720s,True,898.3,11.6,16.9,816.0,104.2,53.8,,22.7,10.8,0.0,13.1,,354.6,12.85,,"seed h3_quality_decay: baseline: 8 s, 8 steps, Q4, int8 enc, LightVAE int8, no LoRA, no last_ref"
+11-19 17:09,decay2_base,q4,720s,True,854.4,13.8,15.5,776.7,98.2,48.4,,22.7,10.8,0.0,13.2,,456.4,2.86,,"seed h3_quality_decay (fixed framing, yukomo_mcu): baseline: 8 s, 8 steps, Q4, int8 enc, LightVAE int8, no LoRA, no last_ref"
+11-19 17:25,decay2_lastref,q4,720s,True,927.1,15.6,24.2,840.0,106.9,47.2,,22.7,10.8,0.0,13.4,,416.9,2.33,,"seed h3_quality_decay (fixed framing, yukomo_mcu): start frame pinned again as the last frame"
+11-19 17:41,decay2_fullvae,q4,720s,True,937.9,53.9,12.5,759.5,96.9,111.9,,22.7,10.5,0.0,13.2,,541.6,2.93,,"seed h3_quality_decay (fixed framing, yukomo_mcu): original H3 VAE decoder instead of LightVAE int8"
+11-19 17:48,decay2_len4,q4,720s,True,378.9,11.4,14.4,331.1,41.8,22.0,,22.7,11.1,0.0,11.5,,411.9,3.28,,"seed h3_quality_decay (fixed framing, yukomo_mcu): 4 s (107 frames)"
+11-19 17:56,decay2_st4,q4,720s,True,448.6,13.8,13.7,381.8,97.9,39.3,,22.7,10.8,0.0,13.2,,480.2,2.78,,"seed h3_quality_decay (fixed framing, yukomo_mcu): 4 steps"
+11-19 18:07,decay2_st6,q4,720s,True,661.2,19.0,22.0,574.2,97.1,46.0,,22.7,10.8,0.0,13.2,,455.2,2.8,,"seed h3_quality_decay (fixed framing, yukomo_mcu): 6 steps"
+11-19 18:21,decay2_q6,q6,720s,True,830.4,15.5,11.9,764.4,96.7,38.8,,22.7,8.5,0.0,15.6,,496.7,2.47,,"seed h3_quality_decay (fixed framing, yukomo_mcu): GGUF Q6_K"
+11-19 18:38,decay2_bf16enc,q4,720s,True,964.1,152.2,11.5,761.3,94.5,39.1,,22.7,10.8,0.0,13.2,,458.0,2.91,,"seed h3_quality_decay (fixed framing, yukomo_mcu): text encoder bf16 (sol kept in the same overrides string)"

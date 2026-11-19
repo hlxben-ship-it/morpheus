@@ -1,0 +1,17 @@
+{
+ "name": "decay2_fullvae",
+ "model": "q4",
+ "clip": "720s",
+ "settings": {
+  "resolution": "1280x704",
+  "video_length": 209,
+  "num_inference_steps": 8,
+  "config": "distilled_4b",
+  "prompt": "For the target video, at 0.00 seconds into the target video, Picture 1 (from Shot 1) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] Static locked-off camera, medium close-up, the framing of Picture 1 never changes: no zoom, no pan, no cut. Anime manga style. A woman with long silver-white hair with a red streak, gold and black fantasy armor, in a sunlit forest, breathes calmly, slowly turns her head a little to the side and back to the camera, blinks, and gives a soft smile. Her face, hair and outfit stay exactly the same; the background stays still apart from leaves moving gently.\n\noverall_soundscape: Soft forest ambience, rustling leaves.\n\nnon_diegetic_music: N/A",
+  "image_start": "/mnt/c/dev/morpheus/bench/h3tune/in/yukomo_mcu.png",
+  "image_refs": [
+   "/mnt/c/dev/morpheus/bench/h3tune/in/yukomo_mcu.png"
+  ]
+ },
+ "note": "seed h3_quality_decay (fixed framing, yukomo_mcu): original H3 VAE decoder instead of LightVAE int8"
+}

@@ -27,6 +27,13 @@ WSL_MODELS = {"minimax_h3_ref2va_hyperflow", "ltx2_22B_dev_q6"}  # checkpoints o
 SOL = {"overrides": "attention_mode='sol'", "attention_sparsity": 1.3}  # tau 1.3: 2x per step; 1.6/2.0 bought ~0-6 % more
 SOL_MODELS = {"minimax_h3_ref2va_hyperflow", "minimax_h3_ref2va_hyperflow_gguf_q4_k_m", "minimax_h3_ref2va_hyperflow_gguf_q6_k"}  # Sol sparse attention is an H3 path in WanGP
 ROCM10_MODELS = SOL_MODELS  # rendered on the ROCm 10 stack (start_warm.sh falls back to /root/venv when /root/venv10 is missing)
+
+
+def with_sol(settings: dict) -> dict:
+    """Sol merged into a job's settings. WanGP's `overrides` is one comma-separated string, so Sol is appended to an
+    override the job already carries (e.g. the bf16 text encoder) instead of replacing it."""
+    own = (settings.get("overrides") or "").strip()
+    return {**settings, **SOL, "overrides": f"{own}, {SOL['overrides']}" if own else SOL["overrides"]}
 NEED_GB = 14       # Windows RAM the VM needs to grow into: measured peak use 2026-11-15 with pinned RAM capped: H3 ~6 GB, LTX ~12 GB (+2 swap)
 READY_WAIT = 240   # VM boot + WanGP import
 
@@ -171,7 +178,7 @@ def run(job: dict, on_event, stopped, idle_timeout: float = 900, keep_warm: int 
         name = uuid.uuid4().hex[:12]
         work = {**job, "id": name, "out_dir": str(JOBS_DIR / name), "result": str(JOBS_DIR / f"{name}.result.json")}
         if work.get("settings", {}).get("model_type") in SOL_MODELS:  # LTX rejects the sol override; an upscale has no settings
-            work["settings"] = {**work["settings"], **SOL}
+            work["settings"] = with_sol(work["settings"])
         WARM.proc.stdin.write(json.dumps(work) + "\n"); WARM.proc.stdin.flush()
         last = time.time()
         while True:

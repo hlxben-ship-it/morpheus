@@ -1,0 +1,11 @@
+{
+ "name": "decay_q6",
+ "model": "q6",
+ "clip": "720s",
+ "settings": {
+  "resolution": "1280x704",
+  "video_length": 209,
+  "num_inference_steps": 8
+ },
+ "note": "seed h3_quality_decay: GGUF Q6_K"
+}
