@@ -34,6 +34,9 @@ def frames(seconds: int) -> int:
     return FPS * int(seconds) + 1
 
 
+# H3 text encoder per job (Glia seed h3_prompt_encoder_test): id -> (WanGP "Text Encoder" config key, text_encoder_quantization override or None).
+# 4b_int8 is today's default; 4b_bf16 = the same distilled 4B in bf16; 32b_q4 = the model's own 32B as GGUF Q4_K_M.
+H3_ENCODERS = {"4b_int8": ("distilled_4b", None), "4b_bf16": ("distilled_4b", "bf16"), "32b_q4": ("gguf_q4_k_m", None)}
 H3_FRAME_OFFSET, H3_FRAME_STEP = 5, 17  # H3 frame counts are 5 + 17n (WanGP minimax_h3_handler: frames_offset / frames_steps)
 H3_WANGP_MIN = 107  # WanGP's frames_minimum for H3 (4.5 s); we render below it (owner test 2026-11-13: 3 s looked right)
 
@@ -139,9 +142,14 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
             s["_frames_minimum"] = s["video_length"]  # the worker lowers WanGP's floor for this one job
         if snap["params"].get("routing") == "fast":
             s["_sol_centroid_route"] = True  # the worker switches engine/wsl/sol_kernel.py to the centroid route score for this job
+        encoder = H3_ENCODERS.get(snap["params"].get("encoder") or "4b_int8")
+        if encoder is None:
+            raise ValueError(f"H3 encoder: one of {', '.join(H3_ENCODERS)}.")
         s.update({"prompt": h3_prompt(snap["prompt"], start_n, end_n), "num_inference_steps": steps,
                   "sample_solver": "euler", "guidance_scale": 1.0, "guidance_phases": 1,
-                  "config": "distilled_4b,lightvae_int8"})  # distilled Qwen3-VL-4B encoder + LightVAE, both int8
+                  "config": encoder[0] + ",lightvae_int8"})  # text encoder + LightVAE int8; the default is the distilled Qwen3-VL-4B int8
+        if encoder[1]:  # WanGP picks the encoder file by this override; a changed config or override reloads the model, so the text cache starts empty
+            s["overrides"] = f"text_encoder_quantization={encoder[1]!r}"
         # Ref2VA wants at least one reference image ("I"); h3_pictures repeats an anchor when there is no other
         s["image_refs"], s["video_prompt_type"] = refs, "I"
     if loras:

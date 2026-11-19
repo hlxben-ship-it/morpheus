@@ -136,6 +136,23 @@ class H3(unittest.TestCase):
         self.assertNotIn("_sol_centroid_route", jobs.render_settings(dict(base, params={**base["params"], "routing": "exact"}), DIR))
         self.assertIs(jobs.render_settings(dict(base, params={**base["params"], "routing": "fast"}), DIR)["_sol_centroid_route"], True)
 
+    def test_encoder_default_and_choices(self):
+        base = snap(model="h3_minimax")
+        default = jobs.render_settings(base, DIR)
+        self.assertEqual(default["config"], "distilled_4b,lightvae_int8")
+        self.assertNotIn("overrides", default)
+        same = jobs.render_settings(dict(base, params={**base["params"], "encoder": "4b_int8"}), DIR)
+        self.assertEqual((same["config"], "overrides" in same), ("distilled_4b,lightvae_int8", False))
+        bf16 = jobs.render_settings(dict(base, params={**base["params"], "encoder": "4b_bf16"}), DIR)
+        self.assertEqual((bf16["config"], bf16["overrides"]), ("distilled_4b,lightvae_int8", "text_encoder_quantization='bf16'"))
+        q4 = jobs.render_settings(dict(base, params={**base["params"], "encoder": "32b_q4"}), DIR)
+        self.assertEqual((q4["config"], "overrides" in q4), ("gguf_q4_k_m,lightvae_int8", False))
+
+    def test_unknown_encoder_stops_before_loading(self):
+        base = snap(model="h3_minimax")
+        with self.assertRaises(ValueError):
+            jobs.render_settings(dict(base, params={**base["params"], "encoder": "32b_bf16"}), DIR)
+
     def test_steps(self):
         for ok in (4, 6, 8):
             self.assertEqual(jobs.render_settings(snap(model="h3_minimax", steps=ok), DIR)["num_inference_steps"], ok)

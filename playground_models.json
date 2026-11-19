@@ -95,6 +95,18 @@
           ],
           "default": "exact",
           "note": "Fast: ~8 % quicker, same seed gives another clip."
+        },
+        {
+          "id": "encoder",
+          "label": "Prompt encoder",
+          "type": "choice",
+          "choices": [
+            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
+            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
+            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
+          ],
+          "default": "4b_int8",
+          "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."
         }
       ]
     },
@@ -146,6 +158,18 @@
           ],
           "default": "exact",
           "note": "Fast: ~8 % quicker, same seed gives another clip."
+        },
+        {
+          "id": "encoder",
+          "label": "Prompt encoder",
+          "type": "choice",
+          "choices": [
+            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
+            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
+            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
+          ],
+          "default": "4b_int8",
+          "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."
         }
       ]
     },
@@ -197,6 +221,18 @@
           ],
           "default": "exact",
           "note": "Fast: ~8 % quicker, same seed gives another clip."
+        },
+        {
+          "id": "encoder",
+          "label": "Prompt encoder",
+          "type": "choice",
+          "choices": [
+            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
+            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
+            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
+          ],
+          "default": "4b_int8",
+          "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."
         }
       ]
     }
