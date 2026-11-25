@@ -1,0 +1,24 @@
+{
+ "name": "rf25_eros",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "eros",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "sinks routed from 0.25 of the schedule (default 0.5)",
+ "int8_kernels": "triton",
+ "ref": "rv_eros",
+ "env": {
+  "MORPHEUS_SOL_ROUTE_FROM": "0.25"
+ }
+}

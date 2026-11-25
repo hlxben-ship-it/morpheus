@@ -8,17 +8,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]; sys.path.insert(0, str(ROOT))
 from engine import jobs, wsl_runner
 
-MODELS = {"flash_int8": "minimax_h3_ref2va_hyperflow",
-          "gguf_q4_k_m": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
-          "gguf_q6_k": "minimax_h3_ref2va_hyperflow_gguf_q6_k",
-          "10eros_q5_0": "minimax_h3_ref2va_10eros_turbo_q5_0",
+MODELS = {"gguf_q6_k": "minimax_h3_ref2va_hyperflow_gguf_q6_k",
           "10eros_q6_k": "minimax_h3_ref2va_10eros_turbo_q6_k"}
 SECONDS, STEPS, RES, ASPECT = 6, 8, "720p", "3:4"
 
 
 def prompt_6s() -> str:
     """The reference H3 prompt, re-timed for 6 s (shot 2 ends at 00:06). The master in reference_prompt.json stays 5 s."""
-    p = json.loads((ROOT / "reference_prompt.json").read_text(encoding="utf-8"))["video"]["models"]["h3_minimax"]["prompt"]
+    p = json.loads((ROOT / "reference_prompt.json").read_text(encoding="utf-8"))["video"]["models"]["h3_10eros"]["prompt"]
     assert "00:05.000" in p, "reference prompt changed: re-check the 6 s re-timing"
     return p.replace("00:05.000", "00:06.000")
 

@@ -156,3 +156,10 @@ time,name,model,clip,ok,total,load,text,denoise,s_step,decode,warm_total,rss,ava
 11-19 18:07,decay2_st6,q4,720s,True,661.2,19.0,22.0,574.2,97.1,46.0,,22.7,10.8,0.0,13.2,,455.2,2.8,,"seed h3_quality_decay (fixed framing, yukomo_mcu): 6 steps"
 11-19 18:21,decay2_q6,q6,720s,True,830.4,15.5,11.9,764.4,96.7,38.8,,22.7,8.5,0.0,15.6,,496.7,2.47,,"seed h3_quality_decay (fixed framing, yukomo_mcu): GGUF Q6_K"
 11-19 18:38,decay2_bf16enc,q4,720s,True,964.1,152.2,11.5,761.3,94.5,39.1,,22.7,10.8,0.0,13.2,,458.0,2.91,,"seed h3_quality_decay (fixed framing, yukomo_mcu): text encoder bf16 (sol kept in the same overrides string)"
+11-20 00:14,rv_eros,eros,ref720,True,524.0,8.8,13.0,465.8,58.4,36.4,494.2,22.7,16.2,0.0,7.8,,512.6,13.36,,"night 2 reference: 10Eros Q6_K, 8 steps, ref720, production stack (int8 triton)"
+11-20 00:22,rv_q6e,q6,ref720,True,235.2,8.1,12.8,190.3,47.8,23.9,214.8,22.6,17.6,0.0,5.3,,672.8,6.72,,night 2 reference: HyperFlow Q6_K fast draft at 8 steps
+11-20 00:31,tm_eros,eros,ref720,True,508.3,8.9,13.0,462.6,57.8,23.8,,22.7,16.3,0.0,7.8,1.0,1.0,1.0,rv_eros,"timing split of a 10Eros step (probe, plumbing)"
+11-20 00:48,ep6_eros,eros,ref720,True,508.2,12.1,13.7,459.5,58.0,23.0,483.8,22.8,16.2,0.0,11.1,1.0,1.0,1.0,rv_eros,preload 6000 MB of the transformer in VRAM (default 0)
+11-20 01:07,ep12_eros,eros,ref720,True,564.0,9.4,13.7,499.1,57.2,41.8,520.4,22.8,16.2,0.0,17.4,1.0,1.0,1.0,rv_eros,preload 12000 MB
+11-20 02:09,tau16_eros,eros,ref720,True,485.4,9.3,13.2,439.1,54.9,23.8,464.4,22.8,16.2,0.0,7.8,0.452,0.95,1.14,rv_eros,Sol tau 1.6 instead of 1.3
+11-20 02:17,ep12_q6e,q6,ref720,True,237.3,7.5,14.0,192.8,46.5,22.9,212.0,22.8,17.5,0.0,15.9,1.0,1.0,1.0,rv_q6e,preload 12000 MB on the draft

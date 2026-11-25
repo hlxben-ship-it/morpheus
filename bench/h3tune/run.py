@@ -21,18 +21,18 @@ if not var.get("no_spoof"): import amdspoof  # noqa: F401
 ns = {"var": var, "after": []}
 for h in var.get("pre_hooks", []): exec(compile((HERE / h).read_text(), h, "exec"), ns)
 
-MODELS = {"int8": "minimax_h3_ref2va_hyperflow", "q4": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
-          "h3img": "minimax_h3_image_pruned", "q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k", "fl2va_q4": "minimax_h3_fl2va_hyperflow_gguf_q4_k_m", "ltx": "ltx2_22B_dev_q6"}
+MODELS = {"eros": "minimax_h3_ref2va_10eros_turbo_q6_k",  # the H3 model since 2026-11-19 (seed h3_shootout_rebuild); HyperFlow int8/q4/fl2va deleted
+          "h3img": "minimax_h3_image_pruned", "q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k", "ltx": "ltx2_22B_dev_q6"}
 clips = json.loads((HERE / "clips.json").read_text(encoding="utf-8"))
-clip, model = var.get("clip", "480s"), var.get("model", "int8")
+clip, model = var.get("clip", "480s"), var.get("model", "eros")
 pic = str(HERE / "in" / "yukomo.jpg")
 REFSET = var.get("refset") == "ref"  # overnight master: the new reference shot (bench/reference/start_frame.png + reference_prompt.json)
 if REFSET:
     pic = str(HERE / "in" / "ref_p1.png")
     _vref = json.loads((HERE.parent.parent / "reference_prompt.json").read_text(encoding="utf-8"))["video"]["models"]
-    clips["_prompt"] = _vref[{"q4": "h3_gguf_q4", "q6": "h3_gguf_q6"}.get(model, "h3_minimax")]["prompt"]
+    clips["_prompt"] = _vref[{"q6": "h3_gguf_q6"}.get(model, "h3_10eros")]["prompt"]
 settings = {"model_type": MODELS[model], "prompt": clips["_prompt"], "image_prompt_type": "S", "image_start": pic,
-            "image_refs": [pic], "video_prompt_type": "I", "seed": 20261112, "num_inference_steps": 4,
+            "image_refs": [pic], "video_prompt_type": "I", "seed": 20261112, "num_inference_steps": 8 if model == "eros" else 4,
             "sample_solver": "euler", "guidance_scale": 1.0, "guidance_phases": 1, "force_fps": 24,
             "multi_prompts_gen_type": "FG", "config": "distilled_4b,lightvae_int8", **clips[clip]}
 if model == "ltx":  # LTX 2.3 dev Q6 + distill LoRA, what morpheus.video_clip() and the Playground send (engine/jobs.py ltx_steps(8))

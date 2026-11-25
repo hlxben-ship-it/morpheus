@@ -19,8 +19,7 @@
   },
   "models": {
     "ltx23": {"references": {"label": "Frames", "main": true, "slots": 1, "toggles": ["last"]}},
-    "h3_minimax": {},
-    "h3_gguf_q4": {},
+    "h3_10eros": {},
     "h3_gguf_q6": {},
     "janku_v5": {"prompt": {"negative": true},
                  "references": {"label": "Start image (img2img)", "main": true, "slots": 0}},

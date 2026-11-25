@@ -20,9 +20,9 @@ SIZES = {
 LTX_BUDGET = 1920 * 1088
 
 MODELS = {"ltx23": "ltx2_22B_dev_q6",  # finetune in engine/wangp/finetunes/
-          "h3_minimax": "minimax_h3_ref2va_hyperflow",
-          # Video Rebirth's own GGUFs, converted by engine/wsl/gguf_to_wangp.py (Glia seed hyperflow_gguf_fl2va): less RAM
-          "h3_gguf_q4": "minimax_h3_ref2va_hyperflow_gguf_q4_k_m",
+          # the H3 model since the shootout (Glia seed h3_shootout_rebuild): 10Eros-Max TURBO, ready GGUF Q6_K, 8 steps
+          "h3_10eros": "minimax_h3_ref2va_10eros_turbo_q6_k",
+          # fast draft: Video Rebirth's own HyperFlow GGUF, converted by engine/wsl/gguf_to_wangp.py
           "h3_gguf_q6": "minimax_h3_ref2va_hyperflow_gguf_q6_k"}
 
 UPSCALERS = {"relayvsr": "RelayVSR", "seedvr2": "SeedVR2 3B"}
@@ -136,7 +136,7 @@ def render_settings(snap: dict, folder, seed: int | None = None) -> dict:
             loras, mults = [DISTILL_LORA] + loras, [phases] + mults
     else:
         if steps not in (4, 6, 8):
-            raise ValueError("H3 HyperFlow steps: 4, 6 or 8.")
+            raise ValueError("H3 steps: 4, 6 or 8.")
         s["video_length"] = h3_frames(snap["duration"])
         if s["video_length"] < H3_WANGP_MIN:
             s["_frames_minimum"] = s["video_length"]  # the worker lowers WanGP's floor for this one job

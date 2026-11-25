@@ -4424,7 +4424,7 @@
       dlg.showModal();
       jump(Math.min(startAt || 0, list.length - 1));
     }
-    // Remaster (seed_2026_11_16_remix_remaster): an all-H3-GGUF-Q4 timeline rendered again on GGUF Q6 at 1080p, shot by shot
+    // Remaster (seed_2026_11_16_remix_remaster): an all-10Eros timeline rendered again on 10Eros at 1080p, shot by shot
     async function remasterCheck() {
       const btn = $('pl-remaster'), ask = ++rmAsk;
       if (!btn) return;
@@ -4442,7 +4442,7 @@
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remaster</h2></div></div>
         <div class="pl-rm-body" style="padding:4px 20px 18px;max-width:520px">
-          <p>${n ? `Renders <b>${n} shot${n === 1 ? '' : 's'}</b> again, one after the other, on <b>H3 GGUF Q6 at 1080p</b>, with the same seed, prompt, pictures, LoRAs and steps.` : ''}${sw ? ` ${sw} shot${sw === 1 ? ' has' : 's have'} a remaster already and ${sw === 1 ? 'is' : 'are'} only swapped in.` : ''} Each finished shot lands on the shelf and replaces its original on the timeline.</p>
+          <p>${n ? `Renders <b>${n} shot${n === 1 ? '' : 's'}</b> again, one after the other, on <b>H3 10Eros at 1080p</b>, with the same seed, prompt, pictures, LoRAs and steps.` : ''}${sw ? ` ${sw} shot${sw === 1 ? ' has' : 's have'} a remaster already and ${sw === 1 ? 'is' : 'are'} only swapped in.` : ''} Each finished shot lands on the shelf and replaces its original on the timeline.</p>
           ${n ? `<p role="alert" style="color:var(--warn, #F08AA8)"><b>⚠ This blocks the GPU for ${est}</b> (rough estimate). Nothing else can render in the meantime. Stop keeps the finished shots; Remaster again carries on.</p>` : ''}
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button type="button" class="sb-quiet" data-a="no">Cancel</button><button type="button" class="pl-tl-play" data-a="go">⟳ Remaster</button></div></div>`;
       dlg.onclose = null;
@@ -5253,7 +5253,7 @@
       dlg.showModal();
       jump(Math.min(startAt || 0, list.length - 1));
     }
-    // Remaster (seed_2026_11_16_remix_remaster): an all-H3-GGUF-Q4 timeline rendered again on GGUF Q6 at 1080p, shot by shot
+    // Remaster (seed_2026_11_16_remix_remaster): an all-10Eros timeline rendered again on 10Eros at 1080p, shot by shot
     async function remasterCheck() {
       const btn = $('pl-remaster'), ask = ++rmAsk;
       if (!btn) return;
@@ -5271,7 +5271,7 @@
       const dlg = $('pl-modal');
       dlg.innerHTML = `<div class="gal-head pl-mhead"><div class="pl-mtitle"><h2 class="h">Remaster</h2></div></div>
         <div class="pl-rm-body" style="padding:4px 20px 18px;max-width:520px">
-          <p>${n ? `Renders <b>${n} shot${n === 1 ? '' : 's'}</b> again, one after the other, on <b>H3 GGUF Q6 at 1080p</b>, with the same seed, prompt, pictures, LoRAs and steps.` : ''}${sw ? ` ${sw} shot${sw === 1 ? ' has' : 's have'} a remaster already and ${sw === 1 ? 'is' : 'are'} only swapped in.` : ''} Each finished shot lands on the shelf and replaces its original on the timeline.</p>
+          <p>${n ? `Renders <b>${n} shot${n === 1 ? '' : 's'}</b> again, one after the other, on <b>H3 10Eros at 1080p</b>, with the same seed, prompt, pictures, LoRAs and steps.` : ''}${sw ? ` ${sw} shot${sw === 1 ? ' has' : 's have'} a remaster already and ${sw === 1 ? 'is' : 'are'} only swapped in.` : ''} Each finished shot lands on the shelf and replaces its original on the timeline.</p>
           ${n ? `<p role="alert" style="color:var(--warn, #F08AA8)"><b>⚠ This blocks the GPU for ${est}</b> (rough estimate). Nothing else can render in the meantime. Stop keeps the finished shots; Remaster again carries on.</p>` : ''}
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button type="button" class="sb-quiet" data-a="no">Cancel</button><button type="button" class="pl-tl-play" data-a="go">⟳ Remaster</button></div></div>`;
       dlg.onclose = null;

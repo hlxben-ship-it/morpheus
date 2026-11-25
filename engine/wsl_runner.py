@@ -23,10 +23,9 @@ DISTRO = "Ubuntu-24.04"
 START = ENGINE / "wsl" / "start_warm.sh"
 JOBS_DIR = ENGINE.parent / "output" / "engine" / "jobs"
 RAM_WAIT = 90  # seconds to wait for the RAM (the last worker's memory takes a moment to come back)
-WSL_MODELS = {"minimax_h3_ref2va_hyperflow", "ltx2_22B_dev_q6"}  # checkpoints on the WSL disk: all video renders here (2026-11-14)
+WSL_MODELS = {"minimax_h3_ref2va_10eros_turbo_q6_k", "minimax_h3_ref2va_hyperflow_gguf_q6_k", "ltx2_22B_dev_q6"}  # checkpoints on the WSL disk: all video renders here (2026-11-14)
 SOL = {"overrides": "attention_mode='sol'", "attention_sparsity": 1.3}  # tau 1.3: 2x per step; 1.6/2.0 bought ~0-6 % more
-SOL_MODELS = {"minimax_h3_ref2va_hyperflow", "minimax_h3_ref2va_hyperflow_gguf_q4_k_m", "minimax_h3_ref2va_hyperflow_gguf_q6_k",
-              "minimax_h3_ref2va_10eros_turbo_q5_0", "minimax_h3_ref2va_10eros_turbo_q6_k"}  # Sol sparse attention is an H3 path in WanGP
+SOL_MODELS = {"minimax_h3_ref2va_hyperflow_gguf_q6_k", "minimax_h3_ref2va_10eros_turbo_q6_k"}  # Sol sparse attention is an H3 path in WanGP
 ROCM10_MODELS = SOL_MODELS  # rendered on the ROCm 10 stack (start_warm.sh falls back to /root/venv when /root/venv10 is missing)
 
 

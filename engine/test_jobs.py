@@ -36,7 +36,7 @@ class Sizes(unittest.TestCase):
     def test_480p_draft(self):
         self.assertEqual(jobs.size("480p", "16:9"), (896, 512))
         self.assertEqual(jobs.render_settings(snap(res="480p"), DIR)["resolution"], "896x512")
-        self.assertEqual(jobs.render_settings(snap(model="h3_minimax", res="480p", aspect="9:16"), DIR)["resolution"], "512x896")
+        self.assertEqual(jobs.render_settings(snap(model="h3_10eros", res="480p", aspect="9:16"), DIR)["resolution"], "512x896")
 
     def test_spike_sizes(self):
         self.assertEqual(jobs.size("720p", "16:9"), (1280, 704))
@@ -109,9 +109,15 @@ class Ltx(unittest.TestCase):
 
 
 class H3(unittest.TestCase):
+    def test_models_after_the_shootout(self):  # seed h3_shootout_rebuild: 10Eros Q6_K + HyperFlow Q6_K draft, nothing else
+        self.assertEqual(jobs.render_settings(snap(model="h3_gguf_q6"), DIR)["model_type"], "minimax_h3_ref2va_hyperflow_gguf_q6_k")
+        for gone in ("h3_minimax", "h3_gguf_q4"):  # saved sessions naming a deleted model get a clear error, not a crash
+            with self.assertRaisesRegex(ValueError, "does not render"):
+                jobs.render_settings(snap(model=gone), DIR)
+
     def test_spike_setup(self):
-        s = jobs.render_settings(snap(model="h3_minimax", steps=4), DIR, seed=1)
-        self.assertEqual(s["model_type"], "minimax_h3_ref2va_hyperflow")
+        s = jobs.render_settings(snap(model="h3_10eros", steps=4), DIR, seed=1)
+        self.assertEqual(s["model_type"], "minimax_h3_ref2va_10eros_turbo_q6_k")
         self.assertEqual((s["num_inference_steps"], s["sample_solver"], s["guidance_phases"], s["config"]), (4, "euler", 1, "distilled_4b,lightvae_int8"))
         self.assertEqual(s["image_refs"], [s["image_start"]])
         self.assertEqual(s["video_prompt_type"], "I")
@@ -124,20 +130,20 @@ class H3(unittest.TestCase):
             n = jobs.h3_frames(s)
             self.assertEqual((n - 5) % 17, 0)
             self.assertGreaterEqual(n, jobs.frames(s))
-        short = jobs.render_settings(snap(model="h3_minimax"), DIR)  # 3 s: below WanGP's 107, the worker lowers the floor
+        short = jobs.render_settings(snap(model="h3_10eros"), DIR)  # 3 s: below WanGP's 107, the worker lowers the floor
         self.assertEqual((short["video_length"], short["_frames_minimum"]), (73, 73))
-        long = jobs.render_settings(dict(snap(model="h3_minimax"), duration=5), DIR)
+        long = jobs.render_settings(dict(snap(model="h3_10eros"), duration=5), DIR)
         self.assertEqual(long["video_length"], 124)
         self.assertNotIn("_frames_minimum", long)
 
     def test_fast_routing_is_a_per_job_flag(self):
-        base = snap(model="h3_minimax")
+        base = snap(model="h3_10eros")
         self.assertNotIn("_sol_centroid_route", jobs.render_settings(base, DIR))
         self.assertNotIn("_sol_centroid_route", jobs.render_settings(dict(base, params={**base["params"], "routing": "exact"}), DIR))
         self.assertIs(jobs.render_settings(dict(base, params={**base["params"], "routing": "fast"}), DIR)["_sol_centroid_route"], True)
 
     def test_encoder_default_and_choices(self):
-        base = snap(model="h3_minimax")
+        base = snap(model="h3_10eros")
         default = jobs.render_settings(base, DIR)
         self.assertEqual(default["config"], "distilled_4b,lightvae_int8")
         self.assertNotIn("overrides", default)
@@ -149,28 +155,28 @@ class H3(unittest.TestCase):
         self.assertEqual((q4["config"], "overrides" in q4), ("gguf_q4_k_m,lightvae_int8", False))
 
     def test_unknown_encoder_stops_before_loading(self):
-        base = snap(model="h3_minimax")
+        base = snap(model="h3_10eros")
         with self.assertRaises(ValueError):
             jobs.render_settings(dict(base, params={**base["params"], "encoder": "32b_bf16"}), DIR)
 
     def test_steps(self):
         for ok in (4, 6, 8):
-            self.assertEqual(jobs.render_settings(snap(model="h3_minimax", steps=ok), DIR)["num_inference_steps"], ok)
+            self.assertEqual(jobs.render_settings(snap(model="h3_10eros", steps=ok), DIR)["num_inference_steps"], ok)
         for bad in (5, 10):
             with self.assertRaises(ValueError):
-                jobs.render_settings(snap(model="h3_minimax", steps=bad), DIR)
+                jobs.render_settings(snap(model="h3_10eros", steps=bad), DIR)
 
     def test_no_picture_is_a_clear_error(self):
         with self.assertRaisesRegex(ValueError, "main image or a reference"):
-            jobs.render_settings(snap(model="h3_minimax", start=None), DIR)
+            jobs.render_settings(snap(model="h3_10eros", start=None), DIR)
 
     def test_stored_end_frame_is_not_sent(self):  # H3 has no End slot; an LTX end stays saved, unused
-        s = jobs.render_settings(snap(model="h3_minimax", end="end_1.png"), DIR)
+        s = jobs.render_settings(snap(model="h3_10eros", end="end_1.png"), DIR)
         self.assertEqual(s["image_prompt_type"], "S")
         self.assertNotIn("image_end", s)
 
     def test_seed_example(self):  # main = first frame, Ref 2 = last frame, Ref 1 + 3 filled
-        s = jobs.render_settings(snap(model="h3_minimax", refs=("r1.png", "r2.png", "r3.png", None), last_ref=1), DIR)
+        s = jobs.render_settings(snap(model="h3_10eros", refs=("r1.png", "r2.png", "r3.png", None), last_ref=1), DIR)
         self.assertEqual(s["image_prompt_type"], "SE")
         self.assertEqual(Path(s["image_start"]), DIR / "start_1.png")
         self.assertEqual(Path(s["image_end"]), DIR / "r2.png")
@@ -179,21 +185,21 @@ class H3(unittest.TestCase):
         self.assertIn("At the end of the target video, Picture 2", s["prompt"])
 
     def test_main_as_reference_only(self):
-        s = jobs.render_settings(snap(model="h3_minimax", main_first=False, refs=(None, "r2.png", None, None)), DIR)
+        s = jobs.render_settings(snap(model="h3_10eros", main_first=False, refs=(None, "r2.png", None, None)), DIR)
         self.assertEqual(s["image_prompt_type"], "")
         self.assertNotIn("image_start", s)
         self.assertEqual([Path(x).name for x in s["image_refs"]], ["start_1.png", "r2.png"])
         self.assertTrue(s["prompt"].startswith("integrated_multimodal_description"))
 
     def test_last_frame_without_main_is_picture_1(self):
-        s = jobs.render_settings(snap(model="h3_minimax", start=None, refs=("r1.png", None, None, None), last_ref=0), DIR)
+        s = jobs.render_settings(snap(model="h3_10eros", start=None, refs=("r1.png", None, None, None), last_ref=0), DIR)
         self.assertEqual(s["image_prompt_type"], "E")
         self.assertEqual(s["image_refs"], [s["image_end"]])  # the only anchor repeated as the reference
         self.assertIn("At the end of the target video, Picture 1", s["prompt"])
 
     def test_structured_prompt_untouched(self):
         p = "subject_definitions:\n<Subject 1> is ...\ndetailed_description:\n[Shot 1] ..."
-        self.assertEqual(jobs.render_settings(snap(model="h3_minimax", prompt=p), DIR)["prompt"], p)
+        self.assertEqual(jobs.render_settings(snap(model="h3_10eros", prompt=p), DIR)["prompt"], p)
 
 
 class H3Pictures(unittest.TestCase):

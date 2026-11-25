@@ -1,0 +1,20 @@
+{
+ "name": "rv_q6e",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q6",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "night 2 reference: HyperFlow Q6_K fast draft at 8 steps",
+ "int8_kernels": "triton"
+}

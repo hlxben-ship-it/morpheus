@@ -1,0 +1,20 @@
+{
+ "name": "rv_eros",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "eros",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "night 2 reference: 10Eros Q6_K, 8 steps, ref720, production stack (int8 triton)",
+ "int8_kernels": "triton"
+}

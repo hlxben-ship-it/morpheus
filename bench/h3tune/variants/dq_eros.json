@@ -1,0 +1,22 @@
+{
+ "name": "dq_eros",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "eros",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py",
+  "hooks/dequant_time.py"
+ ],
+ "repeat": 1,
+ "note": "dequant share probe (plumbing)",
+ "int8_kernels": "triton",
+ "ref": "rv_eros"
+}

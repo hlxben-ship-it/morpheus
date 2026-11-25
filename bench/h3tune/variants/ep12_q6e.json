@@ -1,0 +1,21 @@
+{
+ "name": "ep12_q6e",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "q6",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 12000
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "preload 12000 MB on the draft",
+ "int8_kernels": "triton",
+ "ref": "rv_q6e"
+}

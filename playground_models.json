@@ -48,9 +48,9 @@
       "options": []
     },
     {
-      "id": "h3_minimax",
-      "label": "H3 HyperFlow Flash",
-      "note": "Best faces and staging. Measured at 4 steps, 720p: 3 s ≈ 4 min, 4.5 s ≈ 6:30, 8 s ≈ 22 min. 1080p is about 9 min per step.",
+      "id": "h3_10eros",
+      "label": "H3 10Eros-Max TURBO Q6_K",
+      "note": "The H3 model (shootout 2026-11-19: best in the blind round). 8-step TURBO finetune, 18.3 GB GGUF, local use only (MiniMax H3 community licence). Measured at 8 steps, 6 s 720p: 7:47 cold, ~50 s per step; RAM at the 24 GB WSL limit.",
       "resolutions": [
         {
           "id": "720p",
@@ -79,7 +79,7 @@
               6,
               8
             ],
-            "default": 4
+            "default": 8
           }
         }
       ],
@@ -90,8 +90,14 @@
           "type": "choice",
           "stage": "main",
           "choices": [
-            {"id": "exact", "label": "Exact"},
-            {"id": "fast", "label": "Fast"}
+            {
+              "id": "exact",
+              "label": "Exact"
+            },
+            {
+              "id": "fast",
+              "label": "Fast"
+            }
           ],
           "default": "exact",
           "note": "Fast: ~8 % quicker, same seed gives another clip."
@@ -101,72 +107,18 @@
           "label": "Prompt encoder",
           "type": "choice",
           "choices": [
-            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
-            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
-            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
-          ],
-          "default": "4b_int8",
-          "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."
-        }
-      ]
-    },
-    {
-      "id": "h3_gguf_q4",
-      "label": "H3 HyperFlow GGUF Q4_K_M",
-      "note": "Test against H3 HyperFlow Flash (int8, 15.6 GB): Video Rebirth's own GGUF, 9.2 GB, same steps and prompt format. Less RAM; speed and quality: compare with the same seed.",
-      "resolutions": [
-        {
-          "id": "720p",
-          "label": "720p",
-          "target": "720p"
-        },
-        {
-          "id": "480p",
-          "label": "480p (draft, fast)",
-          "target": "480p"
-        },
-        {
-          "id": "1080p",
-          "label": "1080p (very slow)",
-          "target": "1080p"
-        }
-      ],
-      "stages": [
-        {
-          "id": "main",
-          "label": "Single pass",
-          "kind": "sample",
-          "steps": {
-            "choices": [
-              4,
-              6,
-              8
-            ],
-            "default": 4
-          }
-        }
-      ],
-      "options": [
-        {
-          "id": "routing",
-          "label": "Attention routing",
-          "type": "choice",
-          "stage": "main",
-          "choices": [
-            {"id": "exact", "label": "Exact"},
-            {"id": "fast", "label": "Fast"}
-          ],
-          "default": "exact",
-          "note": "Fast: ~8 % quicker, same seed gives another clip."
-        },
-        {
-          "id": "encoder",
-          "label": "Prompt encoder",
-          "type": "choice",
-          "choices": [
-            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
-            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
-            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
+            {
+              "id": "4b_int8",
+              "label": "Distilled 4B int8 (default)"
+            },
+            {
+              "id": "4b_bf16",
+              "label": "Distilled 4B bf16 (+4 GB)"
+            },
+            {
+              "id": "32b_q4",
+              "label": "32B GGUF Q4_K_M (14.6 GB, test)"
+            }
           ],
           "default": "4b_int8",
           "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."
@@ -175,8 +127,8 @@
     },
     {
       "id": "h3_gguf_q6",
-      "label": "H3 HyperFlow GGUF Q6_K",
-      "note": "Test against H3 HyperFlow Flash (int8, 15.6 GB): Video Rebirth's own GGUF, 11.8 GB, same steps and prompt format. Less RAM; speed and quality: compare with the same seed.",
+      "label": "H3 HyperFlow GGUF Q6_K (fast draft)",
+      "note": "Fast draft: Video Rebirth's HyperFlow Flash GGUF, 11.8 GB. 6 s 720p at 8 steps ≈ 6:30 (10Eros 7:47); lost the blind round on looks.",
       "resolutions": [
         {
           "id": "720p",
@@ -216,8 +168,14 @@
           "type": "choice",
           "stage": "main",
           "choices": [
-            {"id": "exact", "label": "Exact"},
-            {"id": "fast", "label": "Fast"}
+            {
+              "id": "exact",
+              "label": "Exact"
+            },
+            {
+              "id": "fast",
+              "label": "Fast"
+            }
           ],
           "default": "exact",
           "note": "Fast: ~8 % quicker, same seed gives another clip."
@@ -227,9 +185,18 @@
           "label": "Prompt encoder",
           "type": "choice",
           "choices": [
-            {"id": "4b_int8", "label": "Distilled 4B int8 (default)"},
-            {"id": "4b_bf16", "label": "Distilled 4B bf16 (+4 GB)"},
-            {"id": "32b_q4", "label": "32B GGUF Q4_K_M (14.6 GB, test)"}
+            {
+              "id": "4b_int8",
+              "label": "Distilled 4B int8 (default)"
+            },
+            {
+              "id": "4b_bf16",
+              "label": "Distilled 4B bf16 (+4 GB)"
+            },
+            {
+              "id": "32b_q4",
+              "label": "32B GGUF Q4_K_M (14.6 GB, test)"
+            }
           ],
           "default": "4b_int8",
           "note": "Test: how well H3 follows the prompt. A change reloads the model; a missing encoder file is downloaded on first use."

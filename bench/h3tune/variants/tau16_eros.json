@@ -1,0 +1,24 @@
+{
+ "name": "tau16_eros",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "eros",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py"
+ ],
+ "repeat": 2,
+ "note": "Sol tau 1.6 instead of 1.3",
+ "int8_kernels": "triton",
+ "ref": "rv_eros",
+ "settings": {
+  "attention_sparsity": 1.6
+ }
+}

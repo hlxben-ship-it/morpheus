@@ -1,0 +1,22 @@
+{
+ "name": "pv8_eros",
+ "python": "/root/venv10/bin/python",
+ "refset": "ref",
+ "model": "eros",
+ "clip": "ref720",
+ "cli": {
+  "perc-reserved-mem-max": 0.05,
+  "preload": 0
+ },
+ "hooks": [
+  "hooks/gguf_triton.py",
+  "hooks/sol_kernel.py",
+  "hooks/sol_route.py",
+  "hooks/int8_backend.py",
+  "hooks/sol_int8pv.py"
+ ],
+ "repeat": 2,
+ "note": "Sol int8 P.V on 10Eros",
+ "int8_kernels": "triton",
+ "ref": "rv_eros"
+}

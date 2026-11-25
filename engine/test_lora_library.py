@@ -132,9 +132,9 @@ class LibraryTest(unittest.TestCase):
         self.add()
         pg = playground.new({})
         with self.assertRaisesRegex(ValueError, "this model takes"):
-            playground.save({"id": pg["id"], "model": "h3_minimax", "loras": [{"id": "dream", "strength": 1}, {"id": "", "strength": 1}]})
+            playground.save({"id": pg["id"], "model": "h3_10eros", "loras": [{"id": "dream", "strength": 1}, {"id": "", "strength": 1}]})
         playground.save({"id": pg["id"], "loras": [{"id": "dream", "strength": 1}, {"id": "", "strength": 1}]})
-        self.assertEqual(playground.save({"id": pg["id"], "model": "h3_minimax"})["loras"][0]["id"], "")
+        self.assertEqual(playground.save({"id": pg["id"], "model": "h3_10eros"})["loras"][0]["id"], "")
 
     def test_old_free_paths_dropped(self):
         pg = playground.new({})

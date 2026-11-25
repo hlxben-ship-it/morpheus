@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory() as tmp:
     clips.mkdir(parents=True)
     (base / "start_1.png").write_bytes(b"png")
 
-    def shot(name, model="h3_gguf_q4", steps=6, seed=1234, **extra):
+    def shot(name, model="h3_10eros", steps=6, seed=1234, **extra):
         (clips / f"{name}.mp4").write_bytes(b"mp4")
         meta = {"format": 1, "playground": pid, "prompt": f"prompt {name}", "model": {"id": model, "label": model},
                 "params": {"main.steps": steps}, "total_steps": steps,
@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     a, b = shot("a"), shot("b", steps=4, seed=99)
     ltx = shot("ltx", model="ltx23")
-    flash = shot("flash", model="h3_minimax")
+    flash = shot("flash", model="h3_gguf_q6")
     up = shot("up", upscale={"method": "relay"})
     lp = shot("lp", loop={"source": "x"})
     plan = lambda: playground.remaster_plan({"id": pid})
@@ -63,10 +63,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check("block: empty timeline", not plan()["ok"])
     setr([a, b, a])
     p = plan()
-    check("pass: all H3 GGUF Q4", p["ok"])
+    check("pass: all H3 10Eros", p["ok"])
     check("duplicates render once, in timeline order", [s["ref"] for s in p["shots"]] == [a, b])
     check("estimate = steps x 9 min (6+4 steps)", p["seconds"] == 10 * 9 * 60)
-    for bad, word in ((ltx, "ltx23"), (flash, "h3_minimax"), (up, "upscale"), (lp, "loop")):
+    for bad, word in ((ltx, "ltx23"), (flash, "h3_gguf_q6"), (up, "upscale"), (lp, "loop")):
         setr([a, bad])
         q = plan()
         check(f"block: {Path(bad).stem} ({word}) disables Remaster and names the clip", not q["ok"] and Path(bad).name in q["reason"])
@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # snapshot rewrite: only model + resolution change
     _, meta = playground.clip_meta(pid, f"playground/{pid}/{a}")
     snap = playground.remaster_snap(pid, a, meta)
-    check("snap: model is GGUF Q6", snap["model"]["id"] == "h3_gguf_q6")
+    check("snap: model is 10Eros", snap["model"]["id"] == "h3_10eros")
     check("snap: resolution 1080p", snap["resolution"]["id"] == "1080p")
     check("snap: same seed / prompt / steps / pictures / duration / aspect",
           (snap["seed"], snap["prompt"], snap["params"], snap["pictures"], snap["duration"], snap["aspect"])
@@ -124,7 +124,7 @@ with tempfile.TemporaryDirectory() as tmp:
         tl = playground.load(pid)["remix"]
         check("finished shot swapped (both copies), the stopped one kept", tl[0] == tl[2] != a and tl[1] == b)
         check("job counts shots", job.get("shots") == 2 and job.get("shots_done") == 1)
-        check("render 1: Q6, 1080p, the clip's own seed", calls[0] == {"model": "h3_gguf_q6", "seed": 1234, "res": "1080p"})
+        check("render 1: 10Eros, 1080p, the clip's own seed", calls[0] == {"model": "h3_10eros", "seed": 1234, "res": "1080p"})
         p = plan()
         check("resume: only the unfinished shot left", p["ok"] and [s["ref"] for s in p["shots"]] == [b])
         # the original put back on the timeline: swapped, not rendered again
@@ -137,8 +137,8 @@ with tempfile.TemporaryDirectory() as tmp:
         check("resume run renders only b, seed 99", [c["seed"] for c in calls] == [99] and out["shots"] == 1 and out["swapped"] == 1)
         metas = [json.loads((base / r).with_suffix(".json").read_text(encoding="utf-8")) for r in tl]
         check("timeline is all remasters now", all(m.get("remaster_of") for m in metas))
-        check("remaster meta: Q6 1080p + seed", [(m["model"]["id"], m["resolution"]["id"], m["seed"]) for m in metas]
-              == [("h3_gguf_q6", "1080p", 1234), ("h3_gguf_q6", "1080p", 99)])
+        check("remaster meta: 10Eros 1080p + seed", [(m["model"]["id"], m["resolution"]["id"], m["seed"]) for m in metas]
+              == [("h3_10eros", "1080p", 1234), ("h3_10eros", "1080p", 99)])
         check("originals stay on the shelf", (base / a).is_file() and (base / b).is_file())
         check("block: everything remastered", not plan()["ok"] and "already" in plan()["reason"])
     finally:

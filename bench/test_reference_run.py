@@ -107,7 +107,7 @@ class Cli(unittest.TestCase):
         self.assertEqual(rr.main(["--model", "nope", "--dry"]), 2)
 
     def test_dry_single_model(self):
-        self.assertEqual(rr.main(["--model", "h3_gguf_q4", "--dry"]), 0)
+        self.assertEqual(rr.main(["--model", "h3_10eros", "--dry"]), 0)
 
 
 if __name__ == "__main__":

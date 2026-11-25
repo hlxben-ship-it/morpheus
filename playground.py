@@ -743,8 +743,8 @@ def export_remix(req: dict) -> dict:
             "clips": len(files), "seconds": round(sum(i["seconds"] for i in infos), 2)}
 
 
-# ---- Remaster (seed_2026_11_16_remix_remaster): an all-H3-GGUF-Q4 timeline re-rendered on GGUF Q6 at 1080p ----
-REMASTER_FROM, REMASTER_TO, REMASTER_RES = "h3_gguf_q4", "h3_gguf_q6", "1080p"
+# ---- Remaster (seed_2026_11_16_remix_remaster): an all-10Eros timeline re-rendered on 10Eros at 1080p (seed h3_shootout_rebuild) ----
+REMASTER_FROM, REMASTER_TO, REMASTER_RES = "h3_10eros", "h3_10eros", "1080p"
 REMASTER_SEC_PER_STEP = 9 * 60  # the H3 Flash note: 1080p is about 9 min per step (a ~5 s shot); Q6 unmeasured, a rough guide
 
 
@@ -815,7 +815,7 @@ def remaster_plan(req: dict) -> dict:
         model = (meta.get("model") or {}).get("id")
         if model != REMASTER_FROM or meta.get("upscale") or meta.get("loop"):
             why = "is an upscale" if meta.get("upscale") else "is a loop" if meta.get("loop") else                   f"was rendered with {(meta.get('model') or {}).get('label') or 'no recorded model'}"
-            return {"ok": False, "reason": f"Remaster needs every timeline clip from H3 HyperFlow GGUF Q4_K_M: {name} {why}.",
+            return {"ok": False, "reason": f"Remaster needs every timeline clip from H3 10Eros-Max TURBO Q6_K: {name} {why}.",
                     "shots": [], "swaps": {}, "seconds": 0}
         steps = int((meta.get("params") or {}).get("main.steps") or 4)
         seconds += steps * REMASTER_SEC_PER_STEP * max(1.0, float(meta.get("duration") or 5) / 5)
