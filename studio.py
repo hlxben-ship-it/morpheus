@@ -5,10 +5,10 @@ playground.py action works on it unchanged: render, upscale, Loop it, Cut, Remix
 (image_playground.py reads and writes it there). "side" says which half the page shows; the model picker lists both
 families and switching to a model of the other family switches the side.
 
-Stage 2, stateful tiles: every shelf tile is a document. Its rendered state is its sidecar (never changes); its edited
-state is a working copy. The editor (the working state above) shows one tile at a time: "open" names it ("new" = the
-loose, unrendered draft, else "clips/<x>.mp4" | "images/<x>.png"), "dirty" says it differs from its rendered state, and
-"tiles" keeps the edited copies of the tiles that are not open (plus the draft while a render is open).
+Drafts (seed studio_drafts, replaces stage 2's edited copies): a rendered tile is read-only, its settings = its sidecar.
+"drafts" = {"draft:<n>": {"settings", "from"}} are the editable tiles, any number. The editor (the working state above)
+shows one tile: "open" names it ("draft:<n>" | "clips/<x>.mp4" | "images/<x>.png"); an open draft's slot is refreshed
+from the working state when another tile opens. Run only from a draft; the draft stays open after it.
 """
 import base64
 import json
@@ -20,7 +20,7 @@ import playground
 import playground_models as pm
 
 SIDES = ("video", "image")
-META = {"id", "kind", "created", "updated", "cover", "starred", "tiles", "open", "dirty", "remix", "_clean", "pictures", "missing", "names"}
+META = {"id", "kind", "created", "updated", "cover", "starred", "tiles", "open", "dirty", "drafts", "next_draft", "remix", "_clean", "pictures", "missing", "names"}
 TILE = re.compile(r"(clips/[0-9A-Za-z_.-]+\.mp4|images/[0-9A-Za-z_.-]+\.png)")
 
 
@@ -44,10 +44,33 @@ def _raw(play_id: str) -> dict:
         raise ValueError("This playground does not exist.")
     if st.get("kind") != "studio":
         raise ValueError("This is not a Studio playground.")
-    st.setdefault("open", "new")  # a Studio from before stage 2: its working state is the draft (seed Q4)
-    st.setdefault("dirty", False)
-    st.setdefault("tiles", {})
+    if "drafts" not in st:
+        _migrate(st)
     return st
+
+
+def _migrate(st: dict) -> None:
+    """A Studio from before seed studio_drafts: every working copy becomes its own draft, nothing is lost (Q2). The
+    working state of the open tile is a draft when it was the loose one or had edits; a clean render stays open read-only."""
+    tiles, dirty, cur = st.pop("tiles", None) or {}, st.pop("dirty", False), st.get("open", "new")
+    names = st.get("names") or {}
+    st["drafts"], st["next_draft"] = {}, 0
+    if "new" in tiles:
+        ref = _add_draft(st, tiles.pop("new"))
+        if names.get("new"):
+            names[ref] = names["new"]
+    open_ref = cur
+    if cur == "new" or dirty:
+        open_ref = _add_draft(st, settings_of(st), None if cur == "new" else cur)
+        if cur == "new" and names.get("new"):
+            names[open_ref] = names["new"]
+    for ref, s in tiles.items():
+        _add_draft(st, s, ref)
+    names.pop("new", None)
+    if not st["drafts"]:
+        _add_draft(st, fresh_settings(st["id"]))
+    st["open"] = open_ref
+    _put(st)
 
 
 def _put(st: dict) -> dict:
@@ -67,7 +90,7 @@ def _set_settings(st: dict, s: dict) -> None:
 
 def new(req: dict) -> dict:
     st = playground.new({})
-    st.update(kind="studio", side="video", image=image_half(st["id"]), open="new", dirty=False, tiles={})
+    st.update(kind="studio", side="video", image=image_half(st["id"]), open="draft:1", drafts={"draft:1": {"settings": {}, "from": None}}, next_draft=1)
     return playground.load(_put(st)["id"])
 
 
@@ -110,11 +133,15 @@ def picture_frame(req: dict) -> dict:
     return playground.frame({"id": play_id, "kind": kind, "data": data})
 
 
-# ---- stage 2: stateful tiles ----
+# ---- drafts (seed studio_drafts): rendered tiles are read-only, drafts are the only editable tiles ----
 
-def tile_exists(play_id: str, ref: str) -> bool:
-    if ref == "new":
-        return True
+def is_draft(ref) -> bool:
+    return isinstance(ref, str) and ref.startswith("draft:")
+
+
+def tile_exists(play_id: str, ref: str, st: dict = None) -> bool:
+    if is_draft(ref):
+        return ref in ((st if st is not None else _raw(play_id)).get("drafts") or {})
     if not TILE.fullmatch(str(ref)):
         return False
     f = playground.folder(play_id) / ref
@@ -148,31 +175,39 @@ def _load_rendered(play_id: str, ref: str) -> None:
             half["defaults"] = meta["defaults"]
         else:
             half.pop("defaults", None)
-    st.update(side=to, open=ref, dirty=False)
+    st.update(side=to, open=ref)
     _put(st)
 
 
+def _stash(st: dict) -> None:
+    """The open draft's working state goes back into its slot (a rendered tile has nothing to keep)."""
+    if is_draft(st["open"]) and st["open"] in st["drafts"]:
+        st["drafts"][st["open"]]["settings"] = settings_of(st)
+
+
+def _add_draft(st: dict, settings: dict, src=None) -> str:
+    st["next_draft"] = int(st.get("next_draft") or 0) + 1
+    ref = f"draft:{st['next_draft']}"
+    st["drafts"][ref] = {"settings": settings, "from": src}
+    return ref
+
+
+def _show_draft(st: dict, ref: str) -> None:
+    _set_settings(st, dict(st["drafts"][ref]["settings"]) or fresh_settings(st["id"]))
+    st["open"] = ref
+
+
 def open_tile(req: dict) -> dict:
-    """Click a tile: the open tile's working state is kept as its edited copy (the draft always, a render only when it
-    has edits), then the clicked tile's edited copy, else its rendered state, fills the editor."""
+    """Click a tile: a draft opens editable with its own settings, a render opens read-only with its rendered state."""
     play_id, ref = str(req.get("id", "")), str(req.get("tile", ""))
     st = _raw(play_id)
-    if not tile_exists(play_id, ref):
+    if not tile_exists(play_id, ref, st):
         raise ValueError("This tile is gone.")
-    cur = st["open"]
-    if cur == ref:
+    if st["open"] == ref:
         return info({"id": play_id})
-    if cur == "new" or st["dirty"]:
-        st["tiles"][cur] = settings_of(st)
-    else:
-        st["tiles"].pop(cur, None)
-    if ref in st["tiles"]:
-        _set_settings(st, st["tiles"].pop(ref))
-        st.update(open=ref, dirty=ref != "new")
-        _put(st)
-    elif ref == "new":
-        _set_settings(st, fresh_settings(play_id))
-        st.update(open="new", dirty=False)
+    _stash(st)
+    if is_draft(ref):
+        _show_draft(st, ref)
         _put(st)
     else:
         st["open"] = ref
@@ -181,42 +216,55 @@ def open_tile(req: dict) -> dict:
     return info({"id": play_id})
 
 
-def back(req: dict) -> dict:
-    """"Back to rendered": the open tile drops its edits."""
-    play_id = str(req.get("id", ""))
+def new_draft(req: dict) -> dict:
+    """"+ New" (empty draft) or "Use these settings on new" (tile = a rendered tile: the draft starts with its settings)."""
+    play_id, src = str(req.get("id", "")), req.get("tile")
     st = _raw(play_id)
-    if st["open"] == "new":
-        raise ValueError("The draft has not been rendered yet.")
-    _load_rendered(play_id, st["open"])
+    if src is not None:
+        src = str(src)
+        if is_draft(src) or not tile_exists(play_id, src, st):
+            raise ValueError("Only a rendered tile can be used on a new draft.")
+    _stash(st)
+    _put(st)
+    if src is None:
+        st = _raw(play_id)
+        settings = fresh_settings(play_id)
+    else:
+        _load_rendered(play_id, src)
+        st = _raw(play_id)
+        settings = settings_of(st)
+    ref = _add_draft(st, settings, src)
+    _show_draft(st, ref)
+    _put(st)
+    return info({"id": play_id})
+
+
+def delete_draft(req: dict) -> dict:
+    """Trash on a draft: gone at once (Q4). Was it open, the newest other draft opens, else a fresh empty one."""
+    play_id, ref = str(req.get("id", "")), str(req.get("tile", ""))
+    st = _raw(play_id)
+    if not is_draft(ref):
+        raise ValueError("Only a draft can be deleted here.")
+    if ref not in st["drafts"]:
+        raise ValueError("This draft is gone.")
+    del st["drafts"][ref]
+    (st.get("names") or {}).pop(ref, None)
+    if st["open"] == ref:
+        rest = list(st["drafts"])
+        _show_draft(st, rest[-1] if rest else _add_draft(st, fresh_settings(play_id)))
+    _put(st)
     return info({"id": play_id})
 
 
 def run_source(play_id: str):
-    """The tile a render starts from (None when this is no Studio)."""
-    try:
-        return _raw(play_id)["open"]
-    except ValueError:
-        return None
-
-
-def rendered(play_id: str, src, refs: list) -> None:
-    """A render from tile `src` arrived as `refs`: the first new tile takes over the editor if it still showed `src`
-    (its working state is exactly what was run, so it is not dirty); the source falls back to its rendered state (seed
-    Q1), the draft to a fresh empty one."""
-    if src is None or not refs:
-        return
+    """The tile a render starts from (None when this is no Studio). A rendered tile is read-only: no render from it."""
     try:
         st = _raw(play_id)
     except ValueError:
-        return
-    new_ref = str(refs[0]).split(f"{play_id}/", 1)[-1]  # "images/x.png" | "clips/x.mp4" (refs may carry the folder)
-    if st["open"] == src:
-        st.update(open=new_ref, dirty=False)
-    if src == "new":
-        st["tiles"]["new"] = fresh_settings(play_id)
-    else:
-        st["tiles"].pop(src, None)
-    _put(st)
+        return None
+    if not is_draft(st["open"]):
+        raise ValueError("A rendered tile is read-only. Use its settings on a new draft to render again.")
+    return st["open"]
 
 
 def banner_of(play_id: str, ref: str) -> str:
@@ -236,18 +284,25 @@ def banner_of(play_id: str, ref: str) -> str:
     return ""
 
 
+def _label(st: dict, ref: str) -> str:
+    names = st.get("names") or {}
+    if names.get(ref):
+        return names[ref]
+    src = st["drafts"][ref].get("from")
+    return f"Draft · from {names.get(src) or src.split('/')[-1]}" if src else "Draft"
+
+
 def info(req: dict) -> dict:
-    """What the page needs to draw the tiles: the open one, whether it has edits, every tile with edits, the banner."""
+    """What the page needs: the open tile, whether it is read-only, the drafts (newest first), the banner, the names."""
     play_id = str(req.get("id", ""))
     st = _raw(play_id)
-    if not tile_exists(play_id, st["open"]):  # the open tile was deleted: its working state stays, as the draft
-        st["tiles"].pop("new", None)
-        st.update(open="new", dirty=False)
+    if not tile_exists(play_id, st["open"], st):  # the open tile was deleted: the newest draft opens
+        rest = list(st["drafts"])
+        _show_draft(st, rest[-1] if rest else _add_draft(st, fresh_settings(play_id)))
         _put(st)
-    st["tiles"] = {k: v for k, v in st["tiles"].items() if tile_exists(play_id, k)}
-    edited = [k for k in st["tiles"] if k != "new"] + ([st["open"]] if st["dirty"] and st["open"] != "new" else [])
-    names = {k: v for k, v in (st.get("names") or {}).items() if tile_exists(play_id, k)}
-    return {"open": st["open"], "dirty": st["dirty"], "edited": edited, "side": st.get("side", "video"),
+    names = {k: v for k, v in (st.get("names") or {}).items() if tile_exists(play_id, k, st)}
+    drafts = [{"ref": k, "label": _label(st, k), "from": d.get("from")} for k, d in reversed(list(st["drafts"].items()))]
+    return {"open": st["open"], "readonly": not is_draft(st["open"]), "drafts": drafts, "side": st.get("side", "video"),
             "banner": banner_of(play_id, st["open"]), "names": names}
 
 
@@ -255,7 +310,7 @@ def rename(req: dict) -> dict:
     """A tile's own name (the toolbar title and its shelf label); empty = back to the generated one."""
     play_id, ref = str(req.get("id", "")), str(req.get("tile", ""))
     st = _raw(play_id)
-    if not tile_exists(play_id, ref):
+    if not tile_exists(play_id, ref, st):
         raise ValueError("This tile is gone.")
     name = " ".join(str(req.get("name") or "").split())[:80]
     names = dict(st.get("names") or {})
@@ -290,4 +345,4 @@ def resharpen_last(req: dict) -> dict:
 
 RESHARPEN = "muse_resharpen"
 
-ACTIONS = {"new": new, "side": side, "resharpen_last": resharpen_last, "picture_frame": picture_frame, "open": open_tile, "back": back, "info": info, "rename": rename}
+ACTIONS = {"new": new, "side": side, "resharpen_last": resharpen_last, "picture_frame": picture_frame, "open": open_tile, "new_draft": new_draft, "delete_draft": delete_draft, "info": info, "rename": rename}

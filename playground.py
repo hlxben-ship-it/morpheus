@@ -115,10 +115,7 @@ def h3_pictures(state: dict) -> list:
 def write(state: dict) -> dict:
     """Through a temp name, so the file on disk is always a whole one."""
     state.pop("pictures", None)  # derived on load, never stored
-    if state.pop("_clean", False):  # a write that is no settings edit (Studio bookkeeping, Remix timeline)
-        pass
-    elif state.get("kind") == "studio":  # Studio (studio.py): the open tile now differs from its rendered state
-        state["dirty"] = True
+    state.pop("_clean", None)  # Studio bookkeeping marker, never stored
     path = folder(state["id"]) / "playground.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     state["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")

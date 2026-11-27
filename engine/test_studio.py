@@ -103,39 +103,87 @@ class Studio(unittest.TestCase):
         src.write_bytes(b"\0")
         return playground.add_clip(self.id, src, snap, seed=7)["video"]
 
-    def test_new_studio_is_clean_draft(self):
+    def test_new_studio_opens_one_empty_draft(self):
         i = studio.info({"id": self.id})
-        self.assertEqual((i["open"], i["dirty"], i["edited"]), ("new", False, []))
+        self.assertEqual((i["open"], i["readonly"]), ("draft:1", False))
+        self.assertEqual(i["drafts"], [{"ref": "draft:1", "label": "Draft", "from": None}])
 
-    def test_edit_marks_dirty_remix_does_not(self):
-        studio.open_tile({"id": self.id, "tile": self.add_clip()})
-        self.assertFalse(studio.info({"id": self.id})["dirty"])
-        playground.save({"id": self.id, "remix": []})
-        self.assertFalse(studio.info({"id": self.id})["dirty"])
-        playground.save({"id": self.id, "prompt": "changed"})
-        self.assertTrue(studio.info({"id": self.id})["dirty"])
-
-    def test_open_tile_loads_rendered_and_keeps_draft(self):
+    def test_rendered_tile_opens_read_only_with_its_settings(self):
         playground.save({"id": self.id, "prompt": "my draft"})
         clip = self.add_clip("rendered prompt")
-        studio.open_tile({"id": self.id, "tile": clip})
-        self.assertEqual(self.raw()["prompt"], "rendered prompt")
-        studio.open_tile({"id": self.id, "tile": "new"})
-        self.assertEqual(self.raw()["prompt"], "my draft")
+        i = studio.open_tile({"id": self.id, "tile": clip})
+        self.assertEqual((i["open"], i["readonly"], self.raw()["prompt"]), (clip, True, "rendered prompt"))
+        studio.open_tile({"id": self.id, "tile": "draft:1"})
+        self.assertEqual(self.raw()["prompt"], "my draft")  # the draft kept its edits across the switch
 
-    def test_edited_copy_survives_switch_and_back_resets(self):
+    def test_use_on_new_makes_a_draft_from_the_tile(self):
+        playground.save({"id": self.id, "prompt": "first draft"})
         clip = self.add_clip("rendered prompt")
         studio.open_tile({"id": self.id, "tile": clip})
-        playground.save({"id": self.id, "prompt": "tweaked"})
-        studio.open_tile({"id": self.id, "tile": "new"})
-        self.assertEqual(studio.info({"id": self.id})["edited"], [clip])
-        studio.open_tile({"id": self.id, "tile": clip})
-        self.assertEqual((self.raw()["prompt"], self.raw()["dirty"]), ("tweaked", True))
-        studio.back({"id": self.id})
-        self.assertEqual((self.raw()["prompt"], self.raw()["dirty"]), ("rendered prompt", False))
-        studio.open_tile({"id": self.id, "tile": "new"})
-        with self.assertRaises(ValueError):
-            studio.back({"id": self.id})  # the draft has no rendered state
+        i = studio.new_draft({"id": self.id, "tile": clip})
+        self.assertEqual((i["open"], i["readonly"]), ("draft:2", False))
+        self.assertEqual(i["drafts"][0], {"ref": "draft:2", "label": "Draft · from " + clip.split("/")[-1], "from": clip})
+        self.assertEqual(self.raw()["prompt"], "rendered prompt")
+        playground.save({"id": self.id, "prompt": "second draft"})
+        studio.new_draft({"id": self.id})  # "+ New": a third, empty one
+        self.assertEqual(self.raw()["prompt"], "")
+        studio.open_tile({"id": self.id, "tile": "draft:2"})
+        self.assertEqual(self.raw()["prompt"], "second draft")
+        studio.open_tile({"id": self.id, "tile": "draft:1"})
+        self.assertEqual(self.raw()["prompt"], "first draft")
+        self.assertEqual([d["ref"] for d in studio.info({"id": self.id})["drafts"]], ["draft:3", "draft:2", "draft:1"])
+
+    def test_use_on_new_refuses_drafts_and_missing_tiles(self):
+        for bad in ("draft:1", "clips/gone.mp4", "../x.mp4"):
+            with self.assertRaises(ValueError):
+                studio.new_draft({"id": self.id, "tile": bad})
+        self.assertEqual(len(studio.info({"id": self.id})["drafts"]), 1)
+
+    def test_delete_draft(self):
+        studio.new_draft({"id": self.id})
+        playground.save({"id": self.id, "prompt": "two"})
+        studio.open_tile({"id": self.id, "tile": "draft:1"})
+        i = studio.delete_draft({"id": self.id, "tile": "draft:2"})  # not the open one: only it goes
+        self.assertEqual((i["open"], [d["ref"] for d in i["drafts"]]), ("draft:1", ["draft:1"]))
+        i = studio.delete_draft({"id": self.id, "tile": "draft:1"})  # the last one, open: a fresh empty draft takes over
+        self.assertEqual((i["open"], [d["ref"] for d in i["drafts"]], self.raw()["prompt"]), ("draft:3", ["draft:3"], ""))
+
+    def test_delete_refuses_rendered_tiles_and_unknown_drafts(self):
+        clip = self.add_clip("A")
+        for bad in (clip, "draft:9"):
+            with self.assertRaises(ValueError):
+                studio.delete_draft({"id": self.id, "tile": bad})
+        self.assertTrue((self.tmp / self.id / clip).is_file())
+
+    def test_migrates_old_edited_copies_into_drafts(self):
+        a, b = self.add_clip("A"), self.add_clip("B")
+        st = self.raw()
+        for k in ("drafts", "next_draft"):
+            st.pop(k)
+        st.update(open=a, dirty=True, prompt="A tweaked", names={"new": "loose one"},
+                  tiles={"new": {**studio.settings_of(st), "prompt": "loose"}, b: {**studio.settings_of(st), "prompt": "B tweaked"}})
+        (self.tmp / self.id / "playground.json").write_text(json.dumps(st), encoding="utf-8")
+        i = studio.info({"id": self.id})
+        got = {d["from"]: d for d in i["drafts"]}
+        self.assertEqual(set(got), {None, a, b})
+        self.assertEqual(got[None]["label"], "loose one")
+        self.assertEqual(i["open"], got[a]["ref"])  # the open edited render became an open draft
+        self.assertEqual(self.raw()["prompt"], "A tweaked")
+        studio.open_tile({"id": self.id, "tile": got[b]["ref"]})
+        self.assertEqual(self.raw()["prompt"], "B tweaked")
+        studio.open_tile({"id": self.id, "tile": got[None]["ref"]})
+        self.assertEqual(self.raw()["prompt"], "loose")
+        self.assertNotIn("tiles", self.raw())
+
+    def test_migrates_clean_render_open_read_only(self):
+        a = self.add_clip("A")
+        st = self.raw()
+        for k in ("drafts", "next_draft"):
+            st.pop(k)
+        st.update(open=a, dirty=False, tiles={})
+        (self.tmp / self.id / "playground.json").write_text(json.dumps(st), encoding="utf-8")
+        i = studio.info({"id": self.id})
+        self.assertEqual((i["open"], i["readonly"], len(i["drafts"])), (a, True, 1))
 
     def test_old_clip_with_stale_params_opens(self):
         clip = self.add_clip("old", params={**playground.load(self.id)["params"], "length": 3})
@@ -146,9 +194,9 @@ class Studio(unittest.TestCase):
     def test_rename_tile(self):
         clip = self.add_clip("A")
         self.assertEqual(studio.rename({"id": self.id, "tile": clip, "name": "  Forest   take 1 "})["names"], {clip: "Forest take 1"})
-        self.assertFalse(studio.info({"id": self.id})["dirty"])  # a name is no settings edit
         self.assertEqual(studio.rename({"id": self.id, "tile": clip, "name": ""})["names"], {})
-        self.assertEqual(studio.rename({"id": self.id, "tile": "new", "name": "my draft"})["names"], {"new": "my draft"})
+        i = studio.rename({"id": self.id, "tile": "draft:1", "name": "my draft"})
+        self.assertEqual((i["names"], i["drafts"][0]["label"]), ({"draft:1": "my draft"}, "my draft"))
         with self.assertRaises(ValueError):
             studio.rename({"id": self.id, "tile": "clips/gone.mp4", "name": "x"})
 
@@ -252,34 +300,16 @@ class Studio(unittest.TestCase):
             with self.assertRaises(ValueError):
                 studio.open_tile({"id": self.id, "tile": bad})
 
-    def test_render_from_draft_opens_new_tile_and_empties_draft(self):
+    def test_render_only_from_a_draft_and_the_draft_stays(self):
         playground.save({"id": self.id, "prompt": "run me"})
-        src = studio.run_source(self.id)
-        clip = self.add_clip("run me")
-        studio.rendered(self.id, src, [clip])
+        self.assertEqual(studio.run_source(self.id), "draft:1")
+        self.add_clip("run me")  # the render lands as a new tile; nothing moves in the editor (Q1)
         i = studio.info({"id": self.id})
-        self.assertEqual((i["open"], i["dirty"]), (clip, False))
-        studio.open_tile({"id": self.id, "tile": "new"})
-        self.assertEqual(self.raw()["prompt"], "")
-
-    def test_render_from_tile_resets_source(self):
-        a = self.add_clip("A")
-        studio.open_tile({"id": self.id, "tile": a})
-        playground.save({"id": self.id, "prompt": "A edited"})
-        src = studio.run_source(self.id)
-        b = self.add_clip("A edited")
-        studio.rendered(self.id, src, [b])
-        self.assertEqual(studio.info({"id": self.id})["edited"], [])
-        studio.open_tile({"id": self.id, "tile": a})
-        self.assertEqual(self.raw()["prompt"], "A")
-
-    def test_render_elsewhere_leaves_editor(self):
-        a = self.add_clip("A")
-        src = studio.run_source(self.id)  # draft
-        studio.open_tile({"id": self.id, "tile": a})  # user moves on while it renders
-        b = self.add_clip("draft run")
-        studio.rendered(self.id, src, [b])
-        self.assertEqual(studio.info({"id": self.id})["open"], a)
+        self.assertEqual((i["open"], self.raw()["prompt"]), ("draft:1", "run me"))
+        clip = self.add_clip("other")
+        studio.open_tile({"id": self.id, "tile": clip})
+        with self.assertRaises(ValueError):
+            studio.run_source(self.id)  # read-only: no render from a rendered tile
 
     def test_banner_and_deleted_open_tile(self):
         a = self.add_clip("A")
@@ -287,7 +317,7 @@ class Studio(unittest.TestCase):
         studio.open_tile({"id": self.id, "tile": loopy})
         self.assertTrue(studio.info({"id": self.id})["banner"].startswith("Loop of "))
         (self.tmp / self.id / loopy).unlink()
-        self.assertEqual(studio.info({"id": self.id})["open"], "new")
+        self.assertEqual(studio.info({"id": self.id})["open"], "draft:1")
 
     def test_open_picture_tile_switches_to_image_side(self):
         ip.save({"id": self.id, "prompt": "a picture prompt"})
@@ -298,7 +328,7 @@ class Studio(unittest.TestCase):
         ip.save({"id": self.id, "prompt": "changed since"})
         studio.open_tile({"id": self.id, "tile": ref})
         st = self.raw()
-        self.assertEqual((st["side"], st["image"]["prompt"], st["open"], st["dirty"]), ("image", "a picture prompt", ref, False))
+        self.assertEqual((st["side"], st["image"]["prompt"], st["open"]), ("image", "a picture prompt", ref))
 
     def test_run_source_none_for_other_kinds(self):
         self.assertIsNone(studio.run_source(ip.new({})["id"]))

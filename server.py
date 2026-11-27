@@ -1745,12 +1745,11 @@ class Handler(BaseHTTPRequestHandler):
         pressed (snapshot); the finished clip moves into the playground's clips/ with its meta json."""
         play_id = str(req.get("id", ""))
         snap = playground.snapshot(play_id)
-        src = studio.run_source(play_id)  # Studio: which tile was run (None for other playgrounds)
+        studio.run_source(play_id)  # Studio: refuses a render from a read-only rendered tile
         settings = engine_jobs.render_settings(snap, playground.folder(play_id), seed=snap.get("seed"))
         out = self.engine_job(req.get("_job", {}), {"kind": "render", "settings": settings}, snap["total_steps"],
                               engine=str(req.get("engine") or "wsl10"))
         meta = playground.add_clip(play_id, Path(out["file"]), snap, seed=settings["seed"], seconds=out["seconds"])
-        studio.rendered(play_id, src, [meta["video"]])
         return meta
 
     def playground_remaster(self, req):
@@ -1769,7 +1768,7 @@ class Handler(BaseHTTPRequestHandler):
         worker (own SDXL / Qwen-Edit loops, H3-Image via WanGP), the pictures land on the playground's shelf with a sidecar."""
         play_id = str(req.get("id", ""))
         snap = image_playground.snapshot(play_id)
-        src = studio.run_source(play_id)  # Studio: which tile was run (None for other playgrounds)
+        studio.run_source(play_id)  # Studio: refuses a render from a read-only rendered tile
         job = req.get("_job", {})
         job["count"] = snap["count"]
         work, t0 = image_playground.worker_job(play_id, snap), time.time()
@@ -1790,7 +1789,6 @@ class Handler(BaseHTTPRequestHandler):
                 image_playground.composite_mask(d / snap["inputs"][0], Path(f), d / snap["mask"], int(snap["params"].get("feather", 16)))
         metas = image_playground.add_images(play_id, files, out.get("seeds") or [], snap,
                                              seconds=out.get("seconds") if work is not None and not snap.get("persona") else round(time.time() - t0))
-        studio.rendered(play_id, src, [m["image"] for m in metas])
         return {"images": metas, "state": image_playground.load(play_id)}
 
     def playground_upscale(self, req):

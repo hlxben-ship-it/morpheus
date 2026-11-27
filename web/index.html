@@ -909,11 +909,13 @@
   .st-name { cursor: text; border-radius: 5px; padding: 2px 4px; } .st-name:hover, .st-name:focus-visible { background: var(--raised); outline: 1px solid var(--line); }
   .st-name-in { width: 300px; padding: 3px 6px; font: 600 13px Montserrat, sans-serif; }
   .st-doc b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; }
-  .st-dirty { color: #F08AA8; font-style: normal; font-size: 12px; }
+  .st-ro-tag { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted, #aaa); font-size: 11px; white-space: nowrap; }
   .st-banner { padding: 3px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--text); font-size: 12px; white-space: nowrap; }
-  .st-back { padding: 4px 10px; font-size: 12px; }
+  .st-usenew { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  .pl-box.st-ro { opacity: .62; }
+  .st-draft .pic img { opacity: .45; filter: saturate(.6); }
+  .st-draft .st-plus { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; }
   .pl-clip.st-open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 18px var(--glow, rgba(177, 77, 255, .4)); }
-  .pl-clip .st-dot { position: absolute; bottom: 5px; left: 6px; z-index: 1; color: #F08AA8; font-style: normal; font-size: 13px; text-shadow: 0 0 6px #000; }
   .pl-clip .st-prev { position: absolute; bottom: 4px; left: 4px; z-index: 2; width: 22px; height: 22px; display: none; place-items: center; border-radius: 6px; background: rgba(0, 0, 0, .65); color: #fff; font-style: normal; font-size: 13px; cursor: pointer; }
   .pl-zoom .st-prev, .pl-clip .st-prev.on { display: grid; }
   .pl-clip .st-prev.on { opacity: 0; transition: opacity .15s; } .pl-clip:hover .st-prev.on { opacity: 1; }
@@ -5722,8 +5724,8 @@
   // ---------- Studio (Local tab): /local/studio/<id>, video + image in one playground (seed combined_playground) ----------
   // The page is the video Playground or the Image Playground, whichever half the Studio's "side" says; studioDecorate adds
   // the other family's models to the one Model list (picking one switches the half) and the other half's renders to the shelf.
-  // a tile is a document (seed stage 2): clicking one stores the open tile's edits on the server and fills the editor with
-  // the clicked tile's edited state, else its rendered state; the page then repaints the half the tile belongs to
+  // drafts (seed studio_drafts): a rendered tile opens read-only with the settings it was made with; drafts are the only
+  // editable tiles, any number; the page repaints the half the opened tile belongs to
   // smooth switching (seed playground_layout_finetune #1): a switch repaints the page (and may swap the half), which
   // shows a blank, then half-built page, then the shelf's other-half tiles pop in. stHold lays a frozen copy of what is
   // on screen over it; stRelease drops the copy once the new page is complete (end of studioDecorate), restoring the
@@ -5826,16 +5828,18 @@
     if (strip) strip.scrollTop = g.shelfTop;
     requestAnimationFrame(() => g.el.remove());  // one frame: the new page is laid out before the copy goes
   }
-  async function studioOpenTile(ref) {
+  // open a tile, start a draft ("+ New" / "Use these settings on new") or delete one: the server answers with the tile now open
+  async function studioSwitch(action, body) {
     wake.stPeekGlow = Date.now();
     stHold();
     await wake.stFlush?.();
     let info;
-    try { info = await post('/api/studio/open', { id: wake.playId, tile: ref }); } catch (err) { stRelease(); return toast(err.message, true); }
+    try { info = await post('/api/studio/' + action, { id: wake.playId, ...body }); } catch (err) { stRelease(); return toast(err.message, true); }
     wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
     if (wake.view === (info.side === 'image' ? 'siplay' : 'splay')) return info.side === 'image' ? paintSIPlay() : paintSPlay();
     showWake(info.side === 'image' ? 'siplay' : 'splay', false);
   }
+  const studioOpenTile = ref => studioSwitch('open', { tile: ref });
   function studioOpen(id, side, push = true) {
     wake.studio = id; wake.playId = id; wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
     showWake(side === 'image' ? 'siplay' : 'splay', push);
@@ -5963,22 +5967,31 @@
       dlg.onclose = () => dlg.querySelector('video')?.pause();
       dlg.showModal();
     });
-    // ---- tiles as documents: "+ New" (the loose draft), a tile for the render that is running, ● = has edits, the open
-    // tile outlined; the toolbar names the open tile, its banner (Loop of …) and "Back to rendered" ----
+    // ---- drafts (seed studio_drafts): "+ New" (an empty draft), one tile per draft with 🗑, a tile for the render that is
+    // running, the open tile outlined; a rendered tile is read-only, its toolbar offers "Use these settings on new" ----
     let info;
     try { info = await post('/api/studio/info', { id: p.id }); } catch { return; }
     if (!strip.isConnected) return;
     const dirOf = `playground/${p.id}/`, refOf = t => { const c = item(t); return c ? (c.video || c.image || '').slice(dirOf.length) : ''; };
-    strip.querySelectorAll(':scope > .pl-clip').forEach(t => {
-      const ref = refOf(t);
-      t.classList.toggle('st-open', ref === info.open);
-      if (info.edited.includes(ref)) t.querySelector('.pic')?.insertAdjacentHTML('beforeend', '<i class="st-dot" title="Has edits">●</i>');
-    });
+    strip.querySelectorAll(':scope > .pl-clip').forEach(t => t.classList.toggle('st-open', refOf(t) === info.open));
     const running = wake.plJob && ['Render', 'Image'].includes(wake.plJob.what) && wake.plJob.play === p.id;
-    strip.insertAdjacentHTML('afterbegin', `<button type="button" class="pl-clip st-new${info.open === 'new' ? ' st-open' : ''}" aria-label="New draft"><span class="pic"><span class="st-plus">+</span></span><small>New${info.open === 'new' ? ' · open' : ''}</small></button>`
+    const byRef = ref => [...mine, ...extra].find(c => (c.video || c.image || '').slice(dirOf.length) === ref);
+    const draftTile = d => {
+      const src = d.from && byRef(d.from), thumb = src && (src.thumb || src.image);
+      return `<div class="pl-clip st-new st-draft${d.ref === info.open ? ' st-open' : ''}" data-ref="${esc(d.ref)}" role="button" tabindex="0" aria-label="${esc(d.label)}"><span class="pic">${thumb ? `<img src="${esc(url(thumb))}" alt="" draggable="false">` : ''}<span class="st-plus">✎</span><i class="pl-del" data-a="deldraft" role="button" tabindex="0" aria-label="Delete draft" title="Delete this draft">${ACT_ICON.trash}</i></span><small>${esc(d.label)}</small></div>`;
+    };
+    strip.insertAdjacentHTML('afterbegin', `<button type="button" class="pl-clip st-new st-add" aria-label="New empty draft" title="A new, empty draft"><span class="pic"><span class="st-plus">+</span></span><small>New</small></button>`
+      + info.drafts.map(draftTile).join('')
       + (running ? `<div class="pl-clip st-run-tile" aria-label="Rendering"><span class="pic"><span class="st-spin"></span></span><small>Rendering …</small></div>` : ''));
+    strip.querySelector('.st-add').onclick = () => studioSwitch('new_draft', {});
+    strip.querySelectorAll('.st-draft').forEach(t => {
+      t.onclick = t.onkeydown = e => {
+        if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault(); e.stopPropagation();
+        studioSwitch(e.target.closest('[data-a="deldraft"]') ? 'delete_draft' : 'open', { tile: t.dataset.ref });
+      };
+    });
     stLivePaint();
-    strip.querySelector('.st-new').onclick = () => studioOpenTile('new');
     const jl = $('st-joblink');
     if (jl) jl.onclick = () => {  // the playground the running job belongs to, on the page it was started from
       const j = wake.plJob;
@@ -6020,7 +6033,7 @@
     // shelf shows the hovered tile (a clip plays muted), else the open one; a click on it = a click on that tile,
     // its ⛶ = that tile's preview
     wake.stXClose?.();
-    const openTile = () => strip.querySelector(':scope > .pl-clip.st-open:not(.st-new)');
+    const openTile = () => strip.querySelector(':scope > .pl-clip.st-open:not(.st-new)');  // a draft has nothing to peek at
     const peek = document.createElement('div');
     peek.className = 'st-peek';
     // the pane sits above the shelf, not in it: the tiles scroll in their own box and never slide under the pane
@@ -6032,7 +6045,7 @@
       if (t === shown && peek.childElementCount) return;
       shown = t; const c = t && item(t);
       const src = c ? c.video || c.image : null;
-      if (!src) { peek.innerHTML = `<span class="st-peek-empty">${info.open === 'new' ? 'New draft' : 'Nothing rendered yet'}</span>`; return; }
+      if (!src) { peek.innerHTML = `<span class="st-peek-empty">${info.readonly ? 'Nothing rendered yet' : 'Draft'}</span>`; return; }
       const key = c.video || c.image, old = wake.stPeekMedia;  // the same clip as before a repaint: keep its element, it plays on
       const media = old?.dataset.key === key ? old : c.video && !matchMedia('(prefers-reduced-motion: reduce)').matches
         ? Object.assign(document.createElement('video'), { src: url(c.video), poster: c.thumb ? url(c.thumb) : '', muted: true, loop: true, autoplay: true, playsInline: true })
@@ -6056,9 +6069,10 @@
     show(openTile());
     if (Date.now() - (wake.stPeekGlow || 0) < 5000) { wake.stPeekGlow = 0; peek.classList.add('glow'); }  // a tile was just opened
     const names = info.names || {};
-    strip.querySelectorAll(':scope > .pl-clip').forEach(t => { const n = names[t.classList.contains('st-new') ? 'new' : refOf(t)]; if (n) t.querySelector('small').textContent = n; });
-    const name = names[info.open] ? names[info.open] : info.open === 'new' ? 'New draft' : openItem ? (openItem.label || openItem.model || 'Render') + (openItem.seed != null ? ` · seed ${openItem.seed}` : '') : info.open;
-    tools.insertAdjacentHTML('beforeend', `<span class="st-sep"></span><span class="st-doc"><b class="st-name" tabindex="0" role="button" title="Click to rename">${esc(name)}</b><i class="st-dirty"${info.dirty ? '' : ' hidden'} title="Edited: differs from what was rendered">●</i>${info.banner ? `<span class="st-banner">${esc(info.banner)}</span>` : ''}${info.open !== 'new' ? `<button type="button" class="sb-quiet st-back"${info.dirty ? '' : ' hidden'} title="Drop the edits: back to the settings this tile was rendered with">↺ Back to rendered</button>` : ''}</span>`);
+    strip.querySelectorAll(':scope > .pl-clip:not(.st-new)').forEach(t => { const n = names[refOf(t)]; if (n) t.querySelector('small').textContent = n; });
+    const draft = info.drafts.find(d => d.ref === info.open);
+    const name = draft ? draft.label : names[info.open] ? names[info.open] : openItem ? (openItem.label || openItem.model || 'Render') + (openItem.seed != null ? ` · seed ${openItem.seed}` : '') : info.open;
+    tools.insertAdjacentHTML('beforeend', `<span class="st-sep"></span><span class="st-doc"><b class="st-name" tabindex="0" role="button" title="Click to rename">${esc(name)}</b>${info.banner ? `<span class="st-banner">${esc(info.banner)}</span>` : ''}${info.readonly ? `<span class="st-ro-tag" title="A rendered tile keeps the settings it was made with">read-only</span><button type="button" class="sb-quiet st-usenew" title="A new draft with exactly these settings">⧉ Use these settings on new</button>` : ''}</span>`);
     // rename the open tile in place: click the title, Enter saves, Esc cancels, empty = the generated name again
     const nameEl = tools.querySelector('.st-name');
     nameEl.onclick = nameEl.onkeydown = e => {
@@ -6076,21 +6090,18 @@
       inp.onkeydown = ev => { if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); };
       inp.onblur = () => finish(true);
     };
-    const back = tools.querySelector('.st-back');
-    if (back) back.onclick = async () => {
-      await wake.stFlush?.();
-      try { await post('/api/studio/back', { id: p.id }); } catch (err) { return toast(err.message, true); }
-      wake.play = null; wake.iplay = null; wake.playClips = null; wake.iplayImgs = null;
-      side === 'video' ? paintSPlay() : paintSIPlay();
-    };
-    // an edit in the editor makes the open tile "edited" at once (the server marks it on the save that follows)
+    const useNew = tools.querySelector('.st-usenew');
+    if (useNew) useNew.onclick = () => studioSwitch('new_draft', { tile: info.open });
+    // read-only: the editor frames are locked (the shelf, the timeline and the bar stay usable), no render, no prompt tools
     const box = strip.closest('.pl');
-    box._stEdit = () => { const d = box.querySelector('.st-dirty'), b = box.querySelector('.st-back'); if (d) d.hidden = false; if (b) b.hidden = false; };
-    if (!box._stWired) {
-      box._stWired = true;
-      const mark = e => { if (!e.target.closest('.st-bar, .pl-strip, #ipl-shelf, .pl-tl, dialog')) box._stEdit?.(); };
-      box.addEventListener('input', mark); box.addEventListener('change', mark);
-    }
+    box.querySelectorAll('.pl-box').forEach(f => {
+      if (f.contains(strip) || f.querySelector('.pl-tl')) return;
+      f.inert = info.readonly; f.classList.toggle('st-ro', info.readonly);
+    });
+    box.querySelectorAll('#pl-render, #pl-edit, #pl-writer, #ipl-edit').forEach(b => {
+      b.disabled = info.readonly;
+      if (info.readonly) b.title = 'Read-only: use these settings on a new draft first';
+    });
   }
 
   // ---------- Image Playground (Local tab): /local/image/<id>, state in output/playground/<id>/ (seed image_playground) ----------
