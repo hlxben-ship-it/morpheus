@@ -128,11 +128,13 @@ class ResharpenRender(unittest.TestCase):
             p.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _render(self, mode, persona):
+    def _render(self, mode, persona, mask=None):
         self.ip.input_picture({"id": self.play, "slot": 0, "data": self.PNG})
         if persona:
             self.ip.input_picture({"id": self.play, "slot": 1, "data": self.PNG})
         self.ip.save({"id": self.play, "model": "muse_resharpen", "prompt": "", "params": {"mode": mode}})
+        if mask:
+            self.ip.mask_picture({"id": self.play, "data": mask})
 
         def engine_job(job, work, steps, engine=None):
             self.engine.append(work)
@@ -160,6 +162,19 @@ class ResharpenRender(unittest.TestCase):
         self._render("max", persona=False)
         self.assertEqual(len(self.engine), 1)
         self.assertEqual(self.swaps, [])
+
+    def test_mask_restores_the_source_outside_after_the_swap(self):
+        """Glia seed resharpen_mask: the composite runs after the swap, so the swap is limited by the mask too."""
+        calls = []
+        real = self.ip.composite_mask
+        with mock.patch.object(self.ip, "composite_mask", lambda *a: (calls.append((len(self.swaps), a[3])), real(*a))):
+            out = self._render("swap", persona=True, mask=self.PNG)
+        self.assertEqual(calls, [(1, 16)])  # once, after the one swap, default feather
+        self.assertTrue(out["images"][0]["mask"].startswith("mask_"))
+
+    def test_no_mask_no_composite(self):
+        with mock.patch.object(self.ip, "composite_mask", side_effect=AssertionError("composited")):
+            self._render("max", persona=False)
 
 
 if __name__ == "__main__":

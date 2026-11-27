@@ -122,6 +122,8 @@ def load(play_id: str) -> dict:
     d = playground.folder(play_id)
     ins = list(st.get("inputs") or [])[:INPUTS]
     st["inputs"] = [f if f and (d / f).is_file() else None for f in ins + [None] * (INPUTS - len(ins))]
+    mk = st.get("mask")  # Resharpen mask (seed resharpen_mask): only with a picture 1 and a helper model
+    st["mask"] = mk if mk and st["inputs"][0] and m.get("helper") and (d / mk).is_file() else None
     st["loras"] = clean_loras(st.get("loras"), m["family"])
     try:
         st["seed"] = clean_seed(st.get("seed"))
@@ -195,6 +197,8 @@ def save(req: dict) -> dict:
         ins = req["inputs"]
         if not isinstance(ins, list) or len(ins) != INPUTS or any(f is not None and f not in st["inputs"] for f in ins):
             raise ValueError("Unknown input pictures.")
+        if ins[0] != st["inputs"][0]:  # another picture 1: its mask no longer fits
+            st["mask"] = None
         st["inputs"] = ins
     return load(_write(st)["id"])
 
@@ -211,7 +215,36 @@ def input_picture(req: dict) -> dict:
     s = slot_of(req)
     st = load(str(req.get("id", "")))
     st["inputs"][s] = None if req.get("data") is None else playground.store_picture(st, f"in{s + 1}", req.get("data"))
+    if s == 0:
+        st["mask"] = None
     return load(_write(st)["id"])
+
+
+def mask_picture(req: dict) -> dict:
+    """Resharpen mask (seed resharpen_mask): a PNG data URL, white = change; data None removes it."""
+    st = load(str(req.get("id", "")))
+    if not (im.get(st["model"]) or {}).get("helper"):
+        raise ValueError("Only Resharpen takes a mask.")
+    if not st["inputs"][0]:
+        raise ValueError("Put a picture into slot 1 first.")
+    if req.get("data") is not None and not str(req["data"]).startswith("data:image/png;base64,"):
+        raise ValueError("The mask must be a PNG.")
+    st["mask"] = None if req.get("data") is None else playground.store_picture(st, "mask", req["data"])
+    return load(_write(st)["id"])
+
+
+def composite_mask(source: Path, result: Path, mask: Path, feather: int) -> None:
+    """Resharpen mask: the result only inside the mask (soft edge of `feather` source px), the source everywhere else; in place.
+    Source and mask are scaled to the result (Cheap 2x, Max's own size)."""
+    from PIL import Image, ImageFilter
+    res = Image.open(result).convert("RGB")
+    src = Image.open(source).convert("RGB")
+    k = res.width / src.width
+    src = src.resize(res.size, Image.LANCZOS) if src.size != res.size else src
+    mk = Image.open(mask).convert("L").resize(res.size, Image.BILINEAR)
+    if feather > 0:
+        mk = mk.filter(ImageFilter.GaussianBlur(feather * k / 2))
+    Image.composite(res, src, mk).save(result)
 
 
 def image_path(play_id: str, image: str) -> Path:
@@ -232,6 +265,8 @@ def use_as_input(req: dict) -> dict:
     name = f"in{s + 1}_{time.time_ns() // 1_000_000}.png"
     shutil.copyfile(src, playground.folder(play_id) / name)
     st["inputs"][s] = name
+    if s == 0:
+        st["mask"] = None
     if (im.get(st["model"]) or {}).get("helper"):  # Muse Resharpen: the picture's own prompt, editable (grooming G3)
         try:
             meta = json.loads(src.with_suffix(".json").read_text(encoding="utf-8-sig"))
@@ -274,6 +309,8 @@ def snapshot(play_id: str) -> dict:
         prompt = m.get("prompt_default", "")
     if m.get("helper"):  # the sidecar names the helper, its source picture and the persona whose face is swapped back in
         extra = {**extra, "helper": m["helper"], "source": inputs[0], "persona": inputs[1] if len(inputs) > 1 else None}
+        if st.get("mask"):  # seed resharpen_mask: the result is blended onto the source through it (server.image_render)
+            extra["mask"] = st["mask"]
     if not prompt.strip() and m["family"] != "sdxl":
         raise ValueError("Write a prompt first.")
     seed = st["seed"] if st["seed"] is not None else random.randrange(1, SEED_MAX)
@@ -346,6 +383,7 @@ def worker_job(play_id: str, snap: dict) -> dict | None:
         if mode == "cheap":  # img2img from picture 1, no references (engine/wsl/image/krea2.py); the persona is only swapped
             params["init"], params["images"] = pics[0], []
             params.pop("mode", None)
+            params.pop("feather", None)
     return {"kind": "image", "family": m["family"], "count": snap["count"], "params": params}
 
 
@@ -460,6 +498,7 @@ def reuse(req: dict) -> dict:
     d = playground.folder(play_id)
     ins = [f if f and (d / f).is_file() else None for f in (meta.get("inputs") or [])][:INPUTS]
     st["inputs"] = ins + [None] * (INPUTS - len(ins))
+    st["mask"] = meta.get("mask")  # seed resharpen_mask: the picture's own mask comes back with its source (load() drops a missing file)
     return load(_write(st)["id"])
 
 
@@ -485,4 +524,5 @@ def heart_image(req: dict) -> dict:
 
 
 ACTIONS = {"new": new, "save": save, "input": input_picture, "use_as_input": use_as_input, "delete_image": delete_image,
-           "star_image": star_image, "heart_image": heart_image, "reuse": reuse}
+           "star_image": star_image, "heart_image": heart_image, "reuse": reuse,
+           "mask": mask_picture}

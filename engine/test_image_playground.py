@@ -253,5 +253,81 @@ class Resharpen(unittest.TestCase):
         self.assertEqual(len(job["params"]["images"]), 1)
 
 
+
+def _png_url(img):
+    import base64
+    from io import BytesIO
+    b = BytesIO(); img.save(b, "PNG")
+    return "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()
+
+
+class ResharpenMask(unittest.TestCase):
+    """Glia seed resharpen_mask: the mask is stored with picture 1, cleared with it, recorded in the snapshot, and the
+    composite keeps the source outside it."""
+    setUp, tearDown = State.setUp, State.tearDown
+
+    def _ready(self):
+        ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        return ip.save({"id": self.id, "model": "muse_resharpen", "prompt": "x"})
+
+    def test_mask_needs_resharpen_and_a_picture(self):
+        with self.assertRaisesRegex(ValueError, "slot 1"):
+            ip.save({"id": self.id, "model": "muse_resharpen"}) and ip.mask_picture({"id": self.id, "data": PNG})
+        ip.input_picture({"id": self.id, "slot": 0, "data": PNG})
+        ip.save({"id": self.id, "model": "muse_krea2", "prompt": "x"})
+        with self.assertRaisesRegex(ValueError, "Only Resharpen"):
+            ip.mask_picture({"id": self.id, "data": PNG})
+
+    def test_mask_is_png_only(self):
+        self._ready()
+        with self.assertRaisesRegex(ValueError, "PNG"):
+            ip.mask_picture({"id": self.id, "data": "data:image/jpeg;base64,AAAA"})
+
+    def test_mask_set_snapshot_and_remove(self):
+        self._ready()
+        st = ip.mask_picture({"id": self.id, "data": PNG})
+        self.assertTrue(st["mask"].startswith("mask_"))
+        snap = ip.snapshot(self.id)
+        self.assertEqual((snap["mask"], snap["params"]["feather"]), (st["mask"], 16))
+        self.assertIsNone(ip.mask_picture({"id": self.id, "data": None})["mask"])
+        self.assertNotIn("mask", ip.snapshot(self.id))
+
+    def test_new_picture_1_clears_the_mask_slot_2_does_not(self):
+        self._ready()
+        ip.mask_picture({"id": self.id, "data": PNG})
+        self.assertIsNotNone(ip.input_picture({"id": self.id, "slot": 1, "data": PNG})["mask"])
+        self.assertIsNone(ip.input_picture({"id": self.id, "slot": 0, "data": PNG})["mask"])
+        ip.mask_picture({"id": self.id, "data": PNG})
+        st = ip.load(self.id)
+        self.assertIsNone(ip.save({"id": self.id, "inputs": [None, st["inputs"][1], None, None]})["mask"])
+
+    def test_cheap_job_does_not_get_feather(self):
+        self._ready()
+        ip.save({"id": self.id, "params": {"mode": "cheap"}})
+        self.assertNotIn("feather", ip.worker_job(self.id, ip.snapshot(self.id))["params"])
+
+    def _composite(self, feather, size=(64, 64)):
+        from PIL import Image, ImageDraw
+        src, res, mk = self.tmp / "s.png", self.tmp / "r.png", self.tmp / "m.png"
+        self.tmp.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (64, 64), (10, 20, 30)).save(src)
+        Image.new("RGB", size, (200, 100, 50)).save(res)
+        m = Image.new("L", (64, 64), 0); ImageDraw.Draw(m).rectangle([24, 24, 39, 39], fill=255); m.save(mk)
+        ip.composite_mask(src, res, mk, feather)
+        return Image.open(res).convert("RGB")
+
+    def test_composite_hard_edge(self):
+        out = self._composite(0)
+        self.assertEqual(out.getpixel((2, 2)), (10, 20, 30))      # outside: the source, exactly
+        self.assertEqual(out.getpixel((31, 31)), (200, 100, 50))  # inside: the result
+        self.assertEqual(out.getpixel((23, 31)), (10, 20, 30))    # right at the border: no ramp
+
+    def test_composite_feather_ramps_and_scales_up(self):
+        out = self._composite(16, size=(128, 128))
+        self.assertEqual(out.size, (128, 128))
+        self.assertEqual(out.getpixel((2, 2)), (10, 20, 30))      # far outside: still the source
+        edge = out.getpixel((46, 63))[0]                          # at the border (2x): a blend
+        self.assertTrue(10 < edge < 200, edge)
+
 if __name__ == "__main__":
     unittest.main()

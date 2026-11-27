@@ -1031,6 +1031,17 @@
   .ipl-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ipl-tile .pl-star { position: absolute; top: 6px; left: 6px; }
   .ipl-tile small { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Resharpen mask (seed resharpen_mask): the mask over slot 1, the painter dialog */
+  .pl-drop img.pl-mask { opacity: .45; mix-blend-mode: screen; pointer-events: none; }
+  .pl-drop .pl-mk { position: absolute; left: 6px; bottom: 6px; z-index: 1; padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, .65); border: 1px solid var(--line); color: #fff; font: 600 11px/1.5 'IBM Plex Mono', monospace; cursor: pointer; }
+  .mk-dlg { width: min(1100px, 96vw); }
+  .mk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
+  .mk-bar .mk-end { margin-left: auto; display: flex; gap: 8px; }
+  .mk-size { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .mk-stage { position: relative; width: fit-content; margin: 0 auto; background: #000; }
+  .mk-stage img { display: block; max-width: 100%; max-height: 70vh; }
+  .mk-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .55; cursor: none; touch-action: none; }
+  .mk-ring { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); pointer-events: none; }
   .pl-modal .ipl-big { display: block; width: 100%; max-height: 66vh; object-fit: contain; border-radius: 10px; background: #000; }
   .pl-modal .ipl-big:fullscreen { max-height: none; border-radius: 0; }
   .ipl-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
@@ -5333,6 +5344,7 @@
       return Object.keys(PL_ASPECT).reduce((b, a) => { const [x, y] = a.split(':').map(Number); return Math.abs(r - Math.log(x / y)) < Math.abs(r - Math.log(b.split(':')[0] / b.split(':')[1])) ? a : b; }, '1:1'); };
     const param = (k, s) => {
       if (s.needs_input && !hasInput) return '';
+      if (k === 'feather' && !p.mask) return '';  // seed resharpen_mask: the edge slider only means something with a mask
       const v = p.params[k], lab = `<span class="lab">${esc(s.label || k)}</span>`;
       if (s.fixed) return `<div class="ipl-p">${lab}<span class="fixed">${esc(String(s.default))}</span></div>`;
       if (s.toggle) return `<div class="ipl-p">${lab}<label class="check"><input type="checkbox" data-t="${esc(k)}" ${v ? 'checked' : ''}><span>${esc(s.note || '')}</span></label></div>`;
@@ -5345,7 +5357,7 @@
     const cfg = wake.stModels?.[p.model] || null, refsCfg = cfg?.references || {};
     const nIn = Math.min(m.inputs?.max || 0, refsCfg.main === false ? refsCfg.slots ?? 0 : 1 + (refsCfg.slots ?? 3));
     const inSlot = i => `<div class="pl-drop" data-slot="${i}" tabindex="0" aria-label="Input ${i + 1}">${p.inputs[i]
-      ? `<img src="${esc(url(dir + p.inputs[i]))}" alt=""><button type="button" class="x" title="Remove" aria-label="Remove input ${i + 1}">${ACT_ICON.close}</button>${m.family === 'h3_image' ? `<span class="pl-tag">&lt;Picture ${i + 1}&gt;</span>` : ''}`
+      ? `<img src="${esc(url(dir + p.inputs[i]))}" alt="">${i === 0 && m.helper && p.mask ? `<img class="pl-mask" src="${esc(url(dir + p.mask))}" alt="">` : ''}<button type="button" class="x" title="Remove" aria-label="Remove input ${i + 1}">${ACT_ICON.close}</button>${i === 0 && m.helper ? `<button type="button" class="pl-mk" title="Paint the area to resharpen; the rest of the picture stays as it is">${p.mask ? 'Edit mask' : 'Paint mask'}</button>` : ''}${m.family === 'h3_image' ? `<span class="pl-tag">&lt;Picture ${i + 1}&gt;</span>` : ''}`
       : (m.family === 'h3_image' ? `Picture ${i + 1}` : i === 0 ? 'Drop a picture or click' : `Picture ${i + 1}`)}</div>`;
     const lib = () => (wake.loraLib?.loras || []).filter(e => e.family === m.family);
     // LoRA slots: the video Playground's picture slots + library grid, only the model's family
@@ -5520,6 +5532,7 @@
       const k = +d.dataset.slot;
       d.onclick = e => {
         if (e.target.closest('.x')) { post('/api/image_playground/input', { id: p.id, slot: k, data: null }).then(st => { wake.iplay = st; paintSIPlay(); }, err => saved(err.message)); return; }
+        if (e.target.closest('.pl-mk')) return paintMask(p, dir).then(st => { if (st) { wake.iplay = st; paintSIPlay(); } }, err => saved(err.message));
         pick = k; $('ipl-file').value = ''; $('ipl-file').click();
       };
       d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
@@ -5625,6 +5638,72 @@
     if (await studioDecorate('image', p) !== 'away') stRelease();
   }
 
+
+  // Resharpen mask painter (seed resharpen_mask): picture 1 large, brush / eraser / size / clear; saves a PNG mask
+  // (white = resharpen, black = keep) at the picture's own size, capped at 2048 px. Resolves the new state, or null on cancel.
+  function paintMask(p, dir) {
+    return new Promise((resolve, reject) => {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'wake-dialog pl-modal mk-dlg';
+      dlg.innerHTML = `<div class="gal-head"><h2 class="h">Paint the area to resharpen</h2></div>
+        <div class="mk-bar" role="toolbar" aria-label="Mask tools"><span class="seg"><button type="button" data-tool="brush" aria-pressed="true">Brush</button><button type="button" data-tool="erase" aria-pressed="false">Eraser</button></span>
+          <label class="mk-size">Size <input type="range" min="4" max="300" value="60" aria-label="Brush size"></label><button type="button" class="wake-open" data-a="clear">Clear</button>
+          <span class="mk-end"><button type="button" class="wake-open" data-a="cancel">Cancel</button><button type="button" class="wake-open" data-a="save">Save mask</button></span></div>
+        <div class="mk-stage"><img alt=""><canvas></canvas><i class="mk-ring" hidden></i></div>`;
+      document.body.append(dlg);
+      const img = dlg.querySelector('img'), cv = dlg.querySelector('canvas'), ctx = cv.getContext('2d'), size = dlg.querySelector('.mk-size input');
+      let tool = 'brush', last = null;
+      const end = () => { dlg.close(); dlg.remove(); };
+      img.onerror = () => { dlg.remove(); reject(new Error('Picture 1 could not be loaded.')); };
+      img.onload = () => {
+        const k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight));
+        cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+        dlg.showModal();
+        if (!p.mask) return;
+        const old = new Image();
+        old.onload = () => {  // the saved mask back as paint: white -> opaque pink
+          ctx.drawImage(old, 0, 0, cv.width, cv.height);
+          const d = ctx.getImageData(0, 0, cv.width, cv.height), a = d.data;
+          for (let i = 0; i < a.length; i += 4) { const v = a[i]; a[i] = 240; a[i + 1] = 138; a[i + 2] = 168; a[i + 3] = v; }
+          ctx.putImageData(d, 0, 0);
+        };
+        old.src = url(dir + p.mask);
+      };
+      img.src = url(dir + p.inputs[0]);
+      const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+      const stroke = (a, b) => {
+        ctx.globalCompositeOperation = tool === 'erase' ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = 'rgb(240,138,168)'; ctx.lineCap = ctx.lineJoin = 'round';
+        ctx.lineWidth = +size.value * cv.width / cv.getBoundingClientRect().width;
+        ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+      };
+      const ring = dlg.querySelector('.mk-ring');  // the brush outline instead of a crosshair, at the real brush size
+      const showRing = e => { const r = cv.getBoundingClientRect(); ring.hidden = false; ring.style.width = ring.style.height = size.value + 'px';
+        ring.style.left = e.clientX - r.left + 'px'; ring.style.top = e.clientY - r.top + 'px'; };
+      cv.addEventListener('pointermove', showRing); cv.addEventListener('pointerdown', showRing);
+      cv.onpointerleave = () => { if (!last) ring.hidden = true; };
+      size.oninput = () => { ring.style.width = ring.style.height = size.value + 'px'; };
+      cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); last = at(e); stroke(last, last); };
+      cv.onpointermove = e => { if (!last) return; const n = at(e); stroke(last, n); last = n; };
+      cv.onpointerup = cv.onpointercancel = () => { last = null; };
+      dlg.oncancel = e => { e.preventDefault(); end(); resolve(null); };
+      dlg.onclick = async e => {
+        const t = e.target.closest('[data-tool]');
+        if (t) { tool = t.dataset.tool; dlg.querySelectorAll('[data-tool]').forEach(x => x.setAttribute('aria-pressed', x === t)); return; }
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a === 'clear') ctx.clearRect(0, 0, cv.width, cv.height);
+        if (a === 'cancel') { end(); resolve(null); }
+        if (a !== 'save') return;
+        const d = ctx.getImageData(0, 0, cv.width, cv.height), px = d.data;
+        let any = false;
+        for (let i = 0; i < px.length; i += 4) { const v = px[i + 3]; if (v) any = true; px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255; }
+        const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height;
+        out.getContext('2d').putImageData(d, 0, 0);
+        try { const st = await post('/api/image_playground/mask', { id: p.id, data: any ? out.toDataURL('image/png') : null }); end(); resolve(st); }
+        catch (err) { end(); reject(err); }
+      };
+    });
+  }
 
   // Studio Prompt box parts (stage 3): the tile's default prompt / negative (null = the model's, studio_models.json),
   // joined in front of the prompt at render; ↺ takes the model's again

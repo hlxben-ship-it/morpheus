@@ -1784,6 +1784,10 @@ class Handler(BaseHTTPRequestHandler):
             persona = playground.folder(play_id) / snap["persona"]
             for f in files:
                 swap_picture(persona, Path(f))
+        if snap.get("mask"):  # seed resharpen_mask: outside the painted mask the source stays, the swap included
+            d = playground.folder(play_id)
+            for f in files:
+                image_playground.composite_mask(d / snap["inputs"][0], Path(f), d / snap["mask"], int(snap["params"].get("feather", 16)))
         metas = image_playground.add_images(play_id, files, out.get("seeds") or [], snap,
                                              seconds=out.get("seconds") if work is not None and not snap.get("persona") else round(time.time() - t0))
         studio.rendered(play_id, src, [m["image"] for m in metas])
