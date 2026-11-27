@@ -84,6 +84,28 @@
       }
     },
     {
+      "id": "lustify_krea2",
+      "label": "Lustify V10 (Krea 2)",
+      "note": "NSFW Krea 2 turbo finetune, Q4_0 GGUF (8.3 GB). Author's workflow: 8 steps, cfg 1, euler + beta, shift 4. Second pass x2 built in (on by default). Text to image; edit like Muse (untested). Own loop in WSL. Won the blind test vs Muse 2.5 : 0.5 (2026-11-27).",
+      "family": "krea2",
+      "checkpoint": "lustify_v10_krea_turbo_q4_0.gguf",
+      "inputs": {"min": 0, "max": 2, "label": "References (1 = scene, 2 = person; needs an edit LoRA)"},
+      "negative": true,
+      "max_count": 4,
+      "prompt_default": "",
+      "negative_default": "",
+      "sizes": ["1152x1536", "1536x1152", "1024x1024", "1024x1536", "1536x1024", "896x1152", "1152x896"],
+      "params": {
+        "steps": {"label": "Steps", "min": 4, "max": 30, "default": 8},
+        "cfg": {"label": "CFG (1 = off; >1 uses the negative, keep <= 3)", "min": 1, "max": 3, "step": 0.1, "default": 1},
+        "sampler": {"label": "Sampler", "choices": ["euler", "er_sde"], "default": "euler"},
+        "scheduler": {"label": "Scheduler", "choices": ["beta", "simple"], "default": "beta"},
+        "shift": {"label": "Shift", "default": 4, "fixed": true},
+        "second_pass": {"label": "Second pass x2 (sharp, ~+70 s)", "choices": ["on", "off"], "default": "on", "note": "Redraws the picture at double size: 3 steps at 0.75, shift 0.8 (the LustiKrea workflow). Text to image only; ignored with reference pictures."},
+        "ref_scale": {"label": "Reference size (smaller = faster, may cost detail)", "choices": [1, 0.75, 0.5], "labels": {"1": "100 %", "0.75": "75 %", "0.5": "50 %"}, "default": 0.75, "needs_input": true, "advanced": true}
+      }
+    },
+    {
       "id": "muse_resharpen",
       "label": "Resharpen",
       "helper": "resharpen",

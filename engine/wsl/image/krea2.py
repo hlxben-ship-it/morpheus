@@ -15,6 +15,7 @@ import math
 import re
 from pathlib import Path
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -35,6 +36,7 @@ MAX_REFS = 2
 RESHARPEN_MAX_PX = 2048 * 2048  # Muse Resharpen (Glia seed muse_resharpen): the output cap; a bigger 2x is scaled down to fit   # the edit LoRAs are trained on scene (picture 1) + person (picture 2)
 DIT_GPU_GB = 10
 CROP_TOL = 0.08
+SECOND_PASS = {"scale": 2, "steps": 3, "strength": 0.75, "shift": 0.8, "sampler": "euler", "scheduler": "beta"}  # LustiKrea "Second Pass"
 KEEP_TE = True   # keep the encoder in RAM between prompts (a new prompt cost ~80 s of disk read otherwise)
 TE_8BIT = True   # ...as int8 linears (~4.5 GB instead of 8.9: the 24 GB VM also holds the DiT's streamed blocks)
 
@@ -567,8 +569,20 @@ class Krea2:
         s = GROUNDING_PX / max(img.size)
         return img.resize((round(img.width * s), round(img.height * s)), Image.BOX) if s < 1 else img
 
-    @torch.no_grad()
     def generate(self, p, emit, stopped):
+        """_generate, plus Lustify's second pass when p["second_pass"] == "on" (text to image only): the picture x2, then
+        SECOND_PASS steps at its strength and AuraFlow shift, as the LustiKrea workflow (Glia seed lustify_krea2)."""
+        img = self._generate(p, emit, stopped)
+        if p.get("second_pass") != "on" or p.get("init") or p.get("images") or stopped():
+            return img
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, "first.png")
+            img.save(src)
+            return self._generate({**p, **SECOND_PASS, "init": src}, emit, stopped)
+
+    @torch.no_grad()
+    def _generate(self, p, emit, stopped):
         """p: prompt, negative, width, height, seed, steps, cfg, sampler, scheduler, images [paths] (0-2), loras;
         init (path) + strength + scale: Muse Resharpen redraws that picture instead (size follows it)."""
         import os
@@ -617,6 +631,9 @@ class Krea2:
             return unpack(xp - v * sigma.view(-1, 1, 1), lh, lw)
 
         strength = float(p.get("strength") or 1.0) if init is not None else 1.0
+        # p["shift"] = a ComfyUI ModelSamplingAuraFlow shift (sigma = s*t / (1 + (s-1)*t)), as LustiKrea sets it; NOT the
+        # Flux e^shift form of SHIFT: 4 read as Flux = e^4 = 54.6, a far too noisy schedule (soft pictures, seed lustify_krea2)
+        self.ms = sampling.Flow(float(p["shift"])) if p.get("shift") else sampling.FluxShift(SHIFT)
         sig = sampling.sigmas_for(self.ms, p.get("scheduler") or "simple", int(p["steps"]), strength).to(common.DEVICE)
         noise = sampling.initial_noise([1, 16, lh, lw], int(p["seed"])).to(common.DEVICE)
         x = sampling.noise_scaling("flow", sig[0], noise, init if init is not None else torch.zeros_like(noise), True)
